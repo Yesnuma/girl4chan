@@ -157,7 +157,7 @@
         /* Upload Button */
         .upload-btn {
             position: fixed;
-            bottom: 20px;
+            bottom: 80px;
             right: 20px;
             width: 56px;
             height: 56px;
@@ -325,7 +325,37 @@
     </div>
 
     <!-- Upload Button -->
-    <button class="upload-btn">+</button>
+    <button class="upload-btn" onclick="openUploadModal()">+</button>
+
+    <!-- Upload Modal -->
+    <div class="modal" id="uploadModal">
+        <div class="modal-content">
+            <h2>upload image</h2>
+            
+            <div style="margin-bottom: 15px;">
+                <button type="button" id="uploadTabBtn" onclick="switchUploadMode('file')" style="width: 48%; margin-right: 4%; background-color: #9ed2f5;">file</button>
+                <button type="button" id="linkTabBtn" onclick="switchUploadMode('link')" style="width: 48%; background-color: #ddd;">link</button>
+            </div>
+
+            <form id="uploadForm">
+                <div id="fileUploadSection">
+                    <input type="file" id="imageInput" accept="image/*" style="margin-bottom: 15px;">
+                    <input type="url" id="sourceLink" placeholder="source link (optional)">
+                </div>
+                
+                <div id="linkUploadSection" style="display: none;">
+                    <input type="url" id="scrapeLink" placeholder="paste image url (depop, poshmark, etc)" style="margin-bottom: 15px;">
+                    <div id="previewSection" style="display: none; margin-bottom: 15px;">
+                        <p style="font-size: 12px; margin-bottom: 5px;">preview:</p>
+                        <img id="previewImage" style="max-width: 100%; max-height: 200px;">
+                    </div>
+                </div>
+
+                <button type="submit">upload</button>
+                <button type="button" onclick="closeUploadModal()" style="background-color: #ccc; margin-top: 10px;">cancel</button>
+            </form>
+        </div>
+    </div>
 
     <!-- Bottom Nav -->
     <div class="bottom-nav">
@@ -473,6 +503,152 @@
                 console.error('Error loading images:', error);
             }
         }
+
+        // Upload modal functions
+        let uploadMode = 'file'; // 'file' or 'link'
+        
+        window.openUploadModal = function() {
+            document.getElementById('uploadModal').style.display = 'flex';
+        };
+
+        window.closeUploadModal = function() {
+            document.getElementById('uploadModal').style.display = 'none';
+            document.getElementById('uploadForm').reset();
+            document.getElementById('previewSection').style.display = 'none';
+        };
+
+        window.switchUploadMode = function(mode) {
+            uploadMode = mode;
+            const fileSection = document.getElementById('fileUploadSection');
+            const linkSection = document.getElementById('linkUploadSection');
+            const fileBtn = document.getElementById('uploadTabBtn');
+            const linkBtn = document.getElementById('linkTabBtn');
+            
+            if (mode === 'file') {
+                fileSection.style.display = 'block';
+                linkSection.style.display = 'none';
+                fileBtn.style.backgroundColor = '#9ed2f5';
+                linkBtn.style.backgroundColor = '#ddd';
+            } else {
+                fileSection.style.display = 'none';
+                linkSection.style.display = 'block';
+                fileBtn.style.backgroundColor = '#ddd';
+                linkBtn.style.backgroundColor = '#9ed2f5';
+            }
+        };
+
+        // Function to scrape image from URL
+        async function scrapeImageFromUrl(url) {
+            try {
+                // Use a CORS proxy to fetch the page
+                const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                const response = await fetch(proxyUrl + encodeURIComponent(url));
+                const html = await response.text();
+                
+                // Create a temporary DOM to parse the HTML
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                // Try to find Open Graph image first (most e-commerce sites use this)
+                let imageUrl = doc.querySelector('meta[property="og:image"]')?.content;
+                
+                // Fallback to other common meta tags
+                if (!imageUrl) {
+                    imageUrl = doc.querySelector('meta[name="twitter:image"]')?.content;
+                }
+                
+                // Fallback to first large image on page
+                if (!imageUrl) {
+                    const imgs = doc.querySelectorAll('img');
+                    for (let img of imgs) {
+                        const src = img.src || img.getAttribute('data-src');
+                        if (src && !src.includes('logo') && !src.includes('icon')) {
+                            imageUrl = src;
+                            break;
+                        }
+                    }
+                }
+                
+                return imageUrl;
+            } catch (error) {
+                console.error('Scraping error:', error);
+                throw new Error('Could not extract image from URL');
+            }
+        }
+
+        // Preview image from link
+        document.getElementById('scrapeLink')?.addEventListener('blur', async function() {
+            const url = this.value;
+            if (!url) return;
+            
+            try {
+                const imageUrl = await scrapeImageFromUrl(url);
+                if (imageUrl) {
+                    document.getElementById('previewImage').src = imageUrl;
+                    document.getElementById('previewSection').style.display = 'block';
+                }
+            } catch (error) {
+                alert('Could not extract image from this URL. Try uploading the image directly.');
+            }
+        });
+
+        // Handle image upload
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            try {
+                let imageUrl;
+                let sourceLink;
+                
+                if (uploadMode === 'file') {
+                    const fileInput = document.getElementById('imageInput');
+                    const file = fileInput.files[0];
+                    
+                    if (!file) {
+                        alert('Please select an image');
+                        return;
+                    }
+                    
+                    // Upload image to Firebase Storage
+                    const storageRef = ref(storage, `images/${Date.now()}_${file.name}`);
+                    await uploadBytes(storageRef, file);
+                    imageUrl = await getDownloadURL(storageRef);
+                    sourceLink = document.getElementById('sourceLink').value || '';
+                } else {
+                    // Link mode
+                    const linkInput = document.getElementById('scrapeLink');
+                    sourceLink = linkInput.value;
+                    
+                    if (!sourceLink) {
+                        alert('Please enter a URL');
+                        return;
+                    }
+                    
+                    // Get the scraped image URL
+                    imageUrl = await scrapeImageFromUrl(sourceLink);
+                    
+                    if (!imageUrl) {
+                        alert('Could not extract image from URL');
+                        return;
+                    }
+                }
+                
+                // Save to Firestore
+                await addDoc(collection(db, 'images'), {
+                    imageUrl: imageUrl,
+                    link: sourceLink,
+                    userId: auth.currentUser.uid,
+                    createdAt: new Date()
+                });
+                
+                // Close modal and reload feed
+                closeUploadModal();
+                loadEverythingFeed();
+            } catch (error) {
+                alert('Upload failed: ' + error.message);
+                console.error('Upload error:', error);
+            }
+        });
 
         // Make functions globally available
         window.auth = auth;
