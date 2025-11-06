@@ -169,34 +169,52 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
 
-        /* Bottom Nav */
-        .bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background-color: #fff;
-            border-top: 1px solid #ccc;
-            display: flex;
-            justify-content: space-around;
-            padding: 10px 0;
-        }
-
-        .bottom-nav a {
-            color: #666;
-            text-decoration: none;
-            font-size: 12px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .bottom-nav a.active {
-            color: #000;
-        }
-
         .container {
-            padding-bottom: 70px;
+            padding: 15px 10px;
+            padding-bottom: 20px;
+        }
+
+        /* Rules Tab */
+        .rules-tab {
+            position: fixed;
+            right: 0;
+            bottom: 150px;
+            width: 30px;
+            height: 60px;
+            background-color: #d4c5b0;
+            border: 1px solid #b8a890;
+            border-right: none;
+            border-radius: 5px 0 0 5px;
+            cursor: pointer;
+            box-shadow: -2px 2px 5px rgba(0,0,0,0.2);
+        }
+
+        /* Rules Modal */
+        .rules-modal-content {
+            background-color: #f5f5dc;
+            padding: 30px;
+            border: 2px solid #8b7355;
+            width: 90%;
+            max-width: 400px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .rules-modal-content h2 {
+            font-family: 'Courier New', Courier, monospace;
+            margin-bottom: 20px;
+            font-size: 18px;
+            text-align: center;
+        }
+
+        .rules-modal-content p {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 13px;
+            line-height: 1.8;
+            margin-bottom: 15px;
+        }
+
+        .rules-modal-content button {
+            font-family: 'Courier New', Courier, monospace;
         }
 
         /* Login Modal */
@@ -327,6 +345,20 @@
     <!-- Upload Button -->
     <button class="upload-btn" onclick="openUploadModal()">+</button>
 
+    <!-- Rules Tab -->
+    <div class="rules-tab" onclick="openRulesModal()"></div>
+
+    <!-- Rules Modal -->
+    <div class="modal" id="rulesModal">
+        <div class="rules-modal-content">
+            <h2>* secret rules *</h2>
+            <p><strong>TO DELETE:</strong><br>Triple-tap the right corner of your image</p>
+            <p><strong>TO ADD TO COLLECTION:</strong><br>Triple-tap the left corner of any image</p>
+            <p><strong>TO REARRANGE:</strong><br>Hold image for 2 seconds, then drag</p>
+            <button onclick="closeRulesModal()" style="width: 100%; background-color: #d4c5b0; padding: 10px; border: 1px solid #8b7355;">close</button>
+        </div>
+    </div>
+
     <!-- Upload Modal -->
     <div class="modal" id="uploadModal">
         <div class="modal-content">
@@ -341,20 +373,7 @@
     </div>
 
     <!-- Bottom Nav -->
-    <div class="bottom-nav">
-        <a href="#" class="active" onclick="loadPage('everything')">
-            <span style="font-size: 20px;">◉</span>
-            <span>feed</span>
-        </a>
-        <a href="#" onclick="loadPage('collections')">
-            <span style="font-size: 20px;">▦</span>
-            <span>boards</span>
-        </a>
-        <a href="#" onclick="loadPage('profile')">
-            <span style="font-size: 20px;">◈</span>
-            <span>profile</span>
-        </a>
-    </div>
+    <!-- Removed - using sidebar navigation only -->
 
     <!-- Login Modal -->
     <div class="modal" id="loginModal">
@@ -374,7 +393,7 @@
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, collection, addDoc, doc, setDoc, getDoc, getDocs, query, orderBy, updateDoc, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, collection, addDoc, doc, setDoc, getDoc, getDocs, query, orderBy, updateDoc, arrayUnion, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
         // Firebase configuration
@@ -479,11 +498,129 @@
                     const data = doc.data();
                     const item = document.createElement('div');
                     item.className = 'image-item';
-                    item.innerHTML = `<img src="${data.imageUrl}" alt="">`;
+                    item.dataset.imageId = doc.id;
+                    item.dataset.userId = data.userId;
+                    item.dataset.imageUrl = data.imageUrl;
+                    item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
+                    
+                    // Add gesture detection
+                    addGestureHandlers(item);
+                    
                     grid.appendChild(item);
                 });
             } catch (error) {
                 console.error('Error loading images:', error);
+            }
+        }
+
+        // Gesture detection for images
+        function addGestureHandlers(item) {
+            let tapCount = 0;
+            let tapTimer = null;
+            let holdTimer = null;
+            let isDragging = false;
+
+            item.addEventListener('touchstart', (e) => {
+                const touch = e.touches[0];
+                const rect = item.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const isLeftSide = x < rect.width / 3;
+                const isRightSide = x > (rect.width * 2 / 3);
+
+                // Triple tap detection
+                tapCount++;
+                if (tapTimer) clearTimeout(tapTimer);
+                
+                tapTimer = setTimeout(() => {
+                    if (tapCount === 3) {
+                        if (isRightSide) {
+                            // Delete image (only if user owns it)
+                            handleDelete(item);
+                        } else if (isLeftSide) {
+                            // Add to collection
+                            handleAddToCollection(item);
+                        }
+                    }
+                    tapCount = 0;
+                }, 500);
+
+                // Hold detection for drag
+                holdTimer = setTimeout(() => {
+                    isDragging = true;
+                    item.style.opacity = '0.5';
+                    item.style.transform = 'scale(1.05)';
+                }, 2000);
+            });
+
+            item.addEventListener('touchend', () => {
+                if (holdTimer) clearTimeout(holdTimer);
+                if (isDragging) {
+                    item.style.opacity = '1';
+                    item.style.transform = 'scale(1)';
+                    isDragging = false;
+                }
+            });
+
+            item.addEventListener('touchmove', (e) => {
+                if (isDragging) {
+                    e.preventDefault();
+                    // Drag functionality will be implemented next
+                }
+            });
+        }
+
+        // Handle delete
+        async function handleDelete(item) {
+            const imageId = item.dataset.imageId;
+            const userId = item.dataset.userId;
+            
+            if (userId !== auth.currentUser.uid) {
+                alert('You can only delete your own images');
+                return;
+            }
+
+            try {
+                await deleteDoc(doc(db, 'images', imageId));
+                item.remove();
+            } catch (error) {
+                alert('Delete failed: ' + error.message);
+            }
+        }
+
+        // Handle add to collection
+        async function handleAddToCollection(item) {
+            const imageId = item.dataset.imageId;
+            
+            // Get all collections
+            try {
+                const collectionsSnapshot = await getDocs(collection(db, 'collections'));
+                const collections = [];
+                collectionsSnapshot.forEach((doc) => {
+                    collections.push({ id: doc.id, name: doc.data().name });
+                });
+
+                if (collections.length === 0) {
+                    alert('No collections yet. Create one first!');
+                    return;
+                }
+
+                // Show collection picker (simplified for now)
+                const collectionNames = collections.map(c => c.name).join('\n');
+                const selectedName = prompt(`Add to collection:\n\n${collectionNames}\n\nType collection name:`);
+                
+                if (selectedName) {
+                    const selectedCollection = collections.find(c => c.name.toLowerCase() === selectedName.toLowerCase());
+                    if (selectedCollection) {
+                        await updateDoc(doc(db, 'collections', selectedCollection.id), {
+                            images: arrayUnion(imageId)
+                        });
+                        alert('Added to collection!');
+                    } else {
+                        alert('Collection not found');
+                    }
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
             }
         }
 
@@ -495,6 +632,15 @@
         window.closeUploadModal = function() {
             document.getElementById('uploadModal').style.display = 'none';
             document.getElementById('uploadForm').reset();
+        };
+
+        // Rules modal functions
+        window.openRulesModal = function() {
+            document.getElementById('rulesModal').style.display = 'flex';
+        };
+
+        window.closeRulesModal = function() {
+            document.getElementById('rulesModal').style.display = 'none';
         };
 
         // Handle image upload
