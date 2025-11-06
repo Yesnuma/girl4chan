@@ -798,9 +798,9 @@
                 currentUser = user;
                 document.getElementById('loginModal').style.display = 'none';
                 document.getElementById('logoutBtn').style.display = 'block';
-                loadEverythingFeed();
-                loadCollections();
-                checkChatUnlock();
+                await loadCollections();
+                await checkChatUnlock();
+                await restoreLastPage(); // Restore the page they were on
             } else {
                 document.getElementById('loginModal').style.display = 'flex';
                 document.getElementById('logoutBtn').style.display = 'none';
@@ -1016,6 +1016,13 @@
             document.getElementById('pageTitle').textContent = `/ ${collectionName}`;
             currentContext = { type: 'collection', id: collectionId };
             
+            // Save current page to localStorage
+            localStorage.setItem('currentPage', JSON.stringify({ 
+                type: 'collection', 
+                id: collectionId, 
+                name: collectionName 
+            }));
+            
             const grid = document.getElementById('imageGrid');
             grid.innerHTML = '';
             
@@ -1104,31 +1111,58 @@
             document.getElementById('pageTitle').textContent = '/ my profile';
             currentContext = { type: 'profile', id: auth.currentUser.uid };
             
+            // Save current page to localStorage
+            localStorage.setItem('currentPage', JSON.stringify({ type: 'profile' }));
+            
             const grid = document.getElementById('imageGrid');
             grid.innerHTML = '';
             
             try {
+                // Get user's custom order if it exists
+                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+                const customOrder = userDoc.data()?.profileImageOrder || null;
+                
+                // Get all user's images
                 const imagesQuery = query(
                     collection(db, 'images'), 
                     orderBy('createdAt', 'desc')
                 );
                 const snapshot = await getDocs(imagesQuery);
                 
+                // Filter to only user's images
+                const userImages = [];
                 snapshot.forEach((doc) => {
                     const data = doc.data();
                     if (data.userId === auth.currentUser.uid) {
-                        const item = document.createElement('div');
-                        item.className = 'image-item';
-                        item.dataset.imageId = doc.id;
-                        item.dataset.userId = data.userId;
-                        item.dataset.imageUrl = data.imageUrl;
-                        item.dataset.link = data.link || '';
-                        item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
-                        
-                        addGestureHandlers(item, true);
-                        
-                        grid.appendChild(item);
+                        userImages.push({ id: doc.id, data: data });
                     }
+                });
+                
+                // Sort by custom order if it exists
+                if (customOrder && customOrder.length > 0) {
+                    userImages.sort((a, b) => {
+                        const indexA = customOrder.indexOf(a.id);
+                        const indexB = customOrder.indexOf(b.id);
+                        // If not in custom order, put at end
+                        if (indexA === -1) return 1;
+                        if (indexB === -1) return -1;
+                        return indexA - indexB;
+                    });
+                }
+                
+                // Render images
+                userImages.forEach(({ id, data }) => {
+                    const item = document.createElement('div');
+                    item.className = 'image-item';
+                    item.dataset.imageId = id;
+                    item.dataset.userId = data.userId;
+                    item.dataset.imageUrl = data.imageUrl;
+                    item.dataset.link = data.link || '';
+                    item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
+                    
+                    addGestureHandlers(item, true);
+                    
+                    grid.appendChild(item);
                 });
             } catch (error) {
                 console.error('Error loading profile:', error);
@@ -1137,6 +1171,12 @@
 
         // Load everything feed
         async function loadEverythingFeed() {
+            currentContext = { type: 'everything', id: null };
+            document.getElementById('pageTitle').textContent = '/ everything';
+            
+            // Save current page to localStorage
+            localStorage.setItem('currentPage', JSON.stringify({ type: 'everything' }));
+            
             const grid = document.getElementById('imageGrid');
             grid.innerHTML = '';
             
@@ -1160,6 +1200,29 @@
                 });
             } catch (error) {
                 console.error('Error loading images:', error);
+            }
+        }
+
+        // Restore last viewed page
+        async function restoreLastPage() {
+            try {
+                const savedPage = localStorage.getItem('currentPage');
+                if (savedPage) {
+                    const page = JSON.parse(savedPage);
+                    
+                    if (page.type === 'profile') {
+                        await loadMyProfile();
+                    } else if (page.type === 'collection' && page.id && page.name) {
+                        await loadCollection(page.id, page.name);
+                    } else {
+                        await loadEverythingFeed();
+                    }
+                } else {
+                    await loadEverythingFeed();
+                }
+            } catch (error) {
+                console.error('Error restoring page:', error);
+                await loadEverythingFeed();
             }
         }
 
