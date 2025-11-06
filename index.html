@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Board</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0e0d6;
+            color: #000;
+        }
+
+        /* Header */
+        .header {
+            background-color: #9ed2f5;
+            padding: 10px 15px;
+            border-bottom: 1px solid #7ab8db;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: bold;
+            color: #0600ff;
+        }
+
+        .menu-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: -250px;
+            width: 250px;
+            height: 100%;
+            background-color: #eee;
+            border-right: 1px solid #ccc;
+            transition: left 0.3s;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .sidebar.open {
+            left: 0;
+        }
+
+        .sidebar-header {
+            padding: 15px;
+            background-color: #9ed2f5;
+            border-bottom: 1px solid #7ab8db;
+        }
+
+        .sidebar-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            float: right;
+        }
+
+        .sidebar-content {
+            padding: 15px;
+        }
+
+        .sidebar-section {
+            margin-bottom: 20px;
+        }
+
+        .sidebar-section h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #555;
+        }
+
+        .sidebar-section a {
+            display: block;
+            padding: 8px 0;
+            color: #000;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .sidebar-section a:hover {
+            text-decoration: underline;
+        }
+
+        /* Overlay */
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+
+        /* Main Content */
+        .container {
+            padding: 15px 10px;
+        }
+
+        .page-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            padding-left: 5px;
+        }
+
+        /* Image Grid */
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0;
+        }
+
+        .image-item {
+            aspect-ratio: 3 / 4;
+            background-color: #ddd;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .image-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Upload Button */
+        .upload-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background-color: #9ed2f5;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        /* Bottom Nav */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: #fff;
+            border-top: 1px solid #ccc;
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+        }
+
+        .bottom-nav a {
+            color: #666;
+            text-decoration: none;
+            font-size: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .bottom-nav a.active {
+            color: #000;
+        }
+
+        .container {
+            padding-bottom: 70px;
+        }
+
+        /* Login Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #f0e0d6;
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: #fff;
+            padding: 30px;
+            border: 1px solid #ccc;
+            width: 90%;
+            max-width: 350px;
+        }
+
+        .modal-content h2 {
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+            font-family: Arial, sans-serif;
+        }
+
+        .modal-content button {
+            width: 100%;
+            padding: 12px;
+            background-color: #9ed2f5;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .modal-content p {
+            margin-top: 15px;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .modal-content a {
+            color: #0600ff;
+            text-decoration: none;
+        }
+
+        .modal-content a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+        <h1>image board</h1>
+        <div style="width: 24px;"></div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <button class="sidebar-close" onclick="toggleSidebar()">×</button>
+            <h2 style="font-size: 16px;">boards</h2>
+        </div>
+        <div class="sidebar-content">
+            <div class="sidebar-section">
+                <h3>MAIN</h3>
+                <a href="#" onclick="loadPage('everything')">/ everything</a>
+                <a href="#" onclick="loadPage('profile')">/ my profile</a>
+            </div>
+            <div class="sidebar-section">
+                <h3>COLLECTIONS</h3>
+                <a href="#" onclick="loadPage('collection')">/ vintage denim</a>
+                <a href="#" onclick="loadPage('collection')">/ y2k finds</a>
+                <a href="#" onclick="loadPage('collection')">/ accessories</a>
+                <a href="#" onclick="loadPage('collection')">/ streetwear</a>
+                <a href="#" style="color: #666; font-style: italic;">+ create new</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay -->
+    <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <div class="page-title" id="pageTitle">/ everything</div>
+        <div class="image-grid" id="imageGrid">
+            <!-- Placeholder images -->
+            <div class="image-item" style="background-color: #c9b5a0;"></div>
+            <div class="image-item" style="background-color: #d4c4b0;"></div>
+            <div class="image-item" style="background-color: #b5a596;"></div>
+            <div class="image-item" style="background-color: #cbb8a5;"></div>
+            <div class="image-item" style="background-color: #a89787;"></div>
+            <div class="image-item" style="background-color: #d1bfad;"></div>
+            <div class="image-item" style="background-color: #baa999;"></div>
+            <div class="image-item" style="background-color: #c5b3a2;"></div>
+            <div class="image-item" style="background-color: #aea093;"></div>
+            <div class="image-item" style="background-color: #d0beac;"></div>
+            <div class="image-item" style="background-color: #b9a898;"></div>
+            <div class="image-item" style="background-color: #c4b2a1;"></div>
+            <div class="image-item" style="background-color: #ad9f92;"></div>
+            <div class="image-item" style="background-color: #cfbdab;"></div>
+            <div class="image-item" style="background-color: #b8a797;"></div>
+        </div>
+    </div>
+
+    <!-- Upload Button -->
+    <button class="upload-btn">+</button>
+
+    <!-- Bottom Nav -->
+    <div class="bottom-nav">
+        <a href="#" class="active" onclick="loadPage('everything')">
+            <span style="font-size: 20px;">◉</span>
+            <span>feed</span>
+        </a>
+        <a href="#" onclick="loadPage('collections')">
+            <span style="font-size: 20px;">▦</span>
+            <span>boards</span>
+        </a>
+        <a href="#" onclick="loadPage('profile')">
+            <span style="font-size: 20px;">◈</span>
+            <span>profile</span>
+        </a>
+    </div>
+
+    <!-- Login Modal -->
+    <div class="modal" id="loginModal">
+        <div class="modal-content">
+            <h2 id="authTitle">login</h2>
+            <form id="authForm">
+                <input type="email" id="emailInput" placeholder="email" required>
+                <input type="password" id="passwordInput" placeholder="password" required>
+                <input type="text" id="usernameInput" placeholder="username" style="display: none;">
+                <button type="submit" id="authSubmit">login</button>
+                <p id="authSwitch">need an account? <a href="#" onclick="toggleAuthMode(); return false;">sign up</a></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, collection, addDoc, doc, setDoc, getDoc, getDocs, query, orderBy, updateDoc, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDExgxdLsySYHaQp4UdXaxhQ0zcSAS72g4",
+            authDomain: "girl-4chan.firebaseapp.com",
+            projectId: "girl-4chan",
+            storageBucket: "girl-4chan.firebasestorage.app",
+            messagingSenderId: "290973679176",
+            appId: "1:290973679176:web:2074819349d9f464ba227d"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+
+        // Global variables
+        let currentUser = null;
+        let isSignupMode = false;
+
+        // Check auth state
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('loginModal').style.display = 'none';
+                loadEverythingFeed();
+            } else {
+                document.getElementById('loginModal').style.display = 'flex';
+            }
+        });
+
+        // Auth form submission
+        document.getElementById('authForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+            const username = document.getElementById('usernameInput').value;
+
+            try {
+                if (isSignupMode) {
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                    // Create user document
+                    await setDoc(doc(db, 'users', userCredential.user.uid), {
+                        username: username,
+                        email: email,
+                        createdAt: new Date()
+                    });
+                } else {
+                    await signInWithEmailAndPassword(auth, email, password);
+                }
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+
+        // Toggle between login and signup
+        window.toggleAuthMode = function() {
+            isSignupMode = !isSignupMode;
+            const title = document.getElementById('authTitle');
+            const submit = document.getElementById('authSubmit');
+            const switchText = document.getElementById('authSwitch');
+            const usernameInput = document.getElementById('usernameInput');
+
+            if (isSignupMode) {
+                title.textContent = 'sign up';
+                submit.textContent = 'create account';
+                switchText.innerHTML = 'have an account? <a href="#" onclick="toggleAuthMode(); return false;">login</a>';
+                usernameInput.style.display = 'block';
+                usernameInput.required = true;
+            } else {
+                title.textContent = 'login';
+                submit.textContent = 'login';
+                switchText.innerHTML = 'need an account? <a href="#" onclick="toggleAuthMode(); return false;">sign up</a>';
+                usernameInput.style.display = 'none';
+                usernameInput.required = false;
+            }
+        };
+
+        // Load everything feed
+        async function loadEverythingFeed() {
+            const grid = document.getElementById('imageGrid');
+            grid.innerHTML = '';
+            
+            try {
+                const imagesQuery = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
+                const snapshot = await getDocs(imagesQuery);
+                
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const item = document.createElement('div');
+                    item.className = 'image-item';
+                    item.innerHTML = `<img src="${data.imageUrl}" alt="">`;
+                    grid.appendChild(item);
+                });
+            } catch (error) {
+                console.error('Error loading images:', error);
+            }
+        }
+
+        // Make functions globally available
+        window.auth = auth;
+        window.db = db;
+        window.storage = storage;
+        window.currentUser = currentUser;
+        window.loadEverythingFeed = loadEverythingFeed;
+    </script>
+
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('overlay');
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+        }
+
+        function loadPage(page) {
+            // Close sidebar
+            toggleSidebar();
+            
+            // Update page title
+            const titleMap = {
+                'everything': '/ everything',
+                'profile': '/ my profile',
+                'collection': '/ vintage denim',
+                'collections': '/ boards'
+            };
+            document.getElementById('pageTitle').textContent = titleMap[page] || '/ ' + page;
+            
+            // Update active nav
+            document.querySelectorAll('.bottom-nav a').forEach(a => {
+                a.classList.remove('active');
+            });
+
+            // Load content based on page
+            if (page === 'everything') {
+                window.loadEverythingFeed();
+            }
+        }
+    </script>
+</body>
+</html>
