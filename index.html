@@ -156,7 +156,7 @@
         .image-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 3px;
+            gap: 2px;
         }
 
         .image-item {
@@ -1269,7 +1269,7 @@
                 touchStartX = touch.clientX;
                 touchStartY = touch.clientY;
                 
-                e.preventDefault();
+                // DON'T prevent default here - let scrolling work!
                 
                 // Start hold timer for drag if allowed
                 if (allowDrag) {
@@ -1332,7 +1332,7 @@
                     );
                     
                     if (distance > 50) {
-                        e.preventDefault();
+                        e.preventDefault(); // Only prevent when doing corner gesture
                         clearTimeout(tapTimer);
                         
                         if (firstTap === 'top-right' && corner === 'bottom-right') {
