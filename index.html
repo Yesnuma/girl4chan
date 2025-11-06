@@ -146,6 +146,7 @@
             background-color: #ddd;
             position: relative;
             overflow: hidden;
+            transition: transform 0.2s ease;
         }
 
         .image-item img {
@@ -158,10 +159,9 @@
         }
 
         .image-item.dragging {
-            opacity: 0.7;
-            transform: scale(0.85);
-            z-index: 1000;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            opacity: 0.9;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            will-change: transform;
         }
 
         .image-item.drag-over {
@@ -692,6 +692,7 @@
             <p><strong>TO DELETE:</strong><br>Tap top-right corner, then bottom-right corner of your image</p>
             <p><strong>TO ADD TO COLLECTION:</strong><br>Tap top-left corner, then bottom-left corner</p>
             <p><strong>TO OPEN LINK:</strong><br>Tap center of image</p>
+            <p><strong>TO REORDER:</strong><br>Hold for 1 second, then drag to new position</p>
             <p><strong>TO SECRET <span class="clickable-secret" onclick="secretWordClicked('body')">SECRET</span> RULES:</strong><br>Three secrets hide in plain sight - tap the first and last</p>
             <button onclick="closeRulesModal()" style="width: 100%; background-color: #d4c5b0; padding: 10px; border: 1px solid #8b7355;">close</button>
         </div>
@@ -749,9 +750,6 @@
         </div>
     </div>
 
-    <!-- Bottom Nav -->
-    <!-- Removed - using sidebar navigation only -->
-
     <!-- Login Modal -->
     <div class="modal" id="loginModal">
         <div class="modal-content">
@@ -792,6 +790,7 @@
         // Global variables
         let currentUser = null;
         let isSignupMode = false;
+        let currentContext = { type: null, id: null };
 
         // Check auth state
         onAuthStateChanged(auth, async (user) => {
@@ -800,8 +799,8 @@
                 document.getElementById('loginModal').style.display = 'none';
                 document.getElementById('logoutBtn').style.display = 'block';
                 loadEverythingFeed();
-                loadCollections(); // Load collections when user logs in
-                checkChatUnlock(); // Check if chat is unlocked
+                loadCollections();
+                checkChatUnlock();
             } else {
                 document.getElementById('loginModal').style.display = 'flex';
                 document.getElementById('logoutBtn').style.display = 'none';
@@ -840,7 +839,6 @@
             }
 
             try {
-                // Post unlock message to chat
                 await addDoc(collection(db, 'chat'), {
                     userId: auth.currentUser.uid,
                     username: (await getDoc(doc(db, 'users', auth.currentUser.uid))).data().username,
@@ -848,18 +846,16 @@
                     timestamp: new Date()
                 });
 
-                // Mark chat as unlocked for this user
                 await updateDoc(doc(db, 'users', auth.currentUser.uid), {
                     chatUnlocked: true
                 });
 
-                // Show chat tab and load messages
                 document.getElementById('chatTab').classList.add('unlocked');
                 document.getElementById('secretSecretOverlay').classList.remove('active');
                 document.getElementById('brandInputInline').value = '';
                 
                 loadChatMessages();
-                toggleChatbox(); // Open chatbox
+                toggleChatbox();
                 
                 alert('Chat unlocked! Welcome to the secret chat.');
             } catch (error) {
@@ -876,7 +872,6 @@
             }
 
             try {
-                // Post unlock message to chat
                 await addDoc(collection(db, 'chat'), {
                     userId: auth.currentUser.uid,
                     username: (await getDoc(doc(db, 'users', auth.currentUser.uid))).data().username,
@@ -884,19 +879,17 @@
                     timestamp: new Date()
                 });
 
-                // Mark chat as unlocked for this user
                 await updateDoc(doc(db, 'users', auth.currentUser.uid), {
                     chatUnlocked: true
                 });
 
-                // Show chat tab and load messages
                 document.getElementById('chatTab').classList.add('unlocked');
                 document.getElementById('chatUnlockModal').style.display = 'none';
                 document.getElementById('secretSecretOverlay').classList.remove('active');
                 document.getElementById('brandInput').value = '';
                 
                 loadChatMessages();
-                toggleChatbox(); // Open chatbox
+                toggleChatbox();
                 
                 alert('Chat unlocked! Welcome to the secret chat.');
             } catch (error) {
@@ -916,14 +909,12 @@
             const messagesDiv = document.getElementById('chatMessages');
             
             try {
-                // Unsubscribe from previous listener if exists
                 if (chatUnsubscribe) {
                     chatUnsubscribe();
                 }
                 
                 const chatQuery = query(collection(db, 'chat'), orderBy('timestamp', 'asc'));
                 
-                // Set up realtime listener
                 chatUnsubscribe = onSnapshot(chatQuery, (snapshot) => {
                     messagesDiv.innerHTML = '';
                     snapshot.forEach((doc) => {
@@ -941,7 +932,6 @@
                         messagesDiv.appendChild(messageDiv);
                     });
                     
-                    // Scroll to bottom
                     messagesDiv.scrollTop = messagesDiv.scrollHeight;
                 });
             } catch (error) {
@@ -966,7 +956,6 @@
                 });
                 
                 input.value = '';
-                // No need to reload - realtime listener will update automatically
             } catch (error) {
                 alert('Error sending message: ' + error.message);
             }
@@ -976,7 +965,7 @@
         let isLoadingCollections = false;
         
         async function loadCollections() {
-            if (isLoadingCollections) return; // Prevent double-loading
+            if (isLoadingCollections) return;
             isLoadingCollections = true;
             
             const collectionsList = document.getElementById('collectionsList');
@@ -1014,7 +1003,7 @@
                     createdAt: new Date(),
                     images: []
                 });
-                loadCollections(); // Reload collections list
+                loadCollections();
                 alert('Collection created!');
             } catch (error) {
                 alert('Error creating collection: ' + error.message);
@@ -1023,7 +1012,7 @@
 
         // Load specific collection
         async function loadCollection(collectionId, collectionName) {
-            toggleSidebar(); // Close sidebar
+            toggleSidebar();
             document.getElementById('pageTitle').textContent = `/ ${collectionName}`;
             currentContext = { type: 'collection', id: collectionId };
             
@@ -1034,7 +1023,6 @@
                 const collectionDoc = await getDoc(doc(db, 'collections', collectionId));
                 const imageIds = collectionDoc.data().images || [];
                 
-                // Load each image
                 for (const imageId of imageIds) {
                     const imageDoc = await getDoc(doc(db, 'images', imageId));
                     if (imageDoc.exists()) {
@@ -1046,7 +1034,7 @@
                         item.dataset.imageUrl = data.imageUrl;
                         item.dataset.link = data.link || '';
                         item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
-                        addGestureHandlers(item, true); // Enable drag in collections
+                        addGestureHandlers(item, true);
                         grid.appendChild(item);
                     }
                 }
@@ -1074,7 +1062,6 @@
             try {
                 if (isSignupMode) {
                     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                    // Create user document
                     await setDoc(doc(db, 'users', userCredential.user.uid), {
                         username: username,
                         email: email,
@@ -1113,7 +1100,7 @@
 
         // Load my profile
         window.loadMyProfile = async function() {
-            toggleSidebar(); // Close sidebar
+            toggleSidebar();
             document.getElementById('pageTitle').textContent = '/ my profile';
             currentContext = { type: 'profile', id: auth.currentUser.uid };
             
@@ -1129,7 +1116,6 @@
                 
                 snapshot.forEach((doc) => {
                     const data = doc.data();
-                    // Only show user's own images
                     if (data.userId === auth.currentUser.uid) {
                         const item = document.createElement('div');
                         item.className = 'image-item';
@@ -1139,7 +1125,6 @@
                         item.dataset.link = data.link || '';
                         item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
                         
-                        // Enable drag on own profile
                         addGestureHandlers(item, true);
                         
                         grid.appendChild(item);
@@ -1169,7 +1154,6 @@
                     item.dataset.link = data.link || '';
                     item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
                     
-                    // Add gesture detection
                     addGestureHandlers(item);
                     
                     grid.appendChild(item);
@@ -1179,7 +1163,7 @@
             }
         }
 
-        // Gesture detection for images
+        // Gesture detection for images - UPDATED WITH SMOOTH DRAG
         function addGestureHandlers(item, allowDrag = false) {
             let firstTap = null;
             let firstTapPosition = null;
@@ -1187,8 +1171,11 @@
             let touchStartTime = 0;
             let touchStartPos = null;
             let holdTimer = null;
+            let feedbackTimer = null;
             let isDragging = false;
             let dragStartIndex = null;
+            let touchStartX = 0;
+            let touchStartY = 0;
 
             item.addEventListener('touchstart', (e) => {
                 touchStartTime = Date.now();
@@ -1197,17 +1184,31 @@
                 const x = touch.clientX - rect.left;
                 const y = touch.clientY - rect.top;
                 touchStartPos = { x, y };
+                touchStartX = touch.clientX;
+                touchStartY = touch.clientY;
                 
-                // Prevent context menu
                 e.preventDefault();
                 
                 // Start hold timer for drag if allowed
                 if (allowDrag) {
+                    // Visual feedback at 0.8 seconds
+                    feedbackTimer = setTimeout(() => {
+                        item.style.transform = 'scale(0.95)';
+                        item.style.transition = 'transform 0.1s ease';
+                    }, 800);
+                    
+                    // Start drag at 1 second
                     holdTimer = setTimeout(() => {
                         isDragging = true;
                         item.classList.add('dragging');
+                        item.style.transition = 'none';
                         dragStartIndex = Array.from(item.parentNode.children).indexOf(item);
-                    }, 2000);
+                        
+                        // Haptic feedback
+                        if (navigator.vibrate) {
+                            navigator.vibrate(50);
+                        }
+                    }, 1000);
                 }
                 
                 // Detect which area - corners or center
@@ -1269,52 +1270,104 @@
                 if (isDragging) {
                     e.preventDefault();
                     const touch = e.touches[0];
+                    
+                    // Make item follow finger
+                    const deltaX = touch.clientX - touchStartX;
+                    const deltaY = touch.clientY - touchStartY;
+                    item.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.95)`;
+                    item.style.zIndex = '1000';
+                    
+                    // Find what item we're hovering over
+                    item.style.pointerEvents = 'none';
                     const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+                    item.style.pointerEvents = 'auto';
+                    
                     const targetItem = elementAtPoint?.closest('.image-item');
                     
+                    // Remove all drag-over classes first
+                    document.querySelectorAll('.image-item').forEach(i => i.classList.remove('drag-over'));
+                    
                     if (targetItem && targetItem !== item) {
-                        // Highlight drop target
-                        document.querySelectorAll('.image-item').forEach(i => i.classList.remove('drag-over'));
                         targetItem.classList.add('drag-over');
+                        
+                        // Reorder in DOM for smooth shifting
+                        const grid = item.parentNode;
+                        const items = Array.from(grid.children);
+                        const currentIndex = items.indexOf(item);
+                        const targetIndex = items.indexOf(targetItem);
+                        
+                        if (currentIndex < targetIndex) {
+                            grid.insertBefore(item, targetItem.nextSibling);
+                        } else {
+                            grid.insertBefore(item, targetItem);
+                        }
+                    }
+                } else {
+                    // If moved during hold, cancel the drag
+                    const touch = e.touches[0];
+                    const deltaX = touch.clientX - touchStartX;
+                    const deltaY = touch.clientY - touchStartY;
+                    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                    
+                    if (distance > 10) {
+                        if (holdTimer) clearTimeout(holdTimer);
+                        if (feedbackTimer) clearTimeout(feedbackTimer);
+                        item.style.transform = '';
+                        item.style.transition = '';
                     }
                 }
             });
 
             item.addEventListener('touchend', (e) => {
                 if (holdTimer) clearTimeout(holdTimer);
+                if (feedbackTimer) clearTimeout(feedbackTimer);
                 
                 const touchDuration = Date.now() - touchStartTime;
                 
                 if (isDragging) {
-                    // Handle drop
-                    const touch = e.changedTouches[0];
-                    const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
-                    const targetItem = elementAtPoint?.closest('.image-item');
+                    // Save the new order
+                    const grid = item.parentNode;
                     
-                    if (targetItem && targetItem !== item) {
-                        const dragEndIndex = Array.from(item.parentNode.children).indexOf(targetItem);
-                        handleDrop(item, dragStartIndex, dragEndIndex);
-                    }
-                    
+                    // Reset styles
                     item.classList.remove('dragging');
-                    document.querySelectorAll('.image-item').forEach(i => i.classList.remove('drag-over'));
+                    item.style.transform = '';
+                    item.style.transition = 'transform 0.2s ease';
+                    item.style.zIndex = '';
+                    document.querySelectorAll('.image-item').forEach(i => {
+                        i.classList.remove('drag-over');
+                    });
+                    
+                    // Save to Firebase
+                    setTimeout(() => {
+                        item.style.transition = '';
+                    }, 200);
+                    
+                    saveOrderToFirebase(grid);
+                    
                     isDragging = false;
                     dragStartIndex = null;
-                } else if (touchStartPos && touchDuration < 300 && !firstTap) {
-                    const rect = item.getBoundingClientRect();
-                    const centerMargin = 0.3;
-                    const isCenter = (
-                        touchStartPos.x > rect.width * centerMargin && 
-                        touchStartPos.x < rect.width * (1 - centerMargin) &&
-                        touchStartPos.y > rect.height * centerMargin && 
-                        touchStartPos.y < rect.height * (1 - centerMargin)
-                    );
+                } else {
+                    // Reset any visual feedback
+                    item.style.transform = '';
+                    item.style.transition = '';
                     
-                    if (isCenter) {
-                        const link = item.dataset.link;
-                        if (link) {
-                            e.preventDefault();
-                            window.open(link, '_blank');
+                    // Handle single tap on center for link
+                    if (touchStartPos && touchDuration < 300 && !firstTap) {
+                        const rect = item.getBoundingClientRect();
+                        const centerMargin = 0.3;
+                        const isCenter = (
+                            touchStartPos.x > rect.width * centerMargin && 
+                            touchStartPos.x < rect.width * (1 - centerMargin) &&
+                            touchStartPos.y > rect.height * centerMargin && 
+                            touchStartPos.y < rect.height * (1 - centerMargin)
+                        );
+                        
+                        if (isCenter) {
+                            const link = item.dataset.link;
+                            if (link) {
+                                e.preventDefault();
+                                window.open(link, '_blank');
+                            }
                         }
                     }
                 }
@@ -1322,43 +1375,28 @@
                 touchStartPos = null;
             });
 
-            // Prevent context menu completely
             item.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
             });
         }
 
-        // Handle drag and drop reorder
-        let currentContext = { type: null, id: null }; // Track if we're in collection or profile
-        
-        async function handleDrop(draggedItem, fromIndex, toIndex) {
-            if (fromIndex === toIndex) return;
-            
-            const grid = draggedItem.parentNode;
-            const items = Array.from(grid.children);
-            
-            // Reorder in DOM
-            if (fromIndex < toIndex) {
-                grid.insertBefore(draggedItem, items[toIndex].nextSibling);
-            } else {
-                grid.insertBefore(draggedItem, items[toIndex]);
-            }
-            
-            // Save to Firebase based on context
-            if (currentContext.type === 'collection') {
-                await saveCollectionOrder(currentContext.id, grid);
-            } else if (currentContext.type === 'profile') {
-                // Profile order is just visual, saved per user
-                console.log('Profile reordering is visual only for now');
-            }
-        }
-        
-        async function saveCollectionOrder(collectionId, grid) {
+        // Save order to Firebase
+        async function saveOrderToFirebase(grid) {
             try {
                 const imageIds = Array.from(grid.children).map(item => item.dataset.imageId);
-                await updateDoc(doc(db, 'collections', collectionId), {
-                    images: imageIds
-                });
+                
+                if (currentContext.type === 'collection') {
+                    await updateDoc(doc(db, 'collections', currentContext.id), {
+                        images: imageIds
+                    });
+                    console.log('Collection order saved!');
+                } else if (currentContext.type === 'profile') {
+                    // Save profile order - you could store this in a user document
+                    await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+                        profileImageOrder: imageIds
+                    });
+                    console.log('Profile order saved!');
+                }
             } catch (error) {
                 console.error('Error saving order:', error);
             }
@@ -1389,7 +1427,6 @@
         async function handleAddToCollection(item) {
             currentImageToAdd = item.dataset.imageId;
             
-            // Get all collections
             try {
                 const collectionsSnapshot = await getDocs(collection(db, 'collections'));
                 allCollections = [];
@@ -1402,7 +1439,6 @@
                     return;
                 }
 
-                // Show collection picker modal
                 displayCollections(allCollections);
                 document.getElementById('collectionPickerModal').style.display = 'flex';
             } catch (error) {
@@ -1475,13 +1511,11 @@
         window.secretWordClicked = function(location) {
             secretClicks[location] = true;
             
-            // Reset after 5 seconds if both not clicked
             if (secretTimer) clearTimeout(secretTimer);
             secretTimer = setTimeout(() => {
                 secretClicks = { title: false, body: false };
             }, 5000);
             
-            // Check if both clicked
             if (secretClicks.title && secretClicks.body) {
                 openSecretSecretRules();
                 secretClicks = { title: false, body: false };
@@ -1511,12 +1545,10 @@
             }
             
             try {
-                // Upload image to Firebase Storage
                 const storageRef = ref(storage, `images/${Date.now()}_${file.name}`);
                 await uploadBytes(storageRef, file);
                 const imageUrl = await getDownloadURL(storageRef);
                 
-                // Save to Firestore
                 await addDoc(collection(db, 'images'), {
                     imageUrl: imageUrl,
                     link: linkInput.value || '',
@@ -1524,7 +1556,6 @@
                     createdAt: new Date()
                 });
                 
-                // Close modal and reload feed
                 closeUploadModal();
                 loadEverythingFeed();
                 alert('Upload successful!');
@@ -1534,7 +1565,6 @@
             }
         });
 
-        // Make functions globally available
         window.auth = auth;
         window.db = db;
         window.storage = storage;
@@ -1551,10 +1581,8 @@
         }
 
         function loadPage(page) {
-            // Close sidebar
             toggleSidebar();
             
-            // Update page title
             const titleMap = {
                 'everything': '/ everything',
                 'profile': '/ my profile',
@@ -1563,12 +1591,6 @@
             };
             document.getElementById('pageTitle').textContent = titleMap[page] || '/ ' + page;
             
-            // Update active nav
-            document.querySelectorAll('.bottom-nav a').forEach(a => {
-                a.classList.remove('active');
-            });
-
-            // Load content based on page
             if (page === 'everything') {
                 window.loadEverythingFeed();
             }
