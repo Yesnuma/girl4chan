@@ -40,6 +40,14 @@
             cursor: pointer;
         }
 
+        .logout-btn {
+            background: none;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
         /* Sidebar */
         .sidebar {
             position: fixed;
@@ -235,6 +243,12 @@
             cursor: pointer;
             font-size: 14px;
             font-weight: bold;
+            color: #000;
+            opacity: 1;
+        }
+
+        .modal-content button:hover {
+            background-color: #8bc5e8;
         }
 
         .modal-content p {
@@ -258,7 +272,7 @@
     <div class="header">
         <button class="menu-btn" onclick="toggleSidebar()">☰</button>
         <h1>image board</h1>
-        <div style="width: 24px;"></div>
+        <button class="logout-btn" id="logoutBtn" onclick="handleLogout()" style="display: none;">logout</button>
     </div>
 
     <!-- Sidebar -->
@@ -375,11 +389,22 @@
             if (user) {
                 currentUser = user;
                 document.getElementById('loginModal').style.display = 'none';
+                document.getElementById('logoutBtn').style.display = 'block';
                 loadEverythingFeed();
             } else {
                 document.getElementById('loginModal').style.display = 'flex';
+                document.getElementById('logoutBtn').style.display = 'none';
             }
         });
+
+        // Logout function
+        window.handleLogout = async function() {
+            try {
+                await signOut(auth);
+            } catch (error) {
+                alert(error.message);
+            }
+        };
 
         // Auth form submission
         document.getElementById('authForm').addEventListener('submit', async (e) => {
