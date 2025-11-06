@@ -166,7 +166,7 @@
         }
 
         .image-item.drag-over {
-            border: 2px solid #0600ff;
+            /* No visual feedback - cleaner look */
         }
 
         /* Upload Button */
@@ -1351,37 +1351,18 @@
                     document.querySelectorAll('.image-item').forEach(i => i.classList.remove('drag-over'));
                     
                     if (targetItem && targetItem !== item) {
-                        // Show visual feedback
                         targetItem.classList.add('drag-over');
                         
-                        // Only reorder if we've crossed the midpoint of the target
-                        const targetRect = targetItem.getBoundingClientRect();
-                        const targetCenterX = targetRect.left + targetRect.width / 2;
-                        const targetCenterY = targetRect.top + targetRect.height / 2;
-                        
+                        // Reorder in DOM for smooth shifting
                         const grid = item.parentNode;
                         const items = Array.from(grid.children);
                         const currentIndex = items.indexOf(item);
                         const targetIndex = items.indexOf(targetItem);
                         
-                        // Determine if we should reorder based on direction and position
-                        let shouldReorder = false;
-                        
                         if (currentIndex < targetIndex) {
-                            // Dragging forward - need to pass the center of target
-                            shouldReorder = touch.clientX > targetCenterX || touch.clientY > targetCenterY;
+                            grid.insertBefore(item, targetItem.nextSibling);
                         } else {
-                            // Dragging backward - need to pass the center of target
-                            shouldReorder = touch.clientX < targetCenterX || touch.clientY < targetCenterY;
-                        }
-                        
-                        if (shouldReorder) {
-                            // Reorder in DOM for smooth shifting
-                            if (currentIndex < targetIndex) {
-                                grid.insertBefore(item, targetItem.nextSibling);
-                            } else {
-                                grid.insertBefore(item, targetItem);
-                            }
+                            grid.insertBefore(item, targetItem);
                         }
                     }
                 } else {
