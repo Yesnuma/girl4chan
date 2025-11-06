@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Image Board</title>
     <style>
         * {
@@ -650,6 +650,7 @@
         // Gesture detection for images
         function addGestureHandlers(item) {
             let firstTap = null;
+            let firstTapPosition = null;
             let tapTimer = null;
             let touchStartTime = 0;
 
@@ -675,24 +676,35 @@
                 if (!firstTap) {
                     // First tap
                     firstTap = corner;
+                    firstTapPosition = { x, y };
                     
                     // Reset after 1.5 seconds if no second tap
                     tapTimer = setTimeout(() => {
                         firstTap = null;
+                        firstTapPosition = null;
                     }, 1500);
                 } else {
-                    // Second tap
-                    e.preventDefault(); // Prevent default for corner sequences
-                    clearTimeout(tapTimer);
+                    // Second tap - check if it's in a different location
+                    const distance = Math.sqrt(
+                        Math.pow(x - firstTapPosition.x, 2) + 
+                        Math.pow(y - firstTapPosition.y, 2)
+                    );
                     
-                    // Check for valid sequences
-                    if (firstTap === 'top-right' && corner === 'bottom-right') {
-                        handleDelete(item);
-                    } else if (firstTap === 'top-left' && corner === 'bottom-left') {
-                        handleAddToCollection(item);
+                    // Only trigger if taps are far enough apart (at least 50px)
+                    if (distance > 50) {
+                        e.preventDefault(); // Prevent default for corner sequences
+                        clearTimeout(tapTimer);
+                        
+                        // Check for valid sequences
+                        if (firstTap === 'top-right' && corner === 'bottom-right') {
+                            handleDelete(item);
+                        } else if (firstTap === 'top-left' && corner === 'bottom-left') {
+                            handleAddToCollection(item);
+                        }
                     }
                     
                     firstTap = null;
+                    firstTapPosition = null;
                 }
             });
 
