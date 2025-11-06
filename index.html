@@ -154,6 +154,16 @@
             object-fit: cover;
         }
 
+        .image-item.dragging {
+            opacity: 0.5;
+            transform: scale(1.05);
+            z-index: 1000;
+        }
+
+        .image-item.drag-over {
+            border: 2px solid #0600ff;
+        }
+
         /* Upload Button */
         .upload-btn {
             position: fixed;
@@ -193,11 +203,11 @@
         .chat-tab {
             position: fixed;
             right: 0;
-            bottom: 220px;
+            bottom: 80px;
             width: 30px;
             height: 60px;
-            background-color: #d4c5b0;
-            border: 1px solid #b8a890;
+            background-color: #b8a890;
+            border: 1px solid #a0927d;
             border-right: none;
             border-radius: 5px 0 0 5px;
             cursor: pointer;
@@ -609,7 +619,7 @@
             <div class="sidebar-section">
                 <h3>MAIN</h3>
                 <a href="#" onclick="loadPage('everything')">/ everything</a>
-                <a href="#" onclick="loadPage('profile')">/ my profile</a>
+                <a href="#" onclick="loadMyProfile()">/ my profile</a>
             </div>
             <div class="sidebar-section">
                 <h3>COLLECTIONS</h3>
@@ -1031,7 +1041,7 @@
                         item.dataset.imageUrl = data.imageUrl;
                         item.dataset.link = data.link || '';
                         item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
-                        addGestureHandlers(item);
+                        addGestureHandlers(item, true); // Enable drag in collections
                         grid.appendChild(item);
                     }
                 }
@@ -1096,6 +1106,44 @@
             }
         };
 
+        // Load my profile
+        window.loadMyProfile = async function() {
+            toggleSidebar(); // Close sidebar
+            document.getElementById('pageTitle').textContent = '/ my profile';
+            
+            const grid = document.getElementById('imageGrid');
+            grid.innerHTML = '';
+            
+            try {
+                const imagesQuery = query(
+                    collection(db, 'images'), 
+                    orderBy('createdAt', 'desc')
+                );
+                const snapshot = await getDocs(imagesQuery);
+                
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    // Only show user's own images
+                    if (data.userId === auth.currentUser.uid) {
+                        const item = document.createElement('div');
+                        item.className = 'image-item';
+                        item.dataset.imageId = doc.id;
+                        item.dataset.userId = data.userId;
+                        item.dataset.imageUrl = data.imageUrl;
+                        item.dataset.link = data.link || '';
+                        item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
+                        
+                        // Enable drag on own profile
+                        addGestureHandlers(item, true);
+                        
+                        grid.appendChild(item);
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading profile:', error);
+            }
+        };
+
         // Load everything feed
         async function loadEverythingFeed() {
             const grid = document.getElementById('imageGrid');
@@ -1126,12 +1174,15 @@
         }
 
         // Gesture detection for images
-        function addGestureHandlers(item) {
+        function addGestureHandlers(item, allowDrag = false) {
             let firstTap = null;
             let firstTapPosition = null;
             let tapTimer = null;
             let touchStartTime = 0;
             let touchStartPos = null;
+            let holdTimer = null;
+            let isDragging = false;
+            let dragStartIndex = null;
 
             item.addEventListener('touchstart', (e) => {
                 touchStartTime = Date.now();
@@ -1141,8 +1192,17 @@
                 const y = touch.clientY - rect.top;
                 touchStartPos = { x, y };
                 
+                // Start hold timer for drag if allowed
+                if (allowDrag) {
+                    holdTimer = setTimeout(() => {
+                        isDragging = true;
+                        item.classList.add('dragging');
+                        dragStartIndex = Array.from(item.parentNode.children).indexOf(item);
+                    }, 2000);
+                }
+                
                 // Detect which area - corners or center
-                const centerMargin = 0.3; // 30% from each edge is center
+                const centerMargin = 0.3;
                 const isCenter = (
                     x > rect.width * centerMargin && 
                     x < rect.width * (1 - centerMargin) &&
@@ -1151,7 +1211,6 @@
                 );
                 
                 if (isCenter) {
-                    // Center tap will be handled in touchend
                     return;
                 }
                 
@@ -1168,28 +1227,23 @@
                 else if (isBottom && isRight) corner = 'bottom-right';
 
                 if (!firstTap) {
-                    // First tap
                     firstTap = corner;
                     firstTapPosition = { x, y };
                     
-                    // Reset after 1.5 seconds if no second tap
                     tapTimer = setTimeout(() => {
                         firstTap = null;
                         firstTapPosition = null;
                     }, 1500);
                 } else {
-                    // Second tap - check if it's in a different location
                     const distance = Math.sqrt(
                         Math.pow(x - firstTapPosition.x, 2) + 
                         Math.pow(y - firstTapPosition.y, 2)
                     );
                     
-                    // Only trigger if taps are far enough apart (at least 50px)
                     if (distance > 50) {
-                        e.preventDefault(); // Prevent default for corner sequences
+                        e.preventDefault();
                         clearTimeout(tapTimer);
                         
-                        // Check for valid sequences
                         if (firstTap === 'top-right' && corner === 'bottom-right') {
                             handleDelete(item);
                         } else if (firstTap === 'top-left' && corner === 'bottom-left') {
@@ -1202,10 +1256,42 @@
                 }
             });
 
+            item.addEventListener('touchmove', (e) => {
+                if (isDragging) {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+                    const targetItem = elementAtPoint?.closest('.image-item');
+                    
+                    if (targetItem && targetItem !== item) {
+                        // Highlight drop target
+                        document.querySelectorAll('.image-item').forEach(i => i.classList.remove('drag-over'));
+                        targetItem.classList.add('drag-over');
+                    }
+                }
+            });
+
             item.addEventListener('touchend', (e) => {
+                if (holdTimer) clearTimeout(holdTimer);
+                
                 const touchDuration = Date.now() - touchStartTime;
                 
-                if (touchStartPos && touchDuration < 300 && !firstTap) {
+                if (isDragging) {
+                    // Handle drop
+                    const touch = e.changedTouches[0];
+                    const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+                    const targetItem = elementAtPoint?.closest('.image-item');
+                    
+                    if (targetItem && targetItem !== item) {
+                        const dragEndIndex = Array.from(item.parentNode.children).indexOf(targetItem);
+                        handleDrop(item, dragStartIndex, dragEndIndex);
+                    }
+                    
+                    item.classList.remove('dragging');
+                    document.querySelectorAll('.image-item').forEach(i => i.classList.remove('drag-over'));
+                    isDragging = false;
+                    dragStartIndex = null;
+                } else if (touchStartPos && touchDuration < 300 && !firstTap) {
                     const rect = item.getBoundingClientRect();
                     const centerMargin = 0.3;
                     const isCenter = (
@@ -1226,6 +1312,13 @@
                 
                 touchStartPos = null;
             });
+        }
+
+        // Handle drag and drop reorder
+        async function handleDrop(draggedItem, fromIndex, toIndex) {
+            // This will be implemented to reorder in Firebase
+            console.log('Dragged from', fromIndex, 'to', toIndex);
+            alert('Drag reordering coming soon! Need to update Firebase positions.');
         }
 
         // Handle delete
