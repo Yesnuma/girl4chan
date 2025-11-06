@@ -741,6 +741,12 @@
                 <input type="text" id="brandInputInline" placeholder="enter brand..." style="flex: 1; padding: 8px; border: 1px solid #000; font-family: 'Courier New', Courier, monospace; font-size: 12px;">
                 <button onclick="submitChatUnlockInline()" style="padding: 8px 15px; background-color: #000; color: #fff; border: 1px solid #000; font-family: 'Courier New', Courier, monospace; cursor: pointer;">submit</button>
             </div>
+            <p><strong>CHAT RANK COLORS:</strong><br>
+            <span style="color: #0600ff;">■</span> Beginner (0-9 uploads) 
+            <span style="color: #00a86b;">■</span> Regular (10-24) 
+            <span style="color: #ff0074;">■</span> Active (25-49) 
+            <span style="color: #ffa500;">■</span> Power User (50-99) 
+            <span style="background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #8b00ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">■</span> Legend (100+)</p>
             <p><strong>HIDDEN EASTER EGG:</strong><br>[Outfit generator riddle coming soon!]</p>
             <button onclick="closeSecretSecretRules()">close</button>
         </div>
@@ -958,41 +964,45 @@
                         const messageDiv = document.createElement('div');
                         messageDiv.className = 'chat-message';
                         
-                        // Get user's upload count to determine color
+                        // Determine username color
                         let usernameColor = '#0600ff'; // default blue
-                        let uploadCount = 0;
+                        let colorStyle = '';
                         
-                        try {
-                            // Count user's uploads
-                            const imagesQuery = query(
-                                collection(db, 'images')
-                            );
-                            const imagesSnapshot = await getDocs(imagesQuery);
-                            imagesSnapshot.forEach((imgDoc) => {
-                                if (imgDoc.data().userId === data.userId) {
-                                    uploadCount++;
-                                }
-                            });
+                        if (data.userId === auth.currentUser.uid) {
+                            // Your own messages always stay red
+                            colorStyle = 'color: #ff0000;';
+                        } else {
+                            // Others get ranking colors based on upload count
+                            let uploadCount = 0;
                             
-                            // Determine color based on upload count
-                            if (uploadCount >= 100) {
-                                usernameColor = 'linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #8b00ff)';
-                            } else if (uploadCount >= 50) {
-                                usernameColor = '#ffa500'; // orange
-                            } else if (uploadCount >= 25) {
-                                usernameColor = '#ff0074'; // pink
-                            } else if (uploadCount >= 10) {
-                                usernameColor = '#00a86b'; // green
+                            try {
+                                // Count user's uploads
+                                const imagesQuery = query(collection(db, 'images'));
+                                const imagesSnapshot = await getDocs(imagesQuery);
+                                imagesSnapshot.forEach((imgDoc) => {
+                                    if (imgDoc.data().userId === data.userId) {
+                                        uploadCount++;
+                                    }
+                                });
+                                
+                                // Determine color based on upload count
+                                if (uploadCount >= 100) {
+                                    usernameColor = 'linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #8b00ff)';
+                                    colorStyle = `background: ${usernameColor}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;`;
+                                } else if (uploadCount >= 50) {
+                                    colorStyle = 'color: #ffa500;'; // orange
+                                } else if (uploadCount >= 25) {
+                                    colorStyle = 'color: #ff0074;'; // pink
+                                } else if (uploadCount >= 10) {
+                                    colorStyle = 'color: #00a86b;'; // green
+                                } else {
+                                    colorStyle = 'color: #0600ff;'; // blue
+                                }
+                            } catch (error) {
+                                console.error('Error getting user color:', error);
+                                colorStyle = 'color: #0600ff;'; // default blue on error
                             }
-                        } catch (error) {
-                            console.error('Error getting user color:', error);
                         }
-                        
-                        // Apply gradient or solid color
-                        const isGradient = uploadCount >= 100;
-                        const colorStyle = isGradient 
-                            ? `background: ${usernameColor}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;`
-                            : `color: ${usernameColor};`;
                         
                         if (data.userId === auth.currentUser.uid) {
                             messageDiv.classList.add('own');
@@ -1004,7 +1014,7 @@
                         messagesDiv.appendChild(messageDiv);
                     });
                     
-                    // Scroll to bottom after a brief delay to ensure all messages loaded
+                    // Scroll to bottom after a brief delay
                     setTimeout(() => {
                         messagesDiv.scrollTop = messagesDiv.scrollHeight;
                     }, 100);
