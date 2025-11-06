@@ -949,42 +949,40 @@
                 
                 const chatQuery = query(collection(db, 'chat'), orderBy('timestamp', 'asc'));
                 
-                chatUnsubscribe = onSnapshot(chatQuery, async (snapshot) => {
+                chatUnsubscribe = onSnapshot(chatQuery, (snapshot) => {
                     messagesDiv.innerHTML = '';
                     
-                    for (const docSnap of snapshot.docs) {
+                    // Process messages and get colors
+                    snapshot.forEach(async (docSnap) => {
                         const data = docSnap.data();
                         const messageDiv = document.createElement('div');
                         messageDiv.className = 'chat-message';
                         
                         // Get user's upload count to determine color
                         let usernameColor = '#0600ff'; // default blue
+                        let uploadCount = 0;
+                        
                         try {
-                            const userDoc = await getDoc(doc(db, 'users', data.userId));
-                            if (userDoc.exists()) {
-                                // Count user's uploads
-                                const imagesQuery = query(
-                                    collection(db, 'images'),
-                                    orderBy('createdAt', 'desc')
-                                );
-                                const imagesSnapshot = await getDocs(imagesQuery);
-                                let uploadCount = 0;
-                                imagesSnapshot.forEach((imgDoc) => {
-                                    if (imgDoc.data().userId === data.userId) {
-                                        uploadCount++;
-                                    }
-                                });
-                                
-                                // Determine color based on upload count
-                                if (uploadCount >= 100) {
-                                    usernameColor = 'linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #8b00ff)';
-                                } else if (uploadCount >= 50) {
-                                    usernameColor = '#ffa500'; // orange
-                                } else if (uploadCount >= 25) {
-                                    usernameColor = '#ff0074'; // pink
-                                } else if (uploadCount >= 10) {
-                                    usernameColor = '#00a86b'; // green
-                                } // else stays default blue
+                            // Count user's uploads
+                            const imagesQuery = query(
+                                collection(db, 'images')
+                            );
+                            const imagesSnapshot = await getDocs(imagesQuery);
+                            imagesSnapshot.forEach((imgDoc) => {
+                                if (imgDoc.data().userId === data.userId) {
+                                    uploadCount++;
+                                }
+                            });
+                            
+                            // Determine color based on upload count
+                            if (uploadCount >= 100) {
+                                usernameColor = 'linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #8b00ff)';
+                            } else if (uploadCount >= 50) {
+                                usernameColor = '#ffa500'; // orange
+                            } else if (uploadCount >= 25) {
+                                usernameColor = '#ff0074'; // pink
+                            } else if (uploadCount >= 10) {
+                                usernameColor = '#00a86b'; // green
                             }
                         } catch (error) {
                             console.error('Error getting user color:', error);
@@ -1004,9 +1002,12 @@
                         }
                         
                         messagesDiv.appendChild(messageDiv);
-                    }
+                    });
                     
-                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    // Scroll to bottom after a brief delay to ensure all messages loaded
+                    setTimeout(() => {
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    }, 100);
                 });
             } catch (error) {
                 console.error('Error loading messages:', error);
