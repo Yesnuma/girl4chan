@@ -1,5 +1,1092 @@
 <!DOCTYPE html>
+<html lang="en"><!DOCTYPE html>
 <html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Image Board</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0e0d6;
+            color: #000;
+        }
+
+        /* Header */
+        .header {
+            background-color: #9ed2f5;
+            padding: 10px 15px;
+            border-bottom: 1px solid #7ab8db;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: bold;
+            color: #0600ff;
+        }
+
+        .menu-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .logout-btn {
+            background: none;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: -250px;
+            width: 250px;
+            height: 100%;
+            background-color: #eee;
+            border-right: 1px solid #ccc;
+            transition: left 0.3s;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .sidebar.open {
+            left: 0;
+        }
+
+        .sidebar-header {
+            padding: 15px;
+            background-color: #9ed2f5;
+            border-bottom: 1px solid #7ab8db;
+        }
+
+        .sidebar-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            float: right;
+        }
+
+        .sidebar-content {
+            padding: 15px;
+        }
+
+        .sidebar-section {
+            margin-bottom: 20px;
+        }
+
+        .sidebar-section h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #555;
+        }
+
+        .sidebar-section a {
+            display: block;
+            padding: 8px 0;
+            color: #000;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .sidebar-section a:hover {
+            text-decoration: underline;
+        }
+
+        /* Overlay */
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+
+        /* Main Content */
+        .container {
+            padding: 15px 10px;
+        }
+
+        .page-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            padding-left: 5px;
+        }
+
+        /* Image Grid */
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0;
+        }
+
+        .image-item {
+            aspect-ratio: 3 / 4;
+            background-color: #ddd;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .image-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Upload Button */
+        .upload-btn {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background-color: #9ed2f5;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        .container {
+            padding: 15px 10px;
+            padding-bottom: 20px;
+        }
+
+        /* Rules Tab */
+        .rules-tab {
+            position: fixed;
+            right: 0;
+            bottom: 150px;
+            width: 30px;
+            height: 60px;
+            background-color: #d4c5b0;
+            border: 1px solid #b8a890;
+            border-right: none;
+            border-radius: 5px 0 0 5px;
+            cursor: pointer;
+            box-shadow: -2px 2px 5px rgba(0,0,0,0.2);
+        }
+
+        /* Rules Modal */
+        .rules-modal-content {
+            background-color: #f5f5dc;
+            padding: 30px;
+            border: 2px solid #8b7355;
+            width: 90%;
+            max-width: 400px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .rules-modal-content h2 {
+            font-family: 'Courier New', Courier, monospace;
+            margin-bottom: 20px;
+            font-size: 18px;
+            text-align: center;
+        }
+
+        .rules-modal-content p {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 13px;
+            line-height: 1.8;
+            margin-bottom: 15px;
+        }
+
+        .rules-modal-content button {
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        /* Collection Picker Modal */
+        .collection-picker-content {
+            background-color: #eee;
+            padding: 0;
+            border: 1px solid #ccc;
+            width: 280px;
+            max-width: 85%;
+            font-family: 'Courier New', Courier, monospace;
+            max-height: 60vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .collection-picker-header {
+            background-color: #9ed2f5;
+            padding: 12px 15px;
+            border-bottom: 1px solid #7ab8db;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .collection-picker-header h2 {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            margin: 0;
+            color: #000;
+        }
+
+        .collection-picker-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .collection-picker-content input {
+            width: calc(100% - 20px);
+            padding: 8px 10px;
+            margin: 10px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+        }
+
+        .collection-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 10px 10px 10px;
+        }
+
+        .collection-item {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+            background-color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .collection-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        /* Secret Secret Rules */
+        .secret-secret-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('stars-bg.jpg') center center;
+            background-size: cover;
+            z-index: 3000;
+            animation: fadeIn 1s ease-in;
+        }
+
+        .secret-secret-overlay.active {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .secret-secret-content {
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border: 2px solid #fff;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+            width: 85%;
+            max-width: 400px;
+            font-family: 'Courier New', Courier, monospace;
+            animation: popIn 0.5s ease-out 0.5s both;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .secret-secret-content h2 {
+            font-family: 'Courier New', Courier, monospace;
+            margin-bottom: 20px;
+            font-size: 18px;
+            text-align: center;
+            color: #000;
+        }
+
+        .secret-secret-content p {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 13px;
+            line-height: 1.8;
+            margin-bottom: 15px;
+            color: #000;
+        }
+
+        .secret-secret-content button {
+            font-family: 'Courier New', Courier, monospace;
+            width: 100%;
+            background-color: #000;
+            color: #fff;
+            padding: 10px;
+            border: 1px solid #000;
+            cursor: pointer;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes popIn {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* Clickable secret words */
+        .clickable-secret {
+            cursor: pointer;
+            position: relative;
+        }
+
+        .clickable-secret:hover {
+            opacity: 0.7;
+        }
+
+        /* Login Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #f0e0d6;
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: #fff;
+            padding: 30px;
+            border: 1px solid #ccc;
+            width: 90%;
+            max-width: 350px;
+        }
+
+        .modal-content h2 {
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+            font-family: Arial, sans-serif;
+        }
+
+        .modal-content button {
+            width: 100%;
+            padding: 12px;
+            background-color: #9ed2f5;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            color: #000;
+            opacity: 1;
+        }
+
+        .modal-content button:hover {
+            background-color: #8bc5e8;
+        }
+
+        .modal-content p {
+            margin-top: 15px;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .modal-content a {
+            color: #0600ff;
+            text-decoration: none;
+        }
+
+        .modal-content a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+        <h1>image board</h1>
+        <button class="logout-btn" id="logoutBtn" onclick="handleLogout()" style="display: none;">logout</button>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <button class="sidebar-close" onclick="toggleSidebar()">×</button>
+            <h2 style="font-size: 16px;">boards</h2>
+        </div>
+        <div class="sidebar-content">
+            <div class="sidebar-section">
+                <h3>MAIN</h3>
+                <a href="#" onclick="loadPage('everything')">/ everything</a>
+                <a href="#" onclick="loadPage('profile')">/ my profile</a>
+            </div>
+            <div class="sidebar-section">
+                <h3>COLLECTIONS</h3>
+                <div id="collectionsList">
+                    <!-- Collections will load here -->
+                </div>
+                <a href="#" onclick="createNewCollection()" style="color: #666; font-style: italic;">+ create new</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay -->
+    <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <div class="page-title" id="pageTitle">/ everything</div>
+        <div class="image-grid" id="imageGrid">
+            <!-- Placeholder images -->
+            <div class="image-item" style="background-color: #c9b5a0;"></div>
+            <div class="image-item" style="background-color: #d4c4b0;"></div>
+            <div class="image-item" style="background-color: #b5a596;"></div>
+            <div class="image-item" style="background-color: #cbb8a5;"></div>
+            <div class="image-item" style="background-color: #a89787;"></div>
+            <div class="image-item" style="background-color: #d1bfad;"></div>
+            <div class="image-item" style="background-color: #baa999;"></div>
+            <div class="image-item" style="background-color: #c5b3a2;"></div>
+            <div class="image-item" style="background-color: #aea093;"></div>
+            <div class="image-item" style="background-color: #d0beac;"></div>
+            <div class="image-item" style="background-color: #b9a898;"></div>
+            <div class="image-item" style="background-color: #c4b2a1;"></div>
+            <div class="image-item" style="background-color: #ad9f92;"></div>
+            <div class="image-item" style="background-color: #cfbdab;"></div>
+            <div class="image-item" style="background-color: #b8a797;"></div>
+        </div>
+    </div>
+
+    <!-- Upload Button -->
+    <button class="upload-btn" onclick="openUploadModal()">+</button>
+
+    <!-- Rules Tab -->
+    <div class="rules-tab" onclick="openRulesModal()"></div>
+
+    <!-- Rules Modal -->
+    <div class="modal" id="rulesModal">
+        <div class="rules-modal-content">
+            <h2>* <span class="clickable-secret" onclick="secretWordClicked('title')">secret</span> rules *</h2>
+            <p><strong>TO DELETE:</strong><br>Tap top-right corner, then bottom-right corner of your image</p>
+            <p><strong>TO ADD TO COLLECTION:</strong><br>Tap top-left corner, then bottom-left corner</p>
+            <p><strong>TO OPEN LINK:</strong><br>Tap center of image</p>
+            <p><strong>TO <span class="clickable-secret" onclick="secretWordClicked('body')">SECRET</span> SECRET RULES:</strong><br>Tap the hidden word above, then tap it again below</p>
+            <button onclick="closeRulesModal()" style="width: 100%; background-color: #d4c5b0; padding: 10px; border: 1px solid #8b7355;">close</button>
+        </div>
+    </div>
+
+    <!-- Secret Secret Rules Overlay -->
+    <div class="secret-secret-overlay" id="secretSecretOverlay">
+        <div class="secret-secret-content">
+            <h2>✦ secret secret rules ✦</h2>
+            <p><strong>TO ACCESS SECRET CHAT:</strong><br>[Coming soon - another riddle here!]</p>
+            <p><strong>HIDDEN EASTER EGG:</strong><br>[Outfit generator riddle coming soon!]</p>
+            <button onclick="closeSecretSecretRules()">close</button>
+        </div>
+    </div>
+
+    <!-- Collection Picker Modal -->
+    <div class="modal" id="collectionPickerModal">
+        <div class="collection-picker-content">
+            <div class="collection-picker-header">
+                <h2>add to collection</h2>
+                <button class="collection-picker-close" onclick="closeCollectionPicker()">×</button>
+            </div>
+            <input type="text" id="collectionSearch" placeholder="search..." oninput="filterCollections()">
+            <div class="collection-list" id="collectionPickerList">
+                <!-- Collections will load here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div class="modal" id="uploadModal">
+        <div class="modal-content">
+            <h2>upload image</h2>
+            <form id="uploadForm">
+                <input type="file" id="imageInput" accept="image/*" required style="margin-bottom: 15px;">
+                <input type="url" id="linkInput" placeholder="source link (optional)" style="margin-bottom: 15px;">
+                <button type="submit">upload</button>
+                <button type="button" onclick="closeUploadModal()" style="background-color: #ccc; margin-top: 10px;">cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <!-- Removed - using sidebar navigation only -->
+
+    <!-- Login Modal -->
+    <div class="modal" id="loginModal">
+        <div class="modal-content">
+            <h2 id="authTitle">login</h2>
+            <form id="authForm">
+                <input type="email" id="emailInput" placeholder="email" required>
+                <input type="password" id="passwordInput" placeholder="password" required>
+                <input type="text" id="usernameInput" placeholder="username" style="display: none;">
+                <button type="submit" id="authSubmit">login</button>
+                <p id="authSwitch">need an account? <a href="#" onclick="toggleAuthMode(); return false;">sign up</a></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, collection, addDoc, doc, setDoc, getDoc, getDocs, query, orderBy, updateDoc, arrayUnion, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDExgxdLsySYHaQp4UdXaxhQ0zcSAS72g4",
+            authDomain: "girl-4chan.firebaseapp.com",
+            projectId: "girl-4chan",
+            storageBucket: "girl-4chan.firebasestorage.app",
+            messagingSenderId: "290973679176",
+            appId: "1:290973679176:web:2074819349d9f464ba227d"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+
+        // Global variables
+        let currentUser = null;
+        let isSignupMode = false;
+
+        // Check auth state
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('loginModal').style.display = 'none';
+                document.getElementById('logoutBtn').style.display = 'block';
+                loadEverythingFeed();
+                loadCollections(); // Load collections when user logs in
+            } else {
+                document.getElementById('loginModal').style.display = 'flex';
+                document.getElementById('logoutBtn').style.display = 'none';
+            }
+        });
+
+        // Load collections from database
+        async function loadCollections() {
+            const collectionsList = document.getElementById('collectionsList');
+            collectionsList.innerHTML = '';
+            
+            try {
+                const collectionsSnapshot = await getDocs(collection(db, 'collections'));
+                collectionsSnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent = `/ ${data.name}`;
+                    link.onclick = () => {
+                        loadCollection(doc.id, data.name);
+                        return false;
+                    };
+                    collectionsList.appendChild(link);
+                });
+            } catch (error) {
+                console.error('Error loading collections:', error);
+            }
+        }
+
+        // Create new collection
+        window.createNewCollection = async function() {
+            const name = prompt('Collection name:');
+            if (!name) return;
+            
+            try {
+                await addDoc(collection(db, 'collections'), {
+                    name: name,
+                    createdBy: auth.currentUser.uid,
+                    createdAt: new Date(),
+                    images: []
+                });
+                loadCollections(); // Reload collections list
+                alert('Collection created!');
+            } catch (error) {
+                alert('Error creating collection: ' + error.message);
+            }
+        };
+
+        // Load specific collection
+        async function loadCollection(collectionId, collectionName) {
+            toggleSidebar(); // Close sidebar
+            document.getElementById('pageTitle').textContent = `/ ${collectionName}`;
+            
+            const grid = document.getElementById('imageGrid');
+            grid.innerHTML = '';
+            
+            try {
+                const collectionDoc = await getDoc(doc(db, 'collections', collectionId));
+                const imageIds = collectionDoc.data().images || [];
+                
+                // Load each image
+                for (const imageId of imageIds) {
+                    const imageDoc = await getDoc(doc(db, 'images', imageId));
+                    if (imageDoc.exists()) {
+                        const data = imageDoc.data();
+                        const item = document.createElement('div');
+                        item.className = 'image-item';
+                        item.dataset.imageId = imageDoc.id;
+                        item.dataset.userId = data.userId;
+                        item.dataset.imageUrl = data.imageUrl;
+                        item.dataset.link = data.link || '';
+                        item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
+                        addGestureHandlers(item);
+                        grid.appendChild(item);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading collection:', error);
+            }
+        }
+
+        // Logout function
+        window.handleLogout = async function() {
+            try {
+                await signOut(auth);
+            } catch (error) {
+                alert(error.message);
+            }
+        };
+
+        // Auth form submission
+        document.getElementById('authForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+            const username = document.getElementById('usernameInput').value;
+
+            try {
+                if (isSignupMode) {
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                    // Create user document
+                    await setDoc(doc(db, 'users', userCredential.user.uid), {
+                        username: username,
+                        email: email,
+                        createdAt: new Date()
+                    });
+                } else {
+                    await signInWithEmailAndPassword(auth, email, password);
+                }
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+
+        // Toggle between login and signup
+        window.toggleAuthMode = function() {
+            isSignupMode = !isSignupMode;
+            const title = document.getElementById('authTitle');
+            const submit = document.getElementById('authSubmit');
+            const switchText = document.getElementById('authSwitch');
+            const usernameInput = document.getElementById('usernameInput');
+
+            if (isSignupMode) {
+                title.textContent = 'sign up';
+                submit.textContent = 'create account';
+                switchText.innerHTML = 'have an account? <a href="#" onclick="toggleAuthMode(); return false;">login</a>';
+                usernameInput.style.display = 'block';
+                usernameInput.required = true;
+            } else {
+                title.textContent = 'login';
+                submit.textContent = 'login';
+                switchText.innerHTML = 'need an account? <a href="#" onclick="toggleAuthMode(); return false;">sign up</a>';
+                usernameInput.style.display = 'none';
+                usernameInput.required = false;
+            }
+        };
+
+        // Load everything feed
+        async function loadEverythingFeed() {
+            const grid = document.getElementById('imageGrid');
+            grid.innerHTML = '';
+            
+            try {
+                const imagesQuery = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
+                const snapshot = await getDocs(imagesQuery);
+                
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const item = document.createElement('div');
+                    item.className = 'image-item';
+                    item.dataset.imageId = doc.id;
+                    item.dataset.userId = data.userId;
+                    item.dataset.imageUrl = data.imageUrl;
+                    item.dataset.link = data.link || '';
+                    item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
+                    
+                    // Add gesture detection
+                    addGestureHandlers(item);
+                    
+                    grid.appendChild(item);
+                });
+            } catch (error) {
+                console.error('Error loading images:', error);
+            }
+        }
+
+        // Gesture detection for images
+        function addGestureHandlers(item) {
+            let firstTap = null;
+            let firstTapPosition = null;
+            let tapTimer = null;
+            let touchStartTime = 0;
+            let touchStartPos = null;
+
+            item.addEventListener('touchstart', (e) => {
+                touchStartTime = Date.now();
+                const touch = e.touches[0];
+                const rect = item.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                touchStartPos = { x, y };
+                
+                // Detect which area - corners or center
+                const centerMargin = 0.3; // 30% from each edge is center
+                const isCenter = (
+                    x > rect.width * centerMargin && 
+                    x < rect.width * (1 - centerMargin) &&
+                    y > rect.height * centerMargin && 
+                    y < rect.height * (1 - centerMargin)
+                );
+                
+                if (isCenter) {
+                    // Center tap will be handled in touchend
+                    return;
+                }
+                
+                // Detect which corner
+                const isLeft = x < rect.width / 2;
+                const isRight = x > rect.width / 2;
+                const isTop = y < rect.height / 2;
+                const isBottom = y > rect.height / 2;
+                
+                let corner = null;
+                if (isTop && isLeft) corner = 'top-left';
+                else if (isTop && isRight) corner = 'top-right';
+                else if (isBottom && isLeft) corner = 'bottom-left';
+                else if (isBottom && isRight) corner = 'bottom-right';
+
+                if (!firstTap) {
+                    // First tap
+                    firstTap = corner;
+                    firstTapPosition = { x, y };
+                    
+                    // Reset after 1.5 seconds if no second tap
+                    tapTimer = setTimeout(() => {
+                        firstTap = null;
+                        firstTapPosition = null;
+                    }, 1500);
+                } else {
+                    // Second tap - check if it's in a different location
+                    const distance = Math.sqrt(
+                        Math.pow(x - firstTapPosition.x, 2) + 
+                        Math.pow(y - firstTapPosition.y, 2)
+                    );
+                    
+                    // Only trigger if taps are far enough apart (at least 50px)
+                    if (distance > 50) {
+                        e.preventDefault(); // Prevent default for corner sequences
+                        clearTimeout(tapTimer);
+                        
+                        // Check for valid sequences
+                        if (firstTap === 'top-right' && corner === 'bottom-right') {
+                            handleDelete(item);
+                        } else if (firstTap === 'top-left' && corner === 'bottom-left') {
+                            handleAddToCollection(item);
+                        }
+                    }
+                    
+                    firstTap = null;
+                    firstTapPosition = null;
+                }
+            });
+
+            item.addEventListener('touchend', (e) => {
+                const touchDuration = Date.now() - touchStartTime;
+                
+                if (touchStartPos && touchDuration < 300 && !firstTap) {
+                    const rect = item.getBoundingClientRect();
+                    const centerMargin = 0.3;
+                    const isCenter = (
+                        touchStartPos.x > rect.width * centerMargin && 
+                        touchStartPos.x < rect.width * (1 - centerMargin) &&
+                        touchStartPos.y > rect.height * centerMargin && 
+                        touchStartPos.y < rect.height * (1 - centerMargin)
+                    );
+                    
+                    if (isCenter) {
+                        const link = item.dataset.link;
+                        if (link) {
+                            e.preventDefault();
+                            window.open(link, '_blank');
+                        }
+                    }
+                }
+                
+                touchStartPos = null;
+            });
+        }
+
+        // Handle delete
+        async function handleDelete(item) {
+            const imageId = item.dataset.imageId;
+            const userId = item.dataset.userId;
+            
+            if (userId !== auth.currentUser.uid) {
+                alert('You can only delete your own images');
+                return;
+            }
+
+            try {
+                await deleteDoc(doc(db, 'images', imageId));
+                item.remove();
+            } catch (error) {
+                alert('Delete failed: ' + error.message);
+            }
+        }
+
+        // Handle add to collection
+        let currentImageToAdd = null;
+        let allCollections = [];
+
+        async function handleAddToCollection(item) {
+            currentImageToAdd = item.dataset.imageId;
+            
+            // Get all collections
+            try {
+                const collectionsSnapshot = await getDocs(collection(db, 'collections'));
+                allCollections = [];
+                collectionsSnapshot.forEach((doc) => {
+                    allCollections.push({ id: doc.id, name: doc.data().name });
+                });
+
+                if (allCollections.length === 0) {
+                    alert('No collections yet. Create one first!');
+                    return;
+                }
+
+                // Show collection picker modal
+                displayCollections(allCollections);
+                document.getElementById('collectionPickerModal').style.display = 'flex';
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        function displayCollections(collections) {
+            const list = document.getElementById('collectionPickerList');
+            list.innerHTML = '';
+            
+            collections.forEach(col => {
+                const item = document.createElement('div');
+                item.className = 'collection-item';
+                item.textContent = col.name;
+                item.onclick = () => addToSelectedCollection(col.id, col.name);
+                list.appendChild(item);
+            });
+        }
+
+        async function addToSelectedCollection(collectionId, collectionName) {
+            try {
+                await updateDoc(doc(db, 'collections', collectionId), {
+                    images: arrayUnion(currentImageToAdd)
+                });
+                closeCollectionPicker();
+                alert(`Added to ${collectionName}!`);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        window.closeCollectionPicker = function() {
+            document.getElementById('collectionPickerModal').style.display = 'none';
+            document.getElementById('collectionSearch').value = '';
+            currentImageToAdd = null;
+        };
+
+        window.filterCollections = function() {
+            const searchTerm = document.getElementById('collectionSearch').value.toLowerCase();
+            const filtered = allCollections.filter(col => 
+                col.name.toLowerCase().includes(searchTerm)
+            );
+            displayCollections(filtered);
+        };
+
+        // Upload modal functions
+        window.openUploadModal = function() {
+            document.getElementById('uploadModal').style.display = 'flex';
+        };
+
+        window.closeUploadModal = function() {
+            document.getElementById('uploadModal').style.display = 'none';
+            document.getElementById('uploadForm').reset();
+        };
+
+        // Rules modal functions
+        window.openRulesModal = function() {
+            document.getElementById('rulesModal').style.display = 'flex';
+        };
+
+        window.closeRulesModal = function() {
+            document.getElementById('rulesModal').style.display = 'none';
+        };
+
+        // Secret secret rules unlock
+        let secretClicks = { title: false, body: false };
+        let secretTimer = null;
+
+        window.secretWordClicked = function(location) {
+            secretClicks[location] = true;
+            
+            // Reset after 5 seconds if both not clicked
+            if (secretTimer) clearTimeout(secretTimer);
+            secretTimer = setTimeout(() => {
+                secretClicks = { title: false, body: false };
+            }, 5000);
+            
+            // Check if both clicked
+            if (secretClicks.title && secretClicks.body) {
+                openSecretSecretRules();
+                secretClicks = { title: false, body: false };
+            }
+        };
+
+        window.openSecretSecretRules = function() {
+            document.getElementById('rulesModal').style.display = 'none';
+            document.getElementById('secretSecretOverlay').classList.add('active');
+        };
+
+        window.closeSecretSecretRules = function() {
+            document.getElementById('secretSecretOverlay').classList.remove('active');
+        };
+
+        // Handle image upload
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('imageInput');
+            const linkInput = document.getElementById('linkInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select an image');
+                return;
+            }
+            
+            try {
+                // Upload image to Firebase Storage
+                const storageRef = ref(storage, `images/${Date.now()}_${file.name}`);
+                await uploadBytes(storageRef, file);
+                const imageUrl = await getDownloadURL(storageRef);
+                
+                // Save to Firestore
+                await addDoc(collection(db, 'images'), {
+                    imageUrl: imageUrl,
+                    link: linkInput.value || '',
+                    userId: auth.currentUser.uid,
+                    createdAt: new Date()
+                });
+                
+                // Close modal and reload feed
+                closeUploadModal();
+                loadEverythingFeed();
+                alert('Upload successful!');
+            } catch (error) {
+                alert('Upload failed: ' + error.message);
+                console.error('Upload error:', error);
+            }
+        });
+
+        // Make functions globally available
+        window.auth = auth;
+        window.db = db;
+        window.storage = storage;
+        window.currentUser = currentUser;
+        window.loadEverythingFeed = loadEverythingFeed;
+    </script>
+
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('overlay');
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+        }
+
+        function loadPage(page) {
+            // Close sidebar
+            toggleSidebar();
+            
+            // Update page title
+            const titleMap = {
+                'everything': '/ everything',
+                'profile': '/ my profile',
+                'collection': '/ vintage denim',
+                'collections': '/ boards'
+            };
+            document.getElementById('pageTitle').textContent = titleMap[page] || '/ ' + page;
+            
+            // Update active nav
+            document.querySelectorAll('.bottom-nav a').forEach(a => {
+                a.classList.remove('active');
+            });
+
+            // Load content based on page
+            if (page === 'everything') {
+                window.loadEverythingFeed();
+            }
+        }
+    </script>
+</body>
+</html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
