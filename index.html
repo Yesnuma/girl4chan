@@ -1351,18 +1351,37 @@
                     document.querySelectorAll('.image-item').forEach(i => i.classList.remove('drag-over'));
                     
                     if (targetItem && targetItem !== item) {
+                        // Show visual feedback
                         targetItem.classList.add('drag-over');
                         
-                        // Reorder in DOM for smooth shifting
+                        // Only reorder if we've crossed the midpoint of the target
+                        const targetRect = targetItem.getBoundingClientRect();
+                        const targetCenterX = targetRect.left + targetRect.width / 2;
+                        const targetCenterY = targetRect.top + targetRect.height / 2;
+                        
                         const grid = item.parentNode;
                         const items = Array.from(grid.children);
                         const currentIndex = items.indexOf(item);
                         const targetIndex = items.indexOf(targetItem);
                         
+                        // Determine if we should reorder based on direction and position
+                        let shouldReorder = false;
+                        
                         if (currentIndex < targetIndex) {
-                            grid.insertBefore(item, targetItem.nextSibling);
+                            // Dragging forward - need to pass the center of target
+                            shouldReorder = touch.clientX > targetCenterX || touch.clientY > targetCenterY;
                         } else {
-                            grid.insertBefore(item, targetItem);
+                            // Dragging backward - need to pass the center of target
+                            shouldReorder = touch.clientX < targetCenterX || touch.clientY < targetCenterY;
+                        }
+                        
+                        if (shouldReorder) {
+                            // Reorder in DOM for smooth shifting
+                            if (currentIndex < targetIndex) {
+                                grid.insertBefore(item, targetItem.nextSibling);
+                            } else {
+                                grid.insertBefore(item, targetItem);
+                            }
                         }
                     }
                 } else {
@@ -1376,7 +1395,6 @@
                         if (holdTimer) clearTimeout(holdTimer);
                         if (feedbackTimer) clearTimeout(feedbackTimer);
                         item.style.transform = '';
-                        item.style.transition = '';
                     }
                 }
             });
