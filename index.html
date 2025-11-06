@@ -307,11 +307,10 @@
             </div>
             <div class="sidebar-section">
                 <h3>COLLECTIONS</h3>
-                <a href="#" onclick="loadPage('collection')">/ vintage denim</a>
-                <a href="#" onclick="loadPage('collection')">/ y2k finds</a>
-                <a href="#" onclick="loadPage('collection')">/ accessories</a>
-                <a href="#" onclick="loadPage('collection')">/ streetwear</a>
-                <a href="#" style="color: #666; font-style: italic;">+ create new</a>
+                <div id="collectionsList">
+                    <!-- Collections will load here -->
+                </div>
+                <a href="#" onclick="createNewCollection()" style="color: #666; font-style: italic;">+ create new</a>
             </div>
         </div>
     </div>
@@ -352,9 +351,9 @@
     <div class="modal" id="rulesModal">
         <div class="rules-modal-content">
             <h2>* secret rules *</h2>
-            <p><strong>TO DELETE:</strong><br>Triple-tap the right corner of your image</p>
-            <p><strong>TO ADD TO COLLECTION:</strong><br>Triple-tap the left corner of any image</p>
-            <p><strong>TO REARRANGE:</strong><br>Hold image for 2 seconds, then drag</p>
+            <p><strong>TO DELETE:</strong><br>Tap top-right corner, then bottom-right corner of your image</p>
+            <p><strong>TO ADD TO COLLECTION:</strong><br>Tap top-left corner, then bottom-left corner</p>
+            <p><strong>TO OPEN LINK:</strong><br>Single tap anywhere on image</p>
             <button onclick="closeRulesModal()" style="width: 100%; background-color: #d4c5b0; padding: 10px; border: 1px solid #8b7355;">close</button>
         </div>
     </div>
@@ -423,11 +422,87 @@
                 document.getElementById('loginModal').style.display = 'none';
                 document.getElementById('logoutBtn').style.display = 'block';
                 loadEverythingFeed();
+                loadCollections(); // Load collections when user logs in
             } else {
                 document.getElementById('loginModal').style.display = 'flex';
                 document.getElementById('logoutBtn').style.display = 'none';
             }
         });
+
+        // Load collections from database
+        async function loadCollections() {
+            const collectionsList = document.getElementById('collectionsList');
+            collectionsList.innerHTML = '';
+            
+            try {
+                const collectionsSnapshot = await getDocs(collection(db, 'collections'));
+                collectionsSnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent = `/ ${data.name}`;
+                    link.onclick = () => {
+                        loadCollection(doc.id, data.name);
+                        return false;
+                    };
+                    collectionsList.appendChild(link);
+                });
+            } catch (error) {
+                console.error('Error loading collections:', error);
+            }
+        }
+
+        // Create new collection
+        window.createNewCollection = async function() {
+            const name = prompt('Collection name:');
+            if (!name) return;
+            
+            try {
+                await addDoc(collection(db, 'collections'), {
+                    name: name,
+                    createdBy: auth.currentUser.uid,
+                    createdAt: new Date(),
+                    images: []
+                });
+                loadCollections(); // Reload collections list
+                alert('Collection created!');
+            } catch (error) {
+                alert('Error creating collection: ' + error.message);
+            }
+        };
+
+        // Load specific collection
+        async function loadCollection(collectionId, collectionName) {
+            toggleSidebar(); // Close sidebar
+            document.getElementById('pageTitle').textContent = `/ ${collectionName}`;
+            
+            const grid = document.getElementById('imageGrid');
+            grid.innerHTML = '';
+            
+            try {
+                const collectionDoc = await getDoc(doc(db, 'collections', collectionId));
+                const imageIds = collectionDoc.data().images || [];
+                
+                // Load each image
+                for (const imageId of imageIds) {
+                    const imageDoc = await getDoc(doc(db, 'images', imageId));
+                    if (imageDoc.exists()) {
+                        const data = imageDoc.data();
+                        const item = document.createElement('div');
+                        item.className = 'image-item';
+                        item.dataset.imageId = imageDoc.id;
+                        item.dataset.userId = data.userId;
+                        item.dataset.imageUrl = data.imageUrl;
+                        item.dataset.link = data.link || '';
+                        item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
+                        addGestureHandlers(item);
+                        grid.appendChild(item);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading collection:', error);
+            }
+        }
 
         // Logout function
         window.handleLogout = async function() {
@@ -501,6 +576,7 @@
                     item.dataset.imageId = doc.id;
                     item.dataset.userId = data.userId;
                     item.dataset.imageUrl = data.imageUrl;
+                    item.dataset.link = data.link || '';
                     item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
                     
                     // Add gesture detection
@@ -515,56 +591,59 @@
 
         // Gesture detection for images
         function addGestureHandlers(item) {
-            let tapCount = 0;
+            let firstTap = null;
             let tapTimer = null;
-            let holdTimer = null;
-            let isDragging = false;
 
             item.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // Prevent zoom
                 const touch = e.touches[0];
                 const rect = item.getBoundingClientRect();
                 const x = touch.clientX - rect.left;
-                const isLeftSide = x < rect.width / 3;
-                const isRightSide = x > (rect.width * 2 / 3);
-
-                // Triple tap detection
-                tapCount++;
-                if (tapTimer) clearTimeout(tapTimer);
+                const y = touch.clientY - rect.top;
                 
-                tapTimer = setTimeout(() => {
-                    if (tapCount === 3) {
-                        if (isRightSide) {
-                            // Delete image (only if user owns it)
-                            handleDelete(item);
-                        } else if (isLeftSide) {
-                            // Add to collection
-                            handleAddToCollection(item);
-                        }
+                // Detect which corner
+                const isLeft = x < rect.width / 2;
+                const isRight = x > rect.width / 2;
+                const isTop = y < rect.height / 2;
+                const isBottom = y > rect.height / 2;
+                
+                let corner = null;
+                if (isTop && isLeft) corner = 'top-left';
+                else if (isTop && isRight) corner = 'top-right';
+                else if (isBottom && isLeft) corner = 'bottom-left';
+                else if (isBottom && isRight) corner = 'bottom-right';
+
+                if (!firstTap) {
+                    // First tap
+                    firstTap = corner;
+                    
+                    // Reset after 1.5 seconds if no second tap
+                    tapTimer = setTimeout(() => {
+                        firstTap = null;
+                    }, 1500);
+                } else {
+                    // Second tap
+                    clearTimeout(tapTimer);
+                    
+                    // Check for valid sequences
+                    if (firstTap === 'top-right' && corner === 'bottom-right') {
+                        handleDelete(item);
+                    } else if (firstTap === 'top-left' && corner === 'bottom-left') {
+                        handleAddToCollection(item);
                     }
-                    tapCount = 0;
-                }, 500);
-
-                // Hold detection for drag
-                holdTimer = setTimeout(() => {
-                    isDragging = true;
-                    item.style.opacity = '0.5';
-                    item.style.transform = 'scale(1.05)';
-                }, 2000);
-            });
-
-            item.addEventListener('touchend', () => {
-                if (holdTimer) clearTimeout(holdTimer);
-                if (isDragging) {
-                    item.style.opacity = '1';
-                    item.style.transform = 'scale(1)';
-                    isDragging = false;
+                    
+                    firstTap = null;
                 }
             });
 
-            item.addEventListener('touchmove', (e) => {
-                if (isDragging) {
-                    e.preventDefault();
-                    // Drag functionality will be implemented next
+            // Single tap anywhere opens link
+            item.addEventListener('click', (e) => {
+                if (!firstTap) { // Only if not part of a corner sequence
+                    const imageUrl = item.dataset.imageUrl;
+                    const link = item.dataset.link;
+                    if (link) {
+                        window.open(link, '_blank');
+                    }
                 }
             });
         }
