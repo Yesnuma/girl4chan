@@ -217,6 +217,52 @@
             font-family: 'Courier New', Courier, monospace;
         }
 
+        /* Collection Picker Modal */
+        .collection-picker-content {
+            background-color: #f5f5dc;
+            padding: 20px;
+            border: 2px solid #8b7355;
+            width: 90%;
+            max-width: 350px;
+            font-family: 'Courier New', Courier, monospace;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .collection-picker-content h2 {
+            font-family: 'Courier New', Courier, monospace;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .collection-picker-content input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #8b7355;
+            background-color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 13px;
+        }
+
+        .collection-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .collection-item {
+            padding: 10px;
+            border: 1px solid #8b7355;
+            margin-bottom: 5px;
+            cursor: pointer;
+            background-color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .collection-item:hover {
+            background-color: #f0e0d6;
+        }
+
         /* Login Modal */
         .modal {
             display: none;
@@ -355,6 +401,18 @@
             <p><strong>TO ADD TO COLLECTION:</strong><br>Tap top-left corner, then bottom-left corner</p>
             <p><strong>TO OPEN LINK:</strong><br>Single tap anywhere on image</p>
             <button onclick="closeRulesModal()" style="width: 100%; background-color: #d4c5b0; padding: 10px; border: 1px solid #8b7355;">close</button>
+        </div>
+    </div>
+
+    <!-- Collection Picker Modal -->
+    <div class="modal" id="collectionPickerModal">
+        <div class="collection-picker-content">
+            <h2>add to collection:</h2>
+            <input type="text" id="collectionSearch" placeholder="search collections..." oninput="filterCollections()">
+            <div class="collection-list" id="collectionPickerList">
+                <!-- Collections will load here -->
+            </div>
+            <button onclick="closeCollectionPicker()" style="width: 100%; background-color: #d4c5b0; padding: 10px; border: 1px solid #8b7355; margin-top: 10px; font-family: 'Courier New', Courier, monospace;">cancel</button>
         </div>
     </div>
 
@@ -593,9 +651,10 @@
         function addGestureHandlers(item) {
             let firstTap = null;
             let tapTimer = null;
+            let touchStartTime = 0;
 
             item.addEventListener('touchstart', (e) => {
-                e.preventDefault(); // Prevent zoom
+                touchStartTime = Date.now();
                 const touch = e.touches[0];
                 const rect = item.getBoundingClientRect();
                 const x = touch.clientX - rect.left;
@@ -623,6 +682,7 @@
                     }, 1500);
                 } else {
                     // Second tap
+                    e.preventDefault(); // Prevent default for corner sequences
                     clearTimeout(tapTimer);
                     
                     // Check for valid sequences
@@ -636,12 +696,14 @@
                 }
             });
 
-            // Single tap anywhere opens link
-            item.addEventListener('click', (e) => {
-                if (!firstTap) { // Only if not part of a corner sequence
-                    const imageUrl = item.dataset.imageUrl;
+            item.addEventListener('touchend', (e) => {
+                const touchDuration = Date.now() - touchStartTime;
+                
+                // If it's a quick tap (not part of a corner sequence) and no second tap is pending
+                if (touchDuration < 300 && !firstTap) {
                     const link = item.dataset.link;
                     if (link) {
+                        e.preventDefault();
                         window.open(link, '_blank');
                     }
                 }
@@ -667,41 +729,71 @@
         }
 
         // Handle add to collection
+        let currentImageToAdd = null;
+        let allCollections = [];
+
         async function handleAddToCollection(item) {
-            const imageId = item.dataset.imageId;
+            currentImageToAdd = item.dataset.imageId;
             
             // Get all collections
             try {
                 const collectionsSnapshot = await getDocs(collection(db, 'collections'));
-                const collections = [];
+                allCollections = [];
                 collectionsSnapshot.forEach((doc) => {
-                    collections.push({ id: doc.id, name: doc.data().name });
+                    allCollections.push({ id: doc.id, name: doc.data().name });
                 });
 
-                if (collections.length === 0) {
+                if (allCollections.length === 0) {
                     alert('No collections yet. Create one first!');
                     return;
                 }
 
-                // Show collection picker (simplified for now)
-                const collectionNames = collections.map(c => c.name).join('\n');
-                const selectedName = prompt(`Add to collection:\n\n${collectionNames}\n\nType collection name:`);
-                
-                if (selectedName) {
-                    const selectedCollection = collections.find(c => c.name.toLowerCase() === selectedName.toLowerCase());
-                    if (selectedCollection) {
-                        await updateDoc(doc(db, 'collections', selectedCollection.id), {
-                            images: arrayUnion(imageId)
-                        });
-                        alert('Added to collection!');
-                    } else {
-                        alert('Collection not found');
-                    }
-                }
+                // Show collection picker modal
+                displayCollections(allCollections);
+                document.getElementById('collectionPickerModal').style.display = 'flex';
             } catch (error) {
                 alert('Error: ' + error.message);
             }
         }
+
+        function displayCollections(collections) {
+            const list = document.getElementById('collectionPickerList');
+            list.innerHTML = '';
+            
+            collections.forEach(col => {
+                const item = document.createElement('div');
+                item.className = 'collection-item';
+                item.textContent = col.name;
+                item.onclick = () => addToSelectedCollection(col.id, col.name);
+                list.appendChild(item);
+            });
+        }
+
+        async function addToSelectedCollection(collectionId, collectionName) {
+            try {
+                await updateDoc(doc(db, 'collections', collectionId), {
+                    images: arrayUnion(currentImageToAdd)
+                });
+                closeCollectionPicker();
+                alert(`Added to ${collectionName}!`);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        window.closeCollectionPicker = function() {
+            document.getElementById('collectionPickerModal').style.display = 'none';
+            document.getElementById('collectionSearch').value = '';
+            currentImageToAdd = null;
+        };
+
+        window.filterCollections = function() {
+            const searchTerm = document.getElementById('collectionSearch').value.toLowerCase();
+            const filtered = allCollections.filter(col => 
+                col.name.toLowerCase().includes(searchTerm)
+            );
+            displayCollections(filtered);
+        };
 
         // Upload modal functions
         window.openUploadModal = function() {
