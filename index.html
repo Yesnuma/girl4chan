@@ -17,6 +17,24 @@
             color: #000;
         }
 
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 12px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #e0d0c0;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #9ed2f5;
+            border-radius: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #7ab8db;
+        }
+
         /* Header */
         .header {
             background-color: #9ed2f5;
@@ -138,7 +156,7 @@
         .image-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 0;
+            gap: 3px;
         }
 
         .image-item {
