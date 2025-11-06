@@ -311,12 +311,21 @@
             font-weight: bold;
         }
 
+        .clickable-username {
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .clickable-username:hover {
+            opacity: 0.7;
+        }
+
         .chat-message.own .username {
-            color: #ff0000;
+            /* Color set dynamically based on upload count */
         }
 
         .chat-message .username {
-            color: #0600ff;
+            /* Color set dynamically based on upload count */
         }
 
         .chatbox-input {
@@ -940,22 +949,62 @@
                 
                 const chatQuery = query(collection(db, 'chat'), orderBy('timestamp', 'asc'));
                 
-                chatUnsubscribe = onSnapshot(chatQuery, (snapshot) => {
+                chatUnsubscribe = onSnapshot(chatQuery, async (snapshot) => {
                     messagesDiv.innerHTML = '';
-                    snapshot.forEach((doc) => {
-                        const data = doc.data();
+                    
+                    for (const docSnap of snapshot.docs) {
+                        const data = docSnap.data();
                         const messageDiv = document.createElement('div');
                         messageDiv.className = 'chat-message';
                         
+                        // Get user's upload count to determine color
+                        let usernameColor = '#0600ff'; // default blue
+                        try {
+                            const userDoc = await getDoc(doc(db, 'users', data.userId));
+                            if (userDoc.exists()) {
+                                // Count user's uploads
+                                const imagesQuery = query(
+                                    collection(db, 'images'),
+                                    orderBy('createdAt', 'desc')
+                                );
+                                const imagesSnapshot = await getDocs(imagesQuery);
+                                let uploadCount = 0;
+                                imagesSnapshot.forEach((imgDoc) => {
+                                    if (imgDoc.data().userId === data.userId) {
+                                        uploadCount++;
+                                    }
+                                });
+                                
+                                // Determine color based on upload count
+                                if (uploadCount >= 100) {
+                                    usernameColor = 'linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #8b00ff)';
+                                } else if (uploadCount >= 50) {
+                                    usernameColor = '#ffa500'; // orange
+                                } else if (uploadCount >= 25) {
+                                    usernameColor = '#ff0074'; // pink
+                                } else if (uploadCount >= 10) {
+                                    usernameColor = '#00a86b'; // green
+                                } // else stays default blue
+                            }
+                        } catch (error) {
+                            console.error('Error getting user color:', error);
+                        }
+                        
+                        // Apply gradient or solid color
+                        const isGradient = uploadCount >= 100;
+                        const colorStyle = isGradient 
+                            ? `background: ${usernameColor}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;`
+                            : `color: ${usernameColor};`;
+                        
                         if (data.userId === auth.currentUser.uid) {
                             messageDiv.classList.add('own');
-                            messageDiv.innerHTML = `${data.message} :<span class="username">${data.username}</span>`;
+                            messageDiv.innerHTML = `${data.message} :<span class="username clickable-username" style="${colorStyle}" onclick="loadUserProfile('${data.userId}', '${data.username}')">${data.username}</span>`;
                         } else {
-                            messageDiv.innerHTML = `<span class="username">[${data.username}]</span>: ${data.message}`;
+                            messageDiv.innerHTML = `<span class="username clickable-username" style="${colorStyle}" onclick="loadUserProfile('${data.userId}', '${data.username}')">[${data.username}]</span>: ${data.message}`;
                         }
                         
                         messagesDiv.appendChild(messageDiv);
-                    });
+                    }
                     
                     messagesDiv.scrollTop = messagesDiv.scrollHeight;
                 });
@@ -1130,7 +1179,48 @@
             }
         };
 
-        // Load my profile
+        // Load user profile (for viewing other users)
+        window.loadUserProfile = async function(userId, username) {
+            toggleSidebar(); // Close sidebar if open
+            toggleChatbox(); // Close chatbox
+            document.getElementById('pageTitle').textContent = `/ ${username}'s profile`;
+            currentContext = { type: 'userProfile', id: userId };
+            
+            // Save current page to localStorage
+            localStorage.setItem('currentPage', JSON.stringify({ type: 'userProfile', id: userId, username: username }));
+            
+            const grid = document.getElementById('imageGrid');
+            grid.innerHTML = '';
+            
+            try {
+                const imagesQuery = query(
+                    collection(db, 'images'), 
+                    orderBy('createdAt', 'desc')
+                );
+                const snapshot = await getDocs(imagesQuery);
+                
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    // Only show this user's images
+                    if (data.userId === userId) {
+                        const item = document.createElement('div');
+                        item.className = 'image-item';
+                        item.dataset.imageId = doc.id;
+                        item.dataset.userId = data.userId;
+                        item.dataset.imageUrl = data.imageUrl;
+                        item.dataset.link = data.link || '';
+                        item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
+                        
+                        // Add gestures but NO drag (read-only for other users)
+                        addGestureHandlers(item, false);
+                        
+                        grid.appendChild(item);
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading user profile:', error);
+            }
+        };
         window.loadMyProfile = async function() {
             toggleSidebar();
             document.getElementById('pageTitle').textContent = '/ my profile';
@@ -1239,6 +1329,8 @@
                         await loadMyProfile();
                     } else if (page.type === 'collection' && page.id && page.name) {
                         await loadCollection(page.id, page.name);
+                    } else if (page.type === 'userProfile' && page.id && page.username) {
+                        await loadUserProfile(page.id, page.username);
                     } else {
                         await loadEverythingFeed();
                     }
