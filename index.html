@@ -1260,25 +1260,23 @@
         const packageData = {
             'tobacco-royale': {
                 colors: ['#8b4513', '#d2691e', '#a0522d', '#654321', '#f4a460', '#deb887', '#d2b48c', '#ffe4c4'],
-                unlockAt: 10,
                 pattern: '.⋅˚₊‧ 🜲 ‧₊˚ ⋅'
             },
             'princess-peach': {
                 colors: ['#f21d92', '#72779f', '#82bd67', '#975683', '#f7ffaf', '#ff8bb4', '#b9a6e1', '#ffd1ff'],
-                unlockAt: 25,
                 pattern: '.⋅˚₊‧ 🜲 ‧₊˚ ⋅'
             },
             'space-cow': {
                 colors: ['#000033', '#191970', '#483d8b', '#6a5acd', '#b0c4de', '#e0ffff', '#f0f8ff', '#ffffff'],
-                unlockAt: 50,
                 pattern: '.⋅˚₊‧ 🜲 ‧₊˚ ⋅'
             },
             'swamp-witch': {
                 colors: ['#2f4f2f', '#556b2f', '#6b8e23', '#808000', '#9acd32', '#adff2f', '#7fff00', '#98fb98'],
-                unlockAt: 100,
                 pattern: '.⋅˚₊‧ 🜲 ‧₊˚ ⋅'
             }
         };
+
+        const unlockMilestones = [10, 25, 50, 100];
 
         let currentPackage = null;
         let editMode = 'background';
@@ -1298,29 +1296,54 @@
                 }
             });
             
-            // Determine next unlock
-            let nextUnlock = null;
-            if (uploadCount < 10) nextUnlock = 10;
-            else if (uploadCount < 25) nextUnlock = 25;
-            else if (uploadCount < 50) nextUnlock = 50;
-            else if (uploadCount < 100) nextUnlock = 100;
+            // Get user's unlocked packages from Firebase
+            const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+            const unlockedPackages = userDoc.exists() && userDoc.data().unlockedPackages ? userDoc.data().unlockedPackages : [];
+            
+            // Determine how many packages they can unlock based on upload count
+            let availableUnlocks = 0;
+            if (uploadCount >= 100) availableUnlocks = 4;
+            else if (uploadCount >= 50) availableUnlocks = 3;
+            else if (uploadCount >= 25) availableUnlocks = 2;
+            else if (uploadCount >= 10) availableUnlocks = 1;
+            
+            // Determine next unlock milestone
+            const currentUnlocked = unlockedPackages.length;
+            let nextMilestone = null;
+            if (currentUnlocked < 4 && currentUnlocked < availableUnlocks) {
+                // They have unlocks available but haven't used them all
+                nextMilestone = null; // They can unlock now
+            } else if (currentUnlocked < 4) {
+                // They need more uploads
+                nextMilestone = unlockMilestones[currentUnlocked];
+            }
             
             // Update corner indicator
             const indicator = document.getElementById('nextUnlockIndicator');
-            if (nextUnlock) {
-                indicator.textContent = `next unlock: ${nextUnlock} uploads`;
-            } else {
+            if (currentUnlocked >= 4) {
                 indicator.textContent = 'all unlocked!';
+            } else if (nextMilestone) {
+                indicator.textContent = `next unlock: ${nextMilestone} uploads`;
+            } else {
+                indicator.textContent = `unlock available!`;
             }
             
             // Update lock status for each package
             Object.keys(packageData).forEach(packageKey => {
-                const data = packageData[packageKey];
-                const lockId = `lock-${packageKey.split('-')[0]}`;
+                const lockEl = document.getElementById(`lock-${packageKey.split('-')[0]}`);
                 
-                if (uploadCount >= data.unlockAt) {
-                    document.getElementById(lockId).textContent = '✓';
-                    document.getElementById(lockId).style.color = '#00a86b';
+                if (unlockedPackages.includes(packageKey)) {
+                    // Already unlocked
+                    lockEl.textContent = '✓';
+                    lockEl.style.color = '#00a86b';
+                } else if (currentUnlocked < availableUnlocks) {
+                    // Can unlock this one
+                    lockEl.textContent = '🔒';
+                    lockEl.style.color = '#000';
+                } else {
+                    // Still locked
+                    lockEl.textContent = '🔒';
+                    lockEl.style.color = '#999';
                 }
             });
         };
@@ -1330,7 +1353,7 @@
         };
 
         window.selectPackage = async function(packageKey) {
-            // Check if unlocked
+            // Get user's data
             const imagesQuery = query(collection(db, 'images'));
             const snapshot = await getDocs(imagesQuery);
             let uploadCount = 0;
@@ -1340,11 +1363,46 @@
                 }
             });
             
-            if (uploadCount < packageData[packageKey].unlockAt) {
-                alert(`This package requires ${packageData[packageKey].unlockAt} uploads to unlock. You have ${uploadCount}.`);
+            const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+            const unlockedPackages = userDoc.exists() && userDoc.data().unlockedPackages ? userDoc.data().unlockedPackages : [];
+            
+            // Check if already unlocked
+            if (unlockedPackages.includes(packageKey)) {
+                // Open customization
+                openPackageCustomization(packageKey);
                 return;
             }
             
+            // Check if they can unlock
+            let availableUnlocks = 0;
+            if (uploadCount >= 100) availableUnlocks = 4;
+            else if (uploadCount >= 50) availableUnlocks = 3;
+            else if (uploadCount >= 25) availableUnlocks = 2;
+            else if (uploadCount >= 10) availableUnlocks = 1;
+            
+            const currentUnlocked = unlockedPackages.length;
+            
+            if (currentUnlocked >= availableUnlocks) {
+                // Need more uploads
+                const nextMilestone = unlockMilestones[currentUnlocked];
+                alert(`You need ${nextMilestone} uploads to unlock another package. You currently have ${uploadCount} uploads.`);
+                return;
+            }
+            
+            // Can unlock! Ask for confirmation
+            if (confirm(`Unlock ${packageKey.replace('-', ' ')}? This will use 1 of your available unlock slots.`)) {
+                // Add to unlocked packages
+                const updatedUnlocked = [...unlockedPackages, packageKey];
+                await setDoc(doc(db, 'users', auth.currentUser.uid), {
+                    unlockedPackages: updatedUnlocked
+                }, { merge: true });
+                
+                // Open customization
+                openPackageCustomization(packageKey);
+            }
+        };
+
+        async function openPackageCustomization(packageKey) {
             currentPackage = packageKey;
             document.getElementById('packageTitle').textContent = packageKey.replace('-', ' ');
             
@@ -1360,7 +1418,7 @@
             
             document.getElementById('designPackagesOverlay').style.display = 'none';
             document.getElementById('packageCustomizationOverlay').style.display = 'block';
-        };
+        }
 
         window.closePackageCustomization = function() {
             document.getElementById('packageCustomizationOverlay').style.display = 'none';
