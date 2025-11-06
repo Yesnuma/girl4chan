@@ -158,9 +158,10 @@
         }
 
         .image-item.dragging {
-            opacity: 0.5;
-            transform: scale(1.05);
+            opacity: 0.7;
+            transform: scale(0.85);
             z-index: 1000;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
 
         .image-item.drag-over {
@@ -1024,6 +1025,7 @@
         async function loadCollection(collectionId, collectionName) {
             toggleSidebar(); // Close sidebar
             document.getElementById('pageTitle').textContent = `/ ${collectionName}`;
+            currentContext = { type: 'collection', id: collectionId };
             
             const grid = document.getElementById('imageGrid');
             grid.innerHTML = '';
@@ -1113,6 +1115,7 @@
         window.loadMyProfile = async function() {
             toggleSidebar(); // Close sidebar
             document.getElementById('pageTitle').textContent = '/ my profile';
+            currentContext = { type: 'profile', id: auth.currentUser.uid };
             
             const grid = document.getElementById('imageGrid');
             grid.innerHTML = '';
@@ -1326,10 +1329,39 @@
         }
 
         // Handle drag and drop reorder
+        let currentContext = { type: null, id: null }; // Track if we're in collection or profile
+        
         async function handleDrop(draggedItem, fromIndex, toIndex) {
-            // This will be implemented to reorder in Firebase
-            console.log('Dragged from', fromIndex, 'to', toIndex);
-            alert('Drag reordering coming soon! Need to update Firebase positions.');
+            if (fromIndex === toIndex) return;
+            
+            const grid = draggedItem.parentNode;
+            const items = Array.from(grid.children);
+            
+            // Reorder in DOM
+            if (fromIndex < toIndex) {
+                grid.insertBefore(draggedItem, items[toIndex].nextSibling);
+            } else {
+                grid.insertBefore(draggedItem, items[toIndex]);
+            }
+            
+            // Save to Firebase based on context
+            if (currentContext.type === 'collection') {
+                await saveCollectionOrder(currentContext.id, grid);
+            } else if (currentContext.type === 'profile') {
+                // Profile order is just visual, saved per user
+                console.log('Profile reordering is visual only for now');
+            }
+        }
+        
+        async function saveCollectionOrder(collectionId, grid) {
+            try {
+                const imageIds = Array.from(grid.children).map(item => item.dataset.imageId);
+                await updateDoc(doc(db, 'collections', collectionId), {
+                    images: imageIds
+                });
+            } catch (error) {
+                console.error('Error saving order:', error);
+            }
         }
 
         // Handle delete
