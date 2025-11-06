@@ -146,7 +146,7 @@
             background-color: #ddd;
             position: relative;
             overflow: hidden;
-            transition: transform 0.2s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
         }
 
         .image-item img {
@@ -162,6 +162,7 @@
             opacity: 0.9;
             box-shadow: 0 10px 30px rgba(0,0,0,0.4);
             will-change: transform;
+            transition: none !important;
         }
 
         .image-item.drag-over {
@@ -1264,7 +1265,6 @@
                     holdTimer = setTimeout(() => {
                         isDragging = true;
                         item.classList.add('dragging');
-                        item.style.transition = 'none';
                         dragStartIndex = Array.from(item.parentNode.children).indexOf(item);
                         
                         // Haptic feedback
@@ -1391,20 +1391,15 @@
                     // Save the new order
                     const grid = item.parentNode;
                     
-                    // Reset styles
+                    // Reset styles smoothly
                     item.classList.remove('dragging');
                     item.style.transform = '';
-                    item.style.transition = 'transform 0.2s ease';
                     item.style.zIndex = '';
                     document.querySelectorAll('.image-item').forEach(i => {
                         i.classList.remove('drag-over');
                     });
                     
                     // Save to Firebase
-                    setTimeout(() => {
-                        item.style.transition = '';
-                    }, 200);
-                    
                     saveOrderToFirebase(grid);
                     
                     isDragging = false;
@@ -1412,7 +1407,6 @@
                 } else {
                     // Reset any visual feedback
                     item.style.transform = '';
-                    item.style.transition = '';
                     
                     // Handle single tap on center for link
                     if (touchStartPos && touchDuration < 300 && !firstTap) {
