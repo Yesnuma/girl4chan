@@ -272,6 +272,14 @@
             font-weight: bold;
         }
 
+        .chat-message.own .username {
+            color: #ff0000;
+        }
+
+        .chat-message .username {
+            color: #0600ff;
+        }
+
         .chatbox-input {
             display: flex;
             padding: 10px;
@@ -680,7 +688,10 @@
         <div class="secret-secret-content">
             <h2>✦ secret secret rules ✦</h2>
             <p><strong>TO ACCESS SECRET CHAT:</strong><br>Share your favorite lowkey brand</p>
-            <button onclick="openChatUnlock()" style="width: 100%; background-color: #d4c5b0; padding: 10px; border: 1px solid #8b7355; margin-bottom: 10px;">unlock chat</button>
+            <div style="display: flex; gap: 5px; margin-bottom: 20px;">
+                <input type="text" id="brandInputInline" placeholder="enter brand..." style="flex: 1; padding: 8px; border: 1px solid #000; font-family: 'Courier New', Courier, monospace; font-size: 12px;">
+                <button onclick="submitChatUnlockInline()" style="padding: 8px 15px; background-color: #000; color: #fff; border: 1px solid #000; font-family: 'Courier New', Courier, monospace; cursor: pointer;">submit</button>
+            </div>
             <p><strong>HIDDEN EASTER EGG:</strong><br>[Outfit generator riddle coming soon!]</p>
             <button onclick="closeSecretSecretRules()">close</button>
         </div>
@@ -693,6 +704,7 @@
             <p style="font-size: 13px; margin-bottom: 15px;">Share your favorite lowkey brand to gain access:</p>
             <input type="text" id="brandInput" placeholder="enter brand name...">
             <button onclick="submitChatUnlock()">submit</button>
+            <button onclick="closeChatUnlock()" style="background-color: #ccc; margin-top: 10px;">cancel</button>
         </div>
     </div>
 
@@ -744,7 +756,7 @@
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, collection, addDoc, doc, setDoc, getDoc, getDocs, query, orderBy, updateDoc, arrayUnion, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, collection, addDoc, doc, setDoc, getDoc, getDocs, query, orderBy, updateDoc, arrayUnion, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
         // Firebase configuration
@@ -800,6 +812,47 @@
             document.getElementById('chatUnlockModal').style.display = 'flex';
         };
 
+        window.closeChatUnlock = function() {
+            document.getElementById('chatUnlockModal').style.display = 'none';
+            document.getElementById('brandInput').value = '';
+        };
+
+        // Submit chat unlock (inline version)
+        window.submitChatUnlockInline = async function() {
+            const brand = document.getElementById('brandInputInline').value.trim();
+            if (!brand) {
+                alert('Please enter a brand name');
+                return;
+            }
+
+            try {
+                // Post unlock message to chat
+                await addDoc(collection(db, 'chat'), {
+                    userId: auth.currentUser.uid,
+                    username: (await getDoc(doc(db, 'users', auth.currentUser.uid))).data().username,
+                    message: `My favorite lowkey brand: ${brand}`,
+                    timestamp: new Date()
+                });
+
+                // Mark chat as unlocked for this user
+                await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+                    chatUnlocked: true
+                });
+
+                // Show chat tab and load messages
+                document.getElementById('chatTab').classList.add('unlocked');
+                document.getElementById('secretSecretOverlay').classList.remove('active');
+                document.getElementById('brandInputInline').value = '';
+                
+                loadChatMessages();
+                toggleChatbox(); // Open chatbox
+                
+                alert('Chat unlocked! Welcome to the secret chat.');
+            } catch (error) {
+                alert('Error unlocking chat: ' + error.message);
+            }
+        };
+
         // Submit chat unlock
         window.submitChatUnlock = async function() {
             const brand = document.getElementById('brandInput').value.trim();
@@ -842,32 +895,41 @@
             document.getElementById('chatbox').classList.toggle('open');
         };
 
-        // Load chat messages
+        // Load chat messages with realtime updates
+        let chatUnsubscribe = null;
+        
         async function loadChatMessages() {
             const messagesDiv = document.getElementById('chatMessages');
             
             try {
+                // Unsubscribe from previous listener if exists
+                if (chatUnsubscribe) {
+                    chatUnsubscribe();
+                }
+                
                 const chatQuery = query(collection(db, 'chat'), orderBy('timestamp', 'asc'));
-                const snapshot = await getDocs(chatQuery);
                 
-                messagesDiv.innerHTML = '';
-                snapshot.forEach((doc) => {
-                    const data = doc.data();
-                    const messageDiv = document.createElement('div');
-                    messageDiv.className = 'chat-message';
+                // Set up realtime listener
+                chatUnsubscribe = onSnapshot(chatQuery, (snapshot) => {
+                    messagesDiv.innerHTML = '';
+                    snapshot.forEach((doc) => {
+                        const data = doc.data();
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = 'chat-message';
+                        
+                        if (data.userId === auth.currentUser.uid) {
+                            messageDiv.classList.add('own');
+                            messageDiv.innerHTML = `${data.message} :<span class="username">${data.username}</span>`;
+                        } else {
+                            messageDiv.innerHTML = `<span class="username">[${data.username}]</span>: ${data.message}`;
+                        }
+                        
+                        messagesDiv.appendChild(messageDiv);
+                    });
                     
-                    if (data.userId === auth.currentUser.uid) {
-                        messageDiv.classList.add('own');
-                        messageDiv.innerHTML = `${data.message} :<span class="username">${data.username}</span>`;
-                    } else {
-                        messageDiv.innerHTML = `<span class="username">[${data.username}]</span>: ${data.message}`;
-                    }
-                    
-                    messagesDiv.appendChild(messageDiv);
+                    // Scroll to bottom
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
                 });
-                
-                // Scroll to bottom
-                messagesDiv.scrollTop = messagesDiv.scrollHeight;
             } catch (error) {
                 console.error('Error loading messages:', error);
             }
@@ -890,7 +952,7 @@
                 });
                 
                 input.value = '';
-                loadChatMessages(); // Reload messages
+                // No need to reload - realtime listener will update automatically
             } catch (error) {
                 alert('Error sending message: ' + error.message);
             }
