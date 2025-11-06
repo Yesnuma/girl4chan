@@ -189,6 +189,147 @@
             box-shadow: -2px 2px 5px rgba(0,0,0,0.2);
         }
 
+        /* Chat Tab */
+        .chat-tab {
+            position: fixed;
+            right: 0;
+            bottom: 220px;
+            width: 30px;
+            height: 60px;
+            background-color: #d4c5b0;
+            border: 1px solid #b8a890;
+            border-right: none;
+            border-radius: 5px 0 0 5px;
+            cursor: pointer;
+            box-shadow: -2px 2px 5px rgba(0,0,0,0.2);
+            display: none;
+        }
+
+        .chat-tab.unlocked {
+            display: block;
+        }
+
+        /* Chatbox */
+        .chatbox {
+            position: fixed;
+            bottom: -40%;
+            left: 0;
+            right: 0;
+            height: 40%;
+            background-color: #f5f5dc;
+            border-top: 2px solid #8b7355;
+            transition: bottom 0.3s ease;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .chatbox.open {
+            bottom: 0;
+        }
+
+        .chatbox-header {
+            background-color: #d4c5b0;
+            padding: 10px 15px;
+            border-bottom: 1px solid #8b7355;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chatbox-header h3 {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .chatbox-minimize {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        .chatbox-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            background-color: #fff;
+        }
+
+        .chat-message {
+            margin-bottom: 10px;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .chat-message.own {
+            text-align: right;
+        }
+
+        .chat-message .username {
+            font-weight: bold;
+        }
+
+        .chatbox-input {
+            display: flex;
+            padding: 10px;
+            background-color: #f5f5dc;
+            border-top: 1px solid #8b7355;
+        }
+
+        .chatbox-input input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #8b7355;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 13px;
+        }
+
+        .chatbox-input button {
+            padding: 8px 15px;
+            margin-left: 5px;
+            background-color: #d4c5b0;
+            border: 1px solid #8b7355;
+            font-family: 'Courier New', Courier, monospace;
+            cursor: pointer;
+        }
+
+        /* Chat unlock modal */
+        .chat-unlock-content {
+            background-color: #f5f5dc;
+            padding: 30px;
+            border: 2px solid #8b7355;
+            width: 90%;
+            max-width: 400px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .chat-unlock-content h2 {
+            font-family: 'Courier New', Courier, monospace;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+
+        .chat-unlock-content input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #8b7355;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 13px;
+        }
+
+        .chat-unlock-content button {
+            width: 100%;
+            padding: 10px;
+            background-color: #d4c5b0;
+            border: 1px solid #8b7355;
+            font-family: 'Courier New', Courier, monospace;
+            cursor: pointer;
+        }
+
         /* Rules Modal */
         .rules-modal-content {
             background-color: #f5f5dc;
@@ -504,6 +645,24 @@
     <!-- Rules Tab -->
     <div class="rules-tab" onclick="openRulesModal()"></div>
 
+    <!-- Chat Tab -->
+    <div class="chat-tab" id="chatTab" onclick="toggleChatbox()"></div>
+
+    <!-- Chatbox -->
+    <div class="chatbox" id="chatbox">
+        <div class="chatbox-header">
+            <h3>secret chat</h3>
+            <button class="chatbox-minimize" onclick="toggleChatbox()">_</button>
+        </div>
+        <div class="chatbox-messages" id="chatMessages">
+            <!-- Messages will appear here -->
+        </div>
+        <div class="chatbox-input">
+            <input type="text" id="chatInput" placeholder="type message..." onkeypress="if(event.key==='Enter') sendMessage()">
+            <button onclick="sendMessage()">send</button>
+        </div>
+    </div>
+
     <!-- Rules Modal -->
     <div class="modal" id="rulesModal">
         <div class="rules-modal-content">
@@ -520,9 +679,20 @@
     <div class="secret-secret-overlay" id="secretSecretOverlay">
         <div class="secret-secret-content">
             <h2>✦ secret secret rules ✦</h2>
-            <p><strong>TO ACCESS SECRET CHAT:</strong><br>[Coming soon - another riddle here!]</p>
+            <p><strong>TO ACCESS SECRET CHAT:</strong><br>Share your favorite lowkey brand</p>
+            <button onclick="openChatUnlock()" style="width: 100%; background-color: #d4c5b0; padding: 10px; border: 1px solid #8b7355; margin-bottom: 10px;">unlock chat</button>
             <p><strong>HIDDEN EASTER EGG:</strong><br>[Outfit generator riddle coming soon!]</p>
             <button onclick="closeSecretSecretRules()">close</button>
+        </div>
+    </div>
+
+    <!-- Chat Unlock Modal -->
+    <div class="modal" id="chatUnlockModal">
+        <div class="chat-unlock-content">
+            <h2>unlock secret chat</h2>
+            <p style="font-size: 13px; margin-bottom: 15px;">Share your favorite lowkey brand to gain access:</p>
+            <input type="text" id="brandInput" placeholder="enter brand name...">
+            <button onclick="submitChatUnlock()">submit</button>
         </div>
     </div>
 
@@ -605,11 +775,126 @@
                 document.getElementById('logoutBtn').style.display = 'block';
                 loadEverythingFeed();
                 loadCollections(); // Load collections when user logs in
+                checkChatUnlock(); // Check if chat is unlocked
             } else {
                 document.getElementById('loginModal').style.display = 'flex';
                 document.getElementById('logoutBtn').style.display = 'none';
             }
         });
+
+        // Check if chat is unlocked for this user
+        async function checkChatUnlock() {
+            try {
+                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+                if (userDoc.exists() && userDoc.data().chatUnlocked) {
+                    document.getElementById('chatTab').classList.add('unlocked');
+                    loadChatMessages();
+                }
+            } catch (error) {
+                console.error('Error checking chat unlock:', error);
+            }
+        }
+
+        // Open chat unlock modal
+        window.openChatUnlock = function() {
+            document.getElementById('chatUnlockModal').style.display = 'flex';
+        };
+
+        // Submit chat unlock
+        window.submitChatUnlock = async function() {
+            const brand = document.getElementById('brandInput').value.trim();
+            if (!brand) {
+                alert('Please enter a brand name');
+                return;
+            }
+
+            try {
+                // Post unlock message to chat
+                await addDoc(collection(db, 'chat'), {
+                    userId: auth.currentUser.uid,
+                    username: (await getDoc(doc(db, 'users', auth.currentUser.uid))).data().username,
+                    message: `My favorite lowkey brand: ${brand}`,
+                    timestamp: new Date()
+                });
+
+                // Mark chat as unlocked for this user
+                await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+                    chatUnlocked: true
+                });
+
+                // Show chat tab and load messages
+                document.getElementById('chatTab').classList.add('unlocked');
+                document.getElementById('chatUnlockModal').style.display = 'none';
+                document.getElementById('secretSecretOverlay').classList.remove('active');
+                document.getElementById('brandInput').value = '';
+                
+                loadChatMessages();
+                toggleChatbox(); // Open chatbox
+                
+                alert('Chat unlocked! Welcome to the secret chat.');
+            } catch (error) {
+                alert('Error unlocking chat: ' + error.message);
+            }
+        };
+
+        // Toggle chatbox open/close
+        window.toggleChatbox = function() {
+            document.getElementById('chatbox').classList.toggle('open');
+        };
+
+        // Load chat messages
+        async function loadChatMessages() {
+            const messagesDiv = document.getElementById('chatMessages');
+            
+            try {
+                const chatQuery = query(collection(db, 'chat'), orderBy('timestamp', 'asc'));
+                const snapshot = await getDocs(chatQuery);
+                
+                messagesDiv.innerHTML = '';
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'chat-message';
+                    
+                    if (data.userId === auth.currentUser.uid) {
+                        messageDiv.classList.add('own');
+                        messageDiv.innerHTML = `${data.message} :<span class="username">${data.username}</span>`;
+                    } else {
+                        messageDiv.innerHTML = `<span class="username">[${data.username}]</span>: ${data.message}`;
+                    }
+                    
+                    messagesDiv.appendChild(messageDiv);
+                });
+                
+                // Scroll to bottom
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            } catch (error) {
+                console.error('Error loading messages:', error);
+            }
+        }
+
+        // Send message
+        window.sendMessage = async function() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            try {
+                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+                await addDoc(collection(db, 'chat'), {
+                    userId: auth.currentUser.uid,
+                    username: userDoc.data().username,
+                    message: message,
+                    timestamp: new Date()
+                });
+                
+                input.value = '';
+                loadChatMessages(); // Reload messages
+            } catch (error) {
+                alert('Error sending message: ' + error.message);
+            }
+        };
 
         // Load collections from database
         let isLoadingCollections = false;
