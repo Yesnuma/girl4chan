@@ -152,6 +152,9 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
         }
 
         .image-item.dragging {
@@ -1192,6 +1195,9 @@
                 const y = touch.clientY - rect.top;
                 touchStartPos = { x, y };
                 
+                // Prevent context menu
+                e.preventDefault();
+                
                 // Start hold timer for drag if allowed
                 if (allowDrag) {
                     holdTimer = setTimeout(() => {
@@ -1311,6 +1317,11 @@
                 }
                 
                 touchStartPos = null;
+            });
+
+            // Prevent context menu completely
+            item.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
             });
         }
 
