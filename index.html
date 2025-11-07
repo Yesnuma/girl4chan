@@ -583,50 +583,84 @@
             z-index: 2000;
             justify-content: center;
             align-items: center;
+            padding: 20px;
         }
 
         .modal-content {
-            background-color: #fff;
-            padding: 30px;
-            border: 1px solid #ccc;
-            width: 90%;
-            max-width: 350px;
+            background: white;
+            border: 3px solid #0600ff;
+            padding: 40px;
+            box-shadow: 8px 8px 0px #0600ff;
+            width: 100%;
+            max-width: 500px;
         }
 
         .modal-content h2 {
+            text-align: center;
+            color: #0600ff;
+            font-size: 32px;
+            margin-bottom: 10px;
+            text-transform: lowercase;
+            letter-spacing: 2px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .modal-tagline {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
             margin-bottom: 20px;
-            font-size: 20px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .decorative-line {
+            height: 3px;
+            background: linear-gradient(90deg, #0600ff, #9ed2f5, #0600ff);
+            margin: 20px 0;
         }
 
         .modal-content input {
             width: 100%;
             padding: 12px;
             margin-bottom: 15px;
-            border: 1px solid #ccc;
+            border: 2px solid #0600ff;
+            background: #fff;
+            font-family: 'Courier New', Courier, monospace;
             font-size: 14px;
-            font-family: Arial, sans-serif;
+            transition: all 0.3s;
+        }
+
+        .modal-content input:focus {
+            outline: none;
+            background: #9ed2f5;
+            border-color: #0600ff;
         }
 
         .modal-content button {
             width: 100%;
-            padding: 12px;
-            background-color: #9ed2f5;
-            border: none;
-            cursor: pointer;
+            padding: 15px;
+            border: 2px solid #0600ff;
+            background: #0600ff;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
             font-size: 14px;
+            cursor: pointer;
+            text-transform: lowercase;
+            transition: all 0.3s;
             font-weight: bold;
-            color: #000;
-            opacity: 1;
+            margin-bottom: 10px;
         }
 
         .modal-content button:hover {
-            background-color: #8bc5e8;
+            background: white;
+            color: #0600ff;
         }
 
         .modal-content p {
             margin-top: 15px;
-            font-size: 13px;
+            font-size: 12px;
             text-align: center;
+            font-family: 'Courier New', Courier, monospace;
         }
 
         .modal-content a {
@@ -636,6 +670,17 @@
 
         .modal-content a:hover {
             text-decoration: underline;
+        }
+
+        @media (max-width: 600px) {
+            .modal-content {
+                padding: 30px 20px;
+                box-shadow: 5px 5px 0px #0600ff;
+            }
+
+            .modal-content h2 {
+                font-size: 24px;
+            }
         }
     </style>
 </head>
@@ -859,7 +904,9 @@
     <!-- Login Modal -->
     <div class="modal" id="loginModal">
         <div class="modal-content">
-            <h2 id="authTitle">login</h2>
+            <h2 id="authTitle">girlchan</h2>
+            <div class="modal-tagline">// your secret thrift sanctuary //</div>
+            <div class="decorative-line"></div>
             <form id="authForm">
                 <input type="email" id="emailInput" placeholder="email" required>
                 <input type="password" id="passwordInput" placeholder="password" required>
@@ -1236,19 +1283,16 @@
         // Toggle between login and signup
         window.toggleAuthMode = function() {
             isSignupMode = !isSignupMode;
-            const title = document.getElementById('authTitle');
             const submit = document.getElementById('authSubmit');
             const switchText = document.getElementById('authSwitch');
             const usernameInput = document.getElementById('usernameInput');
 
             if (isSignupMode) {
-                title.textContent = 'sign up';
                 submit.textContent = 'create account';
                 switchText.innerHTML = 'have an account? <a href="#" onclick="toggleAuthMode(); return false;">login</a>';
                 usernameInput.style.display = 'block';
                 usernameInput.required = true;
             } else {
-                title.textContent = 'login';
                 submit.textContent = 'login';
                 switchText.innerHTML = 'need an account? <a href="#" onclick="toggleAuthMode(); return false;">sign up</a>';
                 usernameInput.style.display = 'none';
