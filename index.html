@@ -682,6 +682,88 @@
                 font-size: 24px;
             }
         }
+
+        /* Crop Modal */
+        #cropModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 3000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .crop-container {
+            max-width: 90%;
+            max-height: 90%;
+            text-align: center;
+        }
+
+        .crop-area {
+            position: relative;
+            display: inline-block;
+            max-width: 100%;
+            max-height: 70vh;
+        }
+
+        .crop-area img {
+            max-width: 100%;
+            max-height: 70vh;
+            display: block;
+        }
+
+        .crop-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .crop-box {
+            position: absolute;
+            border: 2px solid #0600ff;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+            cursor: move;
+        }
+
+        .crop-controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .crop-controls button {
+            padding: 12px 24px;
+            background: #0600ff;
+            color: white;
+            border: 2px solid #0600ff;
+            cursor: pointer;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .crop-controls button:hover {
+            background: white;
+            color: #0600ff;
+        }
+
+        .crop-controls button.cancel {
+            background: #666;
+            border-color: #666;
+        }
+
+        .crop-controls button.cancel:hover {
+            background: white;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -884,6 +966,22 @@
             <input type="text" id="collectionSearch" placeholder="search..." oninput="filterCollections()">
             <div class="collection-list" id="collectionPickerList">
                 <!-- Collections will load here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Crop Modal -->
+    <div id="cropModal">
+        <div class="crop-container">
+            <div class="crop-area" id="cropArea">
+                <img id="cropImage" src="" alt="Crop preview">
+                <div class="crop-overlay">
+                    <div class="crop-box" id="cropBox"></div>
+                </div>
+            </div>
+            <div class="crop-controls">
+                <button onclick="applyCrop()">crop & continue</button>
+                <button class="cancel" onclick="cancelCrop()">cancel</button>
             </div>
         </div>
     </div>
@@ -2006,6 +2104,8 @@
         window.closeUploadModal = function() {
             document.getElementById('uploadModal').style.display = 'none';
             document.getElementById('uploadForm').reset();
+            croppedBlob = null;
+            document.getElementById('imageInput').value = '';
         };
 
         // Rules modal functions
@@ -2044,22 +2144,171 @@
             document.getElementById('secretSecretOverlay').classList.remove('active');
         };
 
+        // Crop functionality
+        let originalImage = null;
+        let croppedBlob = null;
+        let cropBox = null;
+        let isDragging = false;
+        let startX, startY, startLeft, startTop;
+
+        // Handle image input - show crop modal
+        document.getElementById('imageInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            originalImage = file;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = document.getElementById('cropImage');
+                img.src = event.target.result;
+                img.onload = function() {
+                    initializeCropBox();
+                    document.getElementById('cropModal').style.display = 'flex';
+                };
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function initializeCropBox() {
+            const img = document.getElementById('cropImage');
+            const box = document.getElementById('cropBox');
+            
+            // Calculate 3:4 aspect ratio crop box centered on image
+            const imgWidth = img.offsetWidth;
+            const imgHeight = img.offsetHeight;
+            
+            let boxWidth, boxHeight;
+            const targetRatio = 3 / 4; // width / height
+            
+            if (imgWidth / imgHeight > targetRatio) {
+                // Image is wider - fit to height
+                boxHeight = imgHeight * 0.8;
+                boxWidth = boxHeight * targetRatio;
+            } else {
+                // Image is taller - fit to width
+                boxWidth = imgWidth * 0.8;
+                boxHeight = boxWidth / targetRatio;
+            }
+            
+            box.style.width = boxWidth + 'px';
+            box.style.height = boxHeight + 'px';
+            box.style.left = (imgWidth - boxWidth) / 2 + 'px';
+            box.style.top = (imgHeight - boxHeight) / 2 + 'px';
+            
+            // Add drag functionality
+            box.onmousedown = startDrag;
+            box.ontouchstart = startDrag;
+        }
+
+        function startDrag(e) {
+            e.preventDefault();
+            isDragging = true;
+            
+            const touch = e.touches ? e.touches[0] : e;
+            const box = document.getElementById('cropBox');
+            
+            startX = touch.clientX;
+            startY = touch.clientY;
+            startLeft = box.offsetLeft;
+            startTop = box.offsetTop;
+            
+            document.onmousemove = drag;
+            document.ontouchmove = drag;
+            document.onmouseup = stopDrag;
+            document.ontouchend = stopDrag;
+        }
+
+        function drag(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+            
+            const touch = e.touches ? e.touches[0] : e;
+            const box = document.getElementById('cropBox');
+            const img = document.getElementById('cropImage');
+            
+            const dx = touch.clientX - startX;
+            const dy = touch.clientY - startY;
+            
+            let newLeft = startLeft + dx;
+            let newTop = startTop + dy;
+            
+            // Constrain to image bounds
+            newLeft = Math.max(0, Math.min(newLeft, img.offsetWidth - box.offsetWidth));
+            newTop = Math.max(0, Math.min(newTop, img.offsetHeight - box.offsetHeight));
+            
+            box.style.left = newLeft + 'px';
+            box.style.top = newTop + 'px';
+        }
+
+        function stopDrag() {
+            isDragging = false;
+            document.onmousemove = null;
+            document.ontouchmove = null;
+            document.onmouseup = null;
+            document.ontouchend = null;
+        }
+
+        window.applyCrop = async function() {
+            const img = document.getElementById('cropImage');
+            const box = document.getElementById('cropBox');
+            
+            // Create canvas and crop
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Get actual image dimensions
+            const actualImg = new Image();
+            actualImg.src = img.src;
+            
+            await new Promise(resolve => {
+                actualImg.onload = resolve;
+            });
+            
+            const scaleX = actualImg.width / img.offsetWidth;
+            const scaleY = actualImg.height / img.offsetHeight;
+            
+            const cropX = box.offsetLeft * scaleX;
+            const cropY = box.offsetTop * scaleY;
+            const cropWidth = box.offsetWidth * scaleX;
+            const cropHeight = box.offsetHeight * scaleY;
+            
+            canvas.width = cropWidth;
+            canvas.height = cropHeight;
+            
+            ctx.drawImage(
+                actualImg,
+                cropX, cropY, cropWidth, cropHeight,
+                0, 0, cropWidth, cropHeight
+            );
+            
+            // Convert to blob
+            canvas.toBlob(function(blob) {
+                croppedBlob = blob;
+                document.getElementById('cropModal').style.display = 'none';
+            }, 'image/jpeg', 0.9);
+        };
+
+        window.cancelCrop = function() {
+            document.getElementById('cropModal').style.display = 'none';
+            document.getElementById('imageInput').value = '';
+            croppedBlob = null;
+        };
+
         // Handle image upload
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const fileInput = document.getElementById('imageInput');
             const linkInput = document.getElementById('linkInput');
-            const file = fileInput.files[0];
             
-            if (!file) {
-                alert('Please select an image');
+            if (!croppedBlob) {
+                alert('Please select and crop an image');
                 return;
             }
             
             try {
-                const storageRef = ref(storage, `images/${Date.now()}_${file.name}`);
-                await uploadBytes(storageRef, file);
+                const fileName = `${Date.now()}_cropped.jpg`;
+                const storageRef = ref(storage, `images/${fileName}`);
+                await uploadBytes(storageRef, croppedBlob);
                 const imageUrl = await getDownloadURL(storageRef);
                 
                 await addDoc(collection(db, 'images'), {
