@@ -764,6 +764,21 @@
             background: white;
             color: #666;
         }
+        /* Tags for image detail modal */
+.tag-pill {
+    background-color: #d4c5b0;
+    color: #000;
+    padding: 6px 12px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-family: 'Courier New', Courier, monospace;
+    border: 1px solid #8b7355;
+    display: inline-block;
+}
+
+.tag-pill:hover {
+    background-color: #c9b5a0;
+}
     </style>
 </head>
 <body>
@@ -1043,6 +1058,48 @@
         let isSignupMode = false;
         let currentContext = { type: null, id: null };
 
+        // AI Tagging Configuration
+        const OPENAI_API_KEY = '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';
+        
+        const MASTER_TAG_LIST = [
+            // Item types - tops
+            'baby-tee', 'tank-top', 'crop-top', 'halter-top', 'tube-top', 'butterfly-top',
+            'hoodie', 'cardigan', 'sweater', 'blazer', 'jacket', 'corset', 'bodysuit',
+            'long-sleeve-top', 'graphic-tee', 'turtleneck', 'polo', 'zip-up',
+            
+            // Item types - bottoms
+            'low-rise-jeans', 'cargo-pants', 'mini-skirt', 'maxi-skirt', 'midi-skirt',
+            'pleated-skirt', 'denim-skirt', 'flare-jeans', 'baggy-jeans', 'shorts',
+            'yoga-pants', 'leggings', 'sweatpants', 'track-pants', 'bike-shorts',
+            'wide-leg-pants', 'straight-leg-jeans', 'skinny-jeans', 'mom-jeans',
+            
+            // Item types - dresses & one-pieces
+            'mini-dress', 'midi-dress', 'maxi-dress', 'slip-dress', 'sundress',
+            'party-dress', 'bodycon-dress', 'babydoll-dress', 'romper', 'jumpsuit',
+            
+            // Item types - shoes & accessories
+            'platform-shoes', 'heels', 'sneakers', 'boots', 'mary-janes', 'ballet-flats',
+            'bag', 'belt', 'sunglasses', 'jewelry', 'hair-clip',
+            
+            // Aesthetics & eras
+            'y2k', 'grunge', 'coquette', 'cottagecore', 'mcbling', 'indie-sleaze',
+            'cyber-y2k', 'streetwear', '90s', '00s', 'vintage', 'preppy', 'goth',
+            
+            // Details & materials
+            'rhinestones', 'lace', 'distressed', 'graphic-print', 'butterfly',
+            'velvet', 'mesh', 'sequins', 'denim', 'leather', 'satin', 'knit',
+            'fur-trim', 'ruffles', 'cutout', 'tie-dye', 'plaid', 'floral',
+            
+            // Colors
+            'pink', 'baby-blue', 'black', 'white', 'hot-pink', 'lavender',
+            'lime-green', 'silver', 'gold', 'red', 'purple', 'yellow', 'brown',
+            'grey', 'orange', 'green', 'blue',
+            
+            // Vibes
+            'party', 'casual', 'edgy', 'girly', 'preppy', 'vintage', 'sexy',
+            'cute', 'sporty', 'elegant', 'grunge', 'romantic'
+        ];
+
         // Check auth state
         onAuthStateChanged(auth, async (user) => {
             if (user) {
@@ -1071,6 +1128,110 @@
             }
         }
 
+        // AI Tagging Function
+        async function getAITags(imageFile) {
+            try {
+                // Convert image to base64
+                const base64Image = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(imageFile);
+                });
+
+                const prompt = `Analyze this fashion item image and return ONLY tags from this exact list: ${MASTER_TAG_LIST.join(', ')}.
+
+Important instructions:
+- Return between 5-15 tags that best describe the item
+- Only use tags from the provided list (no variations or new tags)
+- Focus on: item type, aesthetic/era, dominant colors, notable details, and overall vibe
+- Return ONLY a JSON array of strings, nothing else
+- Example format: ["y2k", "baby-tee", "pink", "butterfly", "cute"]
+
+Respond with just the JSON array, no other text.`;
+
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${OPENAI_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: "gpt-4o",
+                        messages: [{
+                            role: "user",
+                            content: [
+                                {
+                                    type: "text",
+                                    text: prompt
+                                },
+                                {
+                                    type: "image_url",
+                                    image_url: {
+                                        url: base64Image
+                                    }
+                                }
+                            ]
+                        }],
+                        max_tokens: 300
+                    })
+                });
+
+                if (!response.ok) {
+                    console.error('AI tagging failed');
+                    return [];
+                }
+
+                const data = await response.json();
+                const content = data.choices[0].message.content;
+                
+                // Parse JSON response
+                let cleanContent = content.trim();
+                cleanContent = cleanContent.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+                
+                const tags = JSON.parse(cleanContent);
+                return tags;
+            } catch (error) {
+                console.error('Error getting AI tags:', error);
+                return [];
+            }
+        }
+
+// Open image detail modal
+        window.openImageDetail = function(imageId, imageUrl, link, tags) {
+            document.getElementById('detailImage').src = imageUrl;
+            
+            // Display tags
+            const tagsContainer = document.getElementById('detailTags');
+            tagsContainer.innerHTML = '';
+            
+            if (tags && tags.length > 0) {
+                tags.forEach(tag => {
+                    const tagEl = document.createElement('span');
+                    tagEl.className = 'tag-pill';
+                    tagEl.textContent = tag;
+                    tagsContainer.appendChild(tagEl);
+                });
+            } else {
+                tagsContainer.innerHTML = '<span style="color: #999; font-size: 12px;">no tags yet</span>';
+            }
+            
+            // Setup shop button
+            const shopBtn = document.getElementById('shopButton');
+            if (link) {
+                shopBtn.style.display = 'block';
+                shopBtn.onclick = () => window.open(link, '_blank');
+            } else {
+                shopBtn.style.display = 'none';
+            }
+            
+            document.getElementById('imageDetailModal').style.display = 'flex';
+        };
+
+        window.closeImageDetail = function() {
+            document.getElementById('imageDetailModal').style.display = 'none';
+        };
+        
         // Open chat unlock modal
         window.openChatUnlock = function() {
             document.getElementById('chatUnlockModal').style.display = 'flex';
@@ -1336,6 +1497,7 @@
                         item.dataset.userId = data.userId;
                         item.dataset.imageUrl = data.imageUrl;
                         item.dataset.link = data.link || '';
+                        item.dataset.tags = JSON.stringify(data.tags || []);
                         item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
                         addGestureHandlers(item, true);
                         grid.appendChild(item);
@@ -1648,6 +1810,7 @@
                         item.dataset.userId = data.userId;
                         item.dataset.imageUrl = data.imageUrl;
                         item.dataset.link = data.link || '';
+                        item.dataset.tags = JSON.stringify(data.tags || []);
                         item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
                         
                         // Add gestures but NO drag (read-only for other users)
@@ -1746,6 +1909,7 @@
                     item.dataset.userId = data.userId;
                     item.dataset.imageUrl = data.imageUrl;
                     item.dataset.link = data.link || '';
+                    item.dataset.tags = JSON.stringify(data.tags || []);
                     item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
                     
                     addGestureHandlers(item);
@@ -1974,12 +2138,16 @@
                         );
                         
                         if (isCenter) {
-                            const link = item.dataset.link;
-                            if (link) {
-                                e.preventDefault();
-                                window.open(link, '_blank');
-                            }
-                        }
+                    e.preventDefault();
+                    // Open detail modal instead of going directly to link
+                    const tags = item.dataset.tags ? JSON.parse(item.dataset.tags) : [];
+                    openImageDetail(
+                        item.dataset.imageId,
+                        item.dataset.imageUrl,
+                        item.dataset.link,
+                        tags
+                    );
+                }
                     }
                 }
                 
@@ -2294,7 +2462,7 @@
             croppedBlob = null;
         };
 
-        // Handle image upload
+       // Handle image upload WITH AI TAGGING
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -2306,17 +2474,37 @@
             }
             
             try {
+                // Show uploading message
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                const originalText = submitBtn.textContent;
+                submitBtn.textContent = 'analyzing image...';
+                submitBtn.disabled = true;
+                
+                // Get AI tags BEFORE uploading
+                const aiTags = await getAITags(croppedBlob);
+                console.log('AI suggested tags:', aiTags);
+                
+                submitBtn.textContent = 'uploading...';
+                
+                // Upload image to storage
                 const fileName = `${Date.now()}_cropped.jpg`;
                 const storageRef = ref(storage, `images/${fileName}`);
                 await uploadBytes(storageRef, croppedBlob);
                 const imageUrl = await getDownloadURL(storageRef);
                 
+                // Save to database with tags
                 await addDoc(collection(db, 'images'), {
                     imageUrl: imageUrl,
                     link: linkInput.value || '',
                     userId: auth.currentUser.uid,
-                    createdAt: new Date()
+                    createdAt: new Date(),
+                    tags: aiTags,
+                    aiTags: aiTags
                 });
+                
+                // Reset button
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
                 
                 closeUploadModal();
                 loadEverythingFeed();
@@ -2324,9 +2512,14 @@
             } catch (error) {
                 alert('Upload failed: ' + error.message);
                 console.error('Upload error:', error);
+                
+                // Reset button on error
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                submitBtn.textContent = 'upload';
+                submitBtn.disabled = false;
             }
         });
-
+        
         window.auth = auth;
         window.db = db;
         window.storage = storage;
@@ -2358,5 +2551,27 @@
             }
         }
     </script>
+    <!-- Image Detail Modal -->
+    <div class="modal" id="imageDetailModal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h2 style="font-size: 18px; margin-bottom: 20px;">item details</h2>
+            <img id="detailImage" style="width: 100%; border-radius: 10px; margin-bottom: 20px;" alt="Item">
+            
+            <div style="margin-bottom: 20px;">
+                <h3 style="font-size: 14px; margin-bottom: 10px; color: #666;">tags:</h3>
+                <div id="detailTags" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    <!-- Tags will be inserted here -->
+                </div>
+            </div>
+            
+            <button id="shopButton" style="width: 100%; padding: 15px; background: #0600ff; color: white; border: 2px solid #0600ff; font-family: 'Courier New', Courier, monospace; cursor: pointer; margin-bottom: 10px;">
+                shop this item →
+            </button>
+            
+            <button onclick="closeImageDetail()" style="width: 100%; padding: 12px; background: #ccc; color: #000; border: 2px solid #999;">
+                close
+            </button>
+        </div>
+    </div>
 </body>
 </html>
