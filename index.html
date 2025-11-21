@@ -1190,7 +1190,12 @@
             } else {
                 shopBtn.style.display = 'none';
             }
-            
+       // Setup search similar button
+const searchBtn = document.getElementById('searchSimilarButton');
+searchBtn.onclick = () => {
+    const sites = 'site:ebay.com OR site:poshmark.com OR site:depop.com OR site:vinted.com OR site:mercari.com OR site:grailed.com OR site:therealreal.com OR site:etsy.com OR site:vestiairecollective.com OR site:tradesy.com';
+    window.open(`https://www.google.com/searchbyimage?image_url=${encodeURIComponent(imageUrl)}&q=${encodeURIComponent(sites)}`, '_blank');
+};     
             document.getElementById('imageDetailModal').style.display = 'flex';
         };
 
@@ -2492,7 +2497,10 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
             <button id="shopButton" style="width: 100%; padding: 15px; background: #0600ff; color: white; border: 2px solid #0600ff; font-family: 'Courier New', Courier, monospace; cursor: pointer; margin-bottom: 10px;">
                 shop this item →
             </button>
-            
+           
+            <button id="searchSimilarButton" style="width: 100%; padding: 15px; background: #9ed2f5; color: #0600ff; border: 2px solid #0600ff; font-family: 'Courier New', Courier, monospace; cursor: pointer; margin-bottom: 10px;">
+    find on resale sites 🔍
+</button>
             <button onclick="closeImageDetail()" style="width: 100%; padding: 12px; background: #ccc; color: #000; border: 2px solid #999;">
                 close
             </button>
