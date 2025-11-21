@@ -1190,12 +1190,7 @@
             } else {
                 shopBtn.style.display = 'none';
             }
-       // Setup search similar button
-const searchBtn = document.getElementById('searchSimilarButton');
-searchBtn.onclick = () => {
-    const sites = 'site:ebay.com OR site:poshmark.com OR site:depop.com OR site:vinted.com OR site:mercari.com OR site:grailed.com OR site:therealreal.com OR site:etsy.com OR site:vestiairecollective.com OR site:tradesy.com';
-    window.open(`https://www.google.com/searchbyimage?image_url=${encodeURIComponent(imageUrl)}&q=${encodeURIComponent(sites)}`, '_blank');
-};     
+      
             document.getElementById('imageDetailModal').style.display = 'flex';
         };
 
@@ -2485,7 +2480,7 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
     <div class="modal" id="imageDetailModal">
         <div class="modal-content" style="max-width: 600px;">
             <h2 style="font-size: 18px; margin-bottom: 20px;">item details</h2>
-            <img id="detailImage" style="max-width: 100%; max-height: 50vh; object-fit: contain; border-radius: 10px; margin-bottom: 20px;" alt="Item">
+            <img id="detailImage" style="max-width: 100%; max-height: 50vh; object-fit: contain; margin-bottom: 20px;" alt="Item">
             
             <div style="margin-bottom: 20px;">
                 <h3 style="font-size: 14px; margin-bottom: 10px; color: #666;">tags:</h3>
@@ -2498,9 +2493,7 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
                 shop this item →
             </button>
            
-            <button id="searchSimilarButton" style="width: 100%; padding: 15px; background: #9ed2f5; color: #0600ff; border: 2px solid #0600ff; font-family: 'Courier New', Courier, monospace; cursor: pointer; margin-bottom: 10px;">
-    find on resale sites 🔍
-</button>
+           
             <button onclick="closeImageDetail()" style="width: 100%; padding: 12px; background: #ccc; color: #000; border: 2px solid #999;">
                 close
             </button>
