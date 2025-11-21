@@ -2285,62 +2285,68 @@
         let isDragging = false;
         let startX, startY, startLeft, startTop;
 
-        // Handle image input - AUTO CROP TO 3:4
-document.getElementById('imageInput').addEventListener('change', function(e) {
+        // Handle image input with crop options
+document.getElementById('imageInput').addEventListener('change', async function(e) {
     const file = e.target.files[0];
     if (!file) return;
-
-    // Auto-crop to 3:4 ratio
-    const reader = new FileReader();
-    reader.onload = async function(event) {
-        const img = new Image();
-        img.src = event.target.result;
-        
-        await new Promise(resolve => {
-            img.onload = resolve;
-        });
-        
-        // Calculate 3:4 crop dimensions (centered)
-        const targetRatio = 3 / 4;
-        let cropWidth, cropHeight, cropX, cropY;
-        
-        if (img.width / img.height > targetRatio) {
-            // Image is wider - crop width
-            cropHeight = img.height;
-            cropWidth = cropHeight * targetRatio;
-            cropX = (img.width - cropWidth) / 2;
-            cropY = 0;
-        } else {
-            // Image is taller - crop height
-            cropWidth = img.width;
-            cropHeight = cropWidth / targetRatio;
-            cropX = 0;
-            cropY = (img.height - cropHeight) / 2;
-        }
-        
-        // Create canvas and crop
-        const canvas = document.createElement('canvas');
-        canvas.width = cropWidth;
-        canvas.height = cropHeight;
-        const ctx = canvas.getContext('2d');
-        
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        
-        ctx.drawImage(
-            img,
-            cropX, cropY, cropWidth, cropHeight,
-            0, 0, cropWidth, cropHeight
-        );
-        
-        // Convert to blob
-        canvas.toBlob(function(blob) {
-            croppedBlob = blob;
-        }, 'image/jpeg', 0.95);
-    };
-    reader.readAsDataURL(file);
+    
+    // Show crop options and WAIT for it to complete
+    await showCropOptions(file);
 });
 
+async function showCropOptions(file) {
+    const options = prompt("Choose crop:\n1 = Square (1:1)\n2 = Vertical (3:4)\n3 = Use Original");
+    
+    if (options === "1") {
+        await autoCropImage(file, 1/1); // Square - WAIT for completion
+    } else if (options === "2") {
+        await autoCropImage(file, 3/4); // Vertical - WAIT for completion
+    } else {
+        croppedBlob = file; // Original
+    }
+}
+
+async function autoCropImage(file, ratio) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = async function(event) {
+            const img = new Image();
+            img.src = event.target.result;
+            
+            await new Promise(r => { img.onload = r; });
+            
+            let cropWidth, cropHeight, cropX, cropY;
+            
+            if (img.width / img.height > ratio) {
+                cropHeight = img.height;
+                cropWidth = cropHeight * ratio;
+                cropX = (img.width - cropWidth) / 2;
+                cropY = 0;
+            } else {
+                cropWidth = img.width;
+                cropHeight = cropWidth / ratio;
+                cropX = 0;
+                cropY = (img.height - cropHeight) / 2;
+            }
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = cropWidth;
+            canvas.height = cropHeight;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            
+            ctx.drawImage(img, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+            
+            canvas.toBlob(function(blob) {
+                croppedBlob = blob;
+                resolve(); // Signal completion!
+            }, 'image/jpeg', 0.95);
+        };
+        reader.readAsDataURL(file);
+    });
+}
         function startDrag(e) {
             e.preventDefault();
             isDragging = true;
