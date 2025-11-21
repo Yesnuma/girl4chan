@@ -2285,22 +2285,13 @@
         let isDragging = false;
         let startX, startY, startLeft, startTop;
 
-        // Handle image input - show crop modal
+        // Handle image input - SKIP CROP FOR NOW
         document.getElementById('imageInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
-
-            originalImage = file;
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                const img = document.getElementById('cropImage');
-                img.src = event.target.result;
-                img.onload = function() {
-                    initializeCropBox();
-                    document.getElementById('cropModal').style.display = 'flex';
-                };
-            };
-            reader.readAsDataURL(file);
+            
+            // Skip crop, just use the file directly
+            croppedBlob = file;
         });
 
         function initializeCropBox() {
