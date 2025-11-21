@@ -1,3 +1,4 @@
+const fetch = require('node-fetch');
 const MASTER_TAG_LIST = [
     'baby-tee', 'tank-top', 'crop-top', 'halter-top', 'tube-top', 'butterfly-top',
     'hoodie', 'cardigan', 'sweater', 'blazer', 'jacket', 'corset', 'bodysuit',
