@@ -1053,6 +1053,14 @@
         const db = getFirestore(app);
         const storage = getStorage(app);
 
+        // Admin configuration
+const ADMIN_USER_ID = 'D3nHi7OKBMU583Ibr2koBAVdxsB2';
+
+function isAdmin() {
+    return auth.currentUser && auth.currentUser.uid === ADMIN_USER_ID;
+}
+
+
         // Global variables
         let currentUser = null;
         let isSignupMode = false;
@@ -1164,23 +1172,65 @@
             }
         }
 // Open image detail modal
-        window.openImageDetail = function(imageId, imageUrl, link, tags) {
-            document.getElementById('detailImage').src = imageUrl;
+window.openImageDetail = function(imageId, imageUrl, link, tags) {
+    document.getElementById('detailImage').src = imageUrl;
+    
+    // Display tags
+    const tagsContainer = document.getElementById('detailTags');
+    tagsContainer.innerHTML = '';
+    
+    if (tags && tags.length > 0) {
+        tags.forEach(tag => {
+            const tagEl = document.createElement('span');
+            tagEl.className = 'tag-pill';
+            tagEl.textContent = tag;
+            tagEl.style.cursor = 'pointer';
+            tagEl.onclick = () => {
+                closeImageDetail();
+                loadTagFeed(tag);
+            };
+            tagsContainer.appendChild(tagEl);
             
-            // Display tags
-            const tagsContainer = document.getElementById('detailTags');
-            tagsContainer.innerHTML = '';
-            
-            if (tags && tags.length > 0) {
-                tags.forEach(tag => {
-                    const tagEl = document.createElement('span');
-                    tagEl.className = 'tag-pill';
-                    tagEl.textContent = tag;
-                    tagsContainer.appendChild(tagEl);
-                });
-            } else {
-                tagsContainer.innerHTML = '<span style="color: #999; font-size: 12px;">no tags yet</span>';
+            // Admin can delete tags
+            if (isAdmin()) {
+                const deleteBtn = document.createElement('span');
+                deleteBtn.textContent = ' ×';
+                deleteBtn.style.cursor = 'pointer';
+                deleteBtn.style.fontWeight = 'bold';
+                deleteBtn.style.marginLeft = '4px';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    removeTag(imageId, tag);
+                };
+                tagEl.appendChild(deleteBtn);
             }
+        });
+    } else {
+        tagsContainer.innerHTML = '<span style="color: #999; font-size: 12px;">no tags yet</span>';
+    }
+    
+    // Admin can add new tags
+    if (isAdmin()) {
+        const addTagInput = document.createElement('input');
+        addTagInput.type = 'text';
+        addTagInput.placeholder = 'add tag...';
+        addTagInput.style.cssText = 'margin-top: 10px; padding: 6px 12px; border: 1px solid #8b7355; font-family: "Courier New", Courier, monospace; font-size: 11px; width: 150px;';
+        
+        const addTagBtn = document.createElement('button');
+        addTagBtn.textContent = '+';
+        addTagBtn.style.cssText = 'margin-left: 5px; padding: 6px 12px; background: #d4c5b0; border: 1px solid #8b7355; cursor: pointer; font-family: "Courier New", Courier, monospace;';
+        addTagBtn.onclick = () => {
+            const newTag = addTagInput.value.trim().toLowerCase();
+            if (newTag) {
+                addTag(imageId, newTag);
+                addTagInput.value = '';
+            }
+        };
+        
+        tagsContainer.appendChild(document.createElement('br'));
+        tagsContainer.appendChild(addTagInput);
+        tagsContainer.appendChild(addTagBtn);
+    }
             
             // Setup shop button
             const shopBtn = document.getElementById('shopButton');
@@ -1197,6 +1247,106 @@
         window.closeImageDetail = function() {
             document.getElementById('imageDetailModal').style.display = 'none';
         };
+
+// Admin function: Add tag to image
+async function addTag(imageId, newTag) {
+    try {
+        const imageRef = doc(db, 'images', imageId);
+        const imageDoc = await getDoc(imageRef);
+        const currentTags = imageDoc.data().tags || [];
+        
+        if (currentTags.includes(newTag)) {
+            alert('Tag already exists');
+            return;
+        }
+        
+        await updateDoc(imageRef, {
+            tags: arrayUnion(newTag)
+        });
+        
+        // Reload the modal with updated tags
+        const data = (await getDoc(imageRef)).data();
+        openImageDetail(imageId, data.imageUrl, data.link, data.tags);
+        
+        console.log('Tag added:', newTag);
+    } catch (error) {
+        alert('Error adding tag: ' + error.message);
+    }
+}
+
+// Admin function: Remove tag from image
+async function removeTag(imageId, tagToRemove) {
+    if (!confirm(`Remove tag "${tagToRemove}"?`)) return;
+    
+    try {
+        const imageRef = doc(db, 'images', imageId);
+        const imageDoc = await getDoc(imageRef);
+        const currentTags = imageDoc.data().tags || [];
+        
+        const updatedTags = currentTags.filter(tag => tag !== tagToRemove);
+        
+        await updateDoc(imageRef, {
+            tags: updatedTags
+        });
+        
+        // Reload the modal with updated tags
+        const data = (await getDoc(imageRef)).data();
+        openImageDetail(imageId, data.imageUrl, data.link, data.tags);
+        
+        console.log('Tag removed:', tagToRemove);
+    } catch (error) {
+        alert('Error removing tag: ' + error.message);
+    }
+}
+
+// Load images filtered by tag
+async function loadTagFeed(tag) {
+    toggleSidebar(); // Close sidebar if open
+    currentContext = { type: 'tag', id: tag };
+    document.getElementById('pageTitle').textContent = `/ #${tag}`;
+    
+    // Save current page to localStorage
+    localStorage.setItem('currentPage', JSON.stringify({ type: 'tag', tag: tag }));
+    
+    const grid = document.getElementById('imageGrid');
+    grid.innerHTML = '';
+    
+    try {
+        const imagesQuery = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(imagesQuery);
+        
+        snapshot.forEach((doc) => {
+            const data = doc.data();
+            const imageTags = data.tags || [];
+            
+            // Only show images that have this tag
+            if (imageTags.includes(tag)) {
+                const item = document.createElement('div');
+                item.className = 'image-item';
+                item.dataset.imageId = doc.id;
+                item.dataset.userId = data.userId;
+                item.dataset.imageUrl = data.imageUrl;
+                item.dataset.link = data.link || '';
+                item.dataset.tags = JSON.stringify(imageTags);
+                item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
+                
+                addGestureHandlers(item);
+                
+                grid.appendChild(item);
+            }
+        });
+        
+        // Show message if no images found
+        if (grid.children.length === 0) {
+            grid.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No images with this tag yet</div>';
+        }
+    } catch (error) {
+        console.error('Error loading tag feed:', error);
+    }
+}
+
+// Make it globally accessible
+window.loadTagFeed = loadTagFeed;
         
         // Open chat unlock modal
         window.openChatUnlock = function() {
@@ -1394,19 +1544,40 @@
             const collectionsList = document.getElementById('collectionsList');
             collectionsList.innerHTML = '';
             
-            try {
-                const collectionsSnapshot = await getDocs(collection(db, 'collections'));
-                collectionsSnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    const link = document.createElement('a');
-                    link.href = '#';
-                    link.textContent = `/ ${data.name}`;
-                    link.onclick = () => {
-                        loadCollection(doc.id, data.name);
-                        return false;
-                    };
-                    collectionsList.appendChild(link);
-                });
+         try {
+    const collectionsSnapshot = await getDocs(collection(db, 'collections'));
+    collectionsSnapshot.forEach((doc) => {
+        const data = doc.data();
+        
+        const container = document.createElement('div');
+        container.style.display = 'flex';
+        container.style.justifyContent = 'space-between';
+        container.style.alignItems = 'center';
+        
+        const link = document.createElement('a');
+        link.href = '#';
+        link.textContent = `/ ${data.name}`;
+        link.onclick = () => {
+            loadCollection(doc.id, data.name);
+            return false;
+        };
+        
+        container.appendChild(link);
+        
+        // Admin can delete collections
+        if (isAdmin()) {
+            const deleteBtn = document.createElement('span');
+            deleteBtn.textContent = '×';
+            deleteBtn.style.cssText = 'cursor: pointer; color: #999; font-size: 18px; padding: 0 5px;';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                deleteCollection(doc.id, data.name);
+            };
+            container.appendChild(deleteBtn);
+        }
+        
+        collectionsList.appendChild(container);
+    });
             } catch (error) {
                 console.error('Error loading collections:', error);
             } finally {
@@ -1432,6 +1603,25 @@
                 alert('Error creating collection: ' + error.message);
             }
         };
+
+        // Admin function: Delete collection
+async function deleteCollection(collectionId, collectionName) {
+    if (!confirm(`Delete collection "${collectionName}"? This cannot be undone.`)) return;
+    
+    try {
+        await deleteDoc(doc(db, 'collections', collectionId));
+        loadCollections(); // Reload the sidebar
+        
+        // If currently viewing this collection, go back to everything
+        if (currentContext.type === 'collection' && currentContext.id === collectionId) {
+            loadEverythingFeed();
+        }
+        
+        alert('Collection deleted!');
+    } catch (error) {
+        alert('Error deleting collection: ' + error.message);
+    }
+}
 
         // Load specific collection
         async function loadCollection(collectionId, collectionName) {
@@ -1898,14 +2088,13 @@
                         await loadMyProfile();
                     } else if (page.type === 'collection' && page.id && page.name) {
                         await loadCollection(page.id, page.name);
-                    } else if (page.type === 'userProfile' && page.id && page.username) {
-                        await loadUserProfile(page.id, page.username);
-                    } else {
-                        await loadEverythingFeed();
-                    }
-                } else {
-                    await loadEverythingFeed();
-                }
+                   } else if (page.type === 'userProfile' && page.id && page.username) {
+    await loadUserProfile(page.id, page.username);
+} else if (page.type === 'tag' && page.tag) {
+    await loadTagFeed(page.tag);
+} else {
+    await loadEverythingFeed();
+
             } catch (error) {
                 console.error('Error restoring page:', error);
                 await loadEverythingFeed();
@@ -2148,22 +2337,27 @@
         }
 
         // Handle delete
-        async function handleDelete(item) {
-            const imageId = item.dataset.imageId;
-            const userId = item.dataset.userId;
-            
-            if (userId !== auth.currentUser.uid) {
-                alert('You can only delete your own images');
-                return;
-            }
+       async function handleDelete(item) {
+    const imageId = item.dataset.imageId;
+    const userId = item.dataset.userId;
+    
+    // Allow admin to delete any image, or users to delete their own
+    if (userId !== auth.currentUser.uid && !isAdmin()) {
+        alert('You can only delete your own images');
+        return;
+    }
 
-            try {
-                await deleteDoc(doc(db, 'images', imageId));
-                item.remove();
-            } catch (error) {
-                alert('Delete failed: ' + error.message);
-            }
+    try {
+        await deleteDoc(doc(db, 'images', imageId));
+        item.remove();
+        
+        if (isAdmin()) {
+            console.log('Admin deleted image:', imageId);
         }
+    } catch (error) {
+        alert('Delete failed: ' + error.message);
+    }
+}
 
         // Handle add to collection
         let currentImageToAdd = null;
