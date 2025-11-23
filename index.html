@@ -1053,20 +1053,10 @@
         const db = getFirestore(app);
         const storage = getStorage(app);
 
-        // Admin configuration
-const ADMIN_USER_ID = 'D3nHi7OKBMU583Ibr2koBAVdxsB2';
-
-function isAdmin() {
-    return auth.currentUser && auth.currentUser.uid === ADMIN_USER_ID;
-}
-
-
         // Global variables
         let currentUser = null;
         let isSignupMode = false;
         let currentContext = { type: null, id: null };
-        let navigationHistory = []; // Track page navigation for back button
-        let activeTagFilters = []; // Track active tag filters for multi-tag filtering
 
         // AI Tagging Configuration
 
@@ -1109,46 +1099,6 @@ function isAdmin() {
             'party', 'casual', 'edgy', 'girly', 'preppy', 'vintage', 'sexy',
             'cute', 'sporty', 'elegant', 'grunge', 'romantic'
         ];
-
-        // Categorized tag structure for filtering
-        const TAG_CATEGORIES = {
-            Items: [
-                'baby-tee', 'tank-top', 'crop-top', 'halter-top', 'tube-top', 'butterfly-top',
-                'hoodie', 'cardigan', 'sweater', 'blazer', 'jacket', 'corset', 'bodysuit',
-                'long-sleeve-top', 'graphic-tee', 'turtleneck', 'polo', 'zip-up',
-                'low-rise-jeans', 'cargo-pants', 'mini-skirt', 'maxi-skirt', 'midi-skirt',
-                'pleated-skirt', 'denim-skirt', 'flare-jeans', 'baggy-jeans', 'shorts',
-                'yoga-pants', 'leggings', 'sweatpants', 'track-pants', 'bike-shorts',
-                'wide-leg-pants', 'straight-leg-jeans', 'skinny-jeans', 'mom-jeans',
-                'mini-dress', 'midi-dress', 'maxi-dress', 'slip-dress', 'sundress',
-                'party-dress', 'bodycon-dress', 'babydoll-dress', 'romper', 'jumpsuit',
-                'platform-shoes', 'heels', 'sneakers', 'boots', 'mary-janes', 'ballet-flats',
-                'bag', 'belt', 'sunglasses', 'jewelry', 'hair-clip'
-            ],
-            Aesthetics: [
-                'y2k', 'grunge', 'coquette', 'cottagecore', 'mcbling', 'indie-sleaze',
-                'cyber-y2k', 'streetwear', '90s', '00s', 'vintage', 'preppy', 'goth'
-            ],
-            Details: [
-                'rhinestones', 'lace', 'distressed', 'graphic-print', 'butterfly',
-                'velvet', 'mesh', 'sequins', 'denim', 'leather', 'satin', 'knit',
-                'fur-trim', 'ruffles', 'cutout', 'tie-dye', 'plaid', 'floral'
-            ],
-            Colors: [
-                'pink', 'baby-blue', 'black', 'white', 'hot-pink', 'lavender',
-                'lime-green', 'silver', 'gold', 'red', 'purple', 'yellow', 'brown',
-                'grey', 'orange', 'green', 'blue'
-            ],
-            Vibes: [
-                'party', 'casual', 'edgy', 'girly', 'preppy', 'vintage', 'sexy',
-                'cute', 'sporty', 'elegant', 'grunge', 'romantic'
-            ]
-        };
-
-        // Helper function to check if a tag is an item type
-        function isItemTag(tag) {
-            return TAG_CATEGORIES.Items.includes(tag);
-        }
 
         // Check auth state
         onAuthStateChanged(auth, async (user) => {
@@ -1213,155 +1163,24 @@ function isAdmin() {
                 return [];
             }
         }
-// Helper function to get all unique tags from database
-async function getAllExistingTags() {
-    try {
-        const imagesQuery = query(collection(db, 'images'));
-        const snapshot = await getDocs(imagesQuery);
-        const allTags = new Set();
-
-        snapshot.forEach((doc) => {
-            const data = doc.data();
-            if (data.tags && Array.isArray(data.tags)) {
-                data.tags.forEach(tag => allTags.add(tag));
-            }
-        });
-
-        return Array.from(allTags).sort();
-    } catch (error) {
-        console.error('Error fetching tags:', error);
-        return [];
-    }
-}
-
 // Open image detail modal
-window.openImageDetail = function(imageId, imageUrl, link, tags) {
-    document.getElementById('detailImage').src = imageUrl;
-    
-    // Display tags
-    const tagsContainer = document.getElementById('detailTags');
-    tagsContainer.innerHTML = '';
-    
-    if (tags && tags.length > 0) {
-        tags.forEach(tag => {
-            const tagEl = document.createElement('span');
-            tagEl.className = 'tag-pill';
-            tagEl.textContent = tag;
-            tagEl.style.cursor = 'pointer';
-            tagEl.onclick = () => {
-                closeImageDetail();
-                loadTagFeed(tag);
-            };
-            tagsContainer.appendChild(tagEl);
+        window.openImageDetail = function(imageId, imageUrl, link, tags) {
+            document.getElementById('detailImage').src = imageUrl;
             
-            // Admin can delete tags
-            if (isAdmin()) {
-                const deleteBtn = document.createElement('span');
-                deleteBtn.textContent = ' ×';
-                deleteBtn.style.cursor = 'pointer';
-                deleteBtn.style.fontWeight = 'bold';
-                deleteBtn.style.marginLeft = '4px';
-                deleteBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    removeTag(imageId, tag);
-                };
-                tagEl.appendChild(deleteBtn);
-            }
-        });
-    } else {
-        tagsContainer.innerHTML = '<span style="color: #999; font-size: 12px;">no tags yet</span>';
-    }
-    
-    // Admin can add new tags with autocomplete
-    if (isAdmin()) {
-        const tagInputWrapper = document.createElement('div');
-        tagInputWrapper.style.cssText = 'position: relative; display: inline-block; margin-top: 10px;';
-
-        const addTagInput = document.createElement('input');
-        addTagInput.type = 'text';
-        addTagInput.placeholder = 'add tag...';
-        addTagInput.style.cssText = 'padding: 6px 12px; border: 1px solid #8b7355; font-family: "Courier New", Courier, monospace; font-size: 11px; width: 150px;';
-
-        const autocompleteDropdown = document.createElement('div');
-        autocompleteDropdown.style.cssText = 'position: absolute; top: 100%; left: 0; width: 200px; max-height: 200px; overflow-y: auto; background: #fff; border: 1px solid #8b7355; z-index: 1000; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.2);';
-
-        // Load existing tags and setup autocomplete
-        let existingTags = [];
-        getAllExistingTags().then(tags => {
-            existingTags = tags;
-        });
-
-        // Show autocomplete on input
-        addTagInput.addEventListener('input', () => {
-            const value = addTagInput.value.trim().toLowerCase();
-            autocompleteDropdown.innerHTML = '';
-
-            if (value.length > 0) {
-                const matches = existingTags.filter(tag =>
-                    tag.toLowerCase().includes(value) && tag.toLowerCase() !== value
-                );
-
-                if (matches.length > 0) {
-                    matches.slice(0, 10).forEach(tag => {
-                        const option = document.createElement('div');
-                        option.textContent = tag;
-                        option.style.cssText = 'padding: 6px 10px; cursor: pointer; font-family: "Courier New", Courier, monospace; font-size: 11px; border-bottom: 1px solid #eee;';
-                        option.onmouseover = () => option.style.background = '#f0e0d6';
-                        option.onmouseout = () => option.style.background = '#fff';
-                        option.onclick = () => {
-                            addTagInput.value = tag;
-                            autocompleteDropdown.style.display = 'none';
-                            addTagInput.focus();
-                        };
-                        autocompleteDropdown.appendChild(option);
-                    });
-                    autocompleteDropdown.style.display = 'block';
-                } else {
-                    autocompleteDropdown.style.display = 'none';
-                }
+            // Display tags
+            const tagsContainer = document.getElementById('detailTags');
+            tagsContainer.innerHTML = '';
+            
+            if (tags && tags.length > 0) {
+                tags.forEach(tag => {
+                    const tagEl = document.createElement('span');
+                    tagEl.className = 'tag-pill';
+                    tagEl.textContent = tag;
+                    tagsContainer.appendChild(tagEl);
+                });
             } else {
-                autocompleteDropdown.style.display = 'none';
+                tagsContainer.innerHTML = '<span style="color: #999; font-size: 12px;">no tags yet</span>';
             }
-        });
-
-        // Hide dropdown when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!tagInputWrapper.contains(e.target)) {
-                autocompleteDropdown.style.display = 'none';
-            }
-        });
-
-        // Allow Enter key to add tag
-        addTagInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                const newTag = addTagInput.value.trim().toLowerCase();
-                if (newTag) {
-                    addTag(imageId, newTag);
-                    addTagInput.value = '';
-                    autocompleteDropdown.style.display = 'none';
-                }
-            }
-        });
-
-        const addTagBtn = document.createElement('button');
-        addTagBtn.textContent = '+';
-        addTagBtn.style.cssText = 'margin-left: 5px; padding: 6px 12px; background: #d4c5b0; border: 1px solid #8b7355; cursor: pointer; font-family: "Courier New", Courier, monospace;';
-        addTagBtn.onclick = () => {
-            const newTag = addTagInput.value.trim().toLowerCase();
-            if (newTag) {
-                addTag(imageId, newTag);
-                addTagInput.value = '';
-                autocompleteDropdown.style.display = 'none';
-            }
-        };
-
-        tagInputWrapper.appendChild(addTagInput);
-        tagInputWrapper.appendChild(autocompleteDropdown);
-
-        tagsContainer.appendChild(document.createElement('br'));
-        tagsContainer.appendChild(tagInputWrapper);
-        tagsContainer.appendChild(addTagBtn);
-    }
             
             // Setup shop button
             const shopBtn = document.getElementById('shopButton');
@@ -1378,447 +1197,6 @@ window.openImageDetail = function(imageId, imageUrl, link, tags) {
         window.closeImageDetail = function() {
             document.getElementById('imageDetailModal').style.display = 'none';
         };
-
-// Admin function: Add tag to image
-async function addTag(imageId, newTag) {
-    try {
-        const imageRef = doc(db, 'images', imageId);
-        const imageDoc = await getDoc(imageRef);
-        const currentTags = imageDoc.data().tags || [];
-        
-        if (currentTags.includes(newTag)) {
-            alert('Tag already exists');
-            return;
-        }
-        
-        await updateDoc(imageRef, {
-            tags: arrayUnion(newTag)
-        });
-        
-        // Reload the modal with updated tags
-        const data = (await getDoc(imageRef)).data();
-        openImageDetail(imageId, data.imageUrl, data.link, data.tags);
-        
-        console.log('Tag added:', newTag);
-    } catch (error) {
-        alert('Error adding tag: ' + error.message);
-    }
-}
-
-// Admin function: Remove tag from image
-async function removeTag(imageId, tagToRemove) {
-    if (!confirm(`Remove tag "${tagToRemove}"?`)) return;
-    
-    try {
-        const imageRef = doc(db, 'images', imageId);
-        const imageDoc = await getDoc(imageRef);
-        const currentTags = imageDoc.data().tags || [];
-        
-        const updatedTags = currentTags.filter(tag => tag !== tagToRemove);
-        
-        await updateDoc(imageRef, {
-            tags: updatedTags
-        });
-        
-        // Reload the modal with updated tags
-        const data = (await getDoc(imageRef)).data();
-        openImageDetail(imageId, data.imageUrl, data.link, data.tags);
-        
-        console.log('Tag removed:', tagToRemove);
-    } catch (error) {
-        alert('Error removing tag: ' + error.message);
-    }
-}
-
-// Load images filtered by tag(s) - supports multi-tag filtering
-async function loadTagFeed(tag, addToHistory = true, resetFilters = true) {
-    closeSidebar(); // Close sidebar if open
-
-    // If resetFilters is true, start fresh with just this tag
-    if (resetFilters) {
-        activeTagFilters = [tag];
-    }
-
-    // Add to navigation history
-    if (addToHistory && navigationHistory.length > 0) {
-        const lastPage = navigationHistory[navigationHistory.length - 1];
-        // Don't add duplicate if same page
-        if (!(lastPage.type === 'tag' && JSON.stringify(lastPage.tags) === JSON.stringify(activeTagFilters))) {
-            navigationHistory.push({ type: 'tag', tags: [...activeTagFilters] });
-        }
-    } else if (addToHistory) {
-        navigationHistory.push({ type: 'tag', tags: [...activeTagFilters] });
-    }
-
-    currentContext = { type: 'tag', id: activeTagFilters[0], tags: activeTagFilters };
-
-    // Build title with all active filters
-    const titleText = activeTagFilters.map(t => `#${t}`).join(' + ');
-    document.getElementById('pageTitle').innerHTML = '';
-
-    // Add back button if there's navigation history
-    if (navigationHistory.length > 1) {
-        const backBtn = document.createElement('span');
-        backBtn.textContent = '← back ';
-        backBtn.style.cursor = 'pointer';
-        backBtn.style.color = '#0600ff';
-        backBtn.style.marginRight = '5px';
-        backBtn.onclick = goBack;
-        document.getElementById('pageTitle').appendChild(backBtn);
-    }
-
-    const titleSpan = document.createElement('span');
-    titleSpan.textContent = `/ ${titleText}`;
-    document.getElementById('pageTitle').appendChild(titleSpan);
-
-    // Save current page to localStorage
-    localStorage.setItem('currentPage', JSON.stringify({ type: 'tag', tags: activeTagFilters }));
-
-    const grid = document.getElementById('imageGrid');
-    grid.innerHTML = '';
-
-    // Remove any existing filter controls
-    const existingFilterControls = grid.parentElement.querySelector('.tag-filter-controls');
-    if (existingFilterControls) {
-        existingFilterControls.remove();
-    }
-
-    // Only show filter controls if we're on a tag page (not on everything/collection/profile pages)
-    if (currentContext.type === 'tag') {
-        // Add filter controls section
-        const filterControls = document.createElement('div');
-        filterControls.className = 'tag-filter-controls';
-        filterControls.style.cssText = 'margin-bottom: 15px; padding: 10px; background: #eee; border: 1px solid #ccc;';
-
-        // Active filters display
-        if (activeTagFilters.length > 0) {
-            const activeFiltersDiv = document.createElement('div');
-            activeFiltersDiv.style.cssText = 'margin-bottom: 10px; font-family: "Courier New", Courier, monospace; font-size: 12px;';
-
-            activeTagFilters.forEach(filterTag => {
-                const filterPill = document.createElement('span');
-                filterPill.className = 'tag-pill';
-                filterPill.style.cssText = 'margin-right: 5px; margin-bottom: 5px; display: inline-block;';
-                filterPill.innerHTML = `${filterTag} <span style="cursor: pointer; font-weight: bold; margin-left: 4px;">×</span>`;
-                filterPill.querySelector('span').onclick = () => removeTagFilter(filterTag);
-                activeFiltersDiv.appendChild(filterPill);
-            });
-
-            filterControls.appendChild(activeFiltersDiv);
-        }
-
-        // Filter buttons
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.cssText = 'display: flex; gap: 10px;';
-
-        const quickFiltersBtn = document.createElement('button');
-        quickFiltersBtn.textContent = '+ quick filters';
-        quickFiltersBtn.style.cssText = 'padding: 8px 12px; background: #d4c5b0; border: 1px solid #8b7355; cursor: pointer; font-family: "Courier New", Courier, monospace; font-size: 11px;';
-        quickFiltersBtn.onclick = () => showQuickFilters();
-
-        const allTagsBtn = document.createElement('button');
-        allTagsBtn.textContent = '+ all tags';
-        allTagsBtn.style.cssText = 'padding: 8px 12px; background: #d4c5b0; border: 1px solid #8b7355; cursor: pointer; font-family: "Courier New", Courier, monospace; font-size: 11px;';
-        allTagsBtn.onclick = () => showAllTagsFilter();
-
-        buttonContainer.appendChild(quickFiltersBtn);
-        buttonContainer.appendChild(allTagsBtn);
-        filterControls.appendChild(buttonContainer);
-
-        grid.parentElement.insertBefore(filterControls, grid);
-    }
-
-    try {
-        const imagesQuery = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
-        const snapshot = await getDocs(imagesQuery);
-
-        snapshot.forEach((doc) => {
-            const data = doc.data();
-            const imageTags = data.tags || [];
-
-            // Check if image has ALL active filter tags
-            const hasAllTags = activeTagFilters.every(filterTag => imageTags.includes(filterTag));
-
-            if (hasAllTags) {
-                const item = document.createElement('div');
-                item.className = 'image-item';
-                item.dataset.imageId = doc.id;
-                item.dataset.userId = data.userId;
-                item.dataset.imageUrl = data.imageUrl;
-                item.dataset.link = data.link || '';
-                item.dataset.tags = JSON.stringify(imageTags);
-                item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
-
-                addGestureHandlers(item);
-
-                grid.appendChild(item);
-            }
-        });
-
-        // Show message if no images found
-        if (grid.children.length === 0) {
-            grid.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No images with these tags yet</div>';
-        }
-    } catch (error) {
-        console.error('Error loading tag feed:', error);
-    }
-}
-
-// Make it globally accessible
-window.loadTagFeed = loadTagFeed;
-
-// Navigation: Go back to previous page
-function goBack() {
-    if (navigationHistory.length > 1) {
-        // Remove current page
-        navigationHistory.pop();
-        // Get previous page
-        const previousPage = navigationHistory[navigationHistory.length - 1];
-
-        // Navigate to previous page without adding to history again
-        if (previousPage.type === 'tag') {
-            activeTagFilters = [...previousPage.tags];
-            loadTagFeed(previousPage.tags[0], false, false);
-        } else if (previousPage.type === 'everything') {
-            loadEverythingFeed(false);
-        } else if (previousPage.type === 'profile') {
-            loadMyProfile(false);
-        } else if (previousPage.type === 'collection') {
-            loadCollectionFeed(previousPage.id, previousPage.name, false);
-        } else if (previousPage.type === 'userProfile') {
-            loadUserProfile(previousPage.id, previousPage.username, false);
-        }
-    }
-}
-
-// Remove a tag from active filters
-function removeTagFilter(tagToRemove) {
-    activeTagFilters = activeTagFilters.filter(t => t !== tagToRemove);
-
-    if (activeTagFilters.length === 0) {
-        // If no filters left, go back to everything feed
-        goBack();
-    } else {
-        // Reload with remaining filters
-        loadTagFeed(activeTagFilters[0], false, false);
-    }
-}
-
-// Add a tag to active filters
-function addTagFilter(tagToAdd) {
-    if (!activeTagFilters.includes(tagToAdd)) {
-        activeTagFilters.push(tagToAdd);
-        loadTagFeed(activeTagFilters[0], false, false);
-    }
-}
-
-// Show quick filters - top 10 co-occurring tags
-async function showQuickFilters() {
-    try {
-        const imagesQuery = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
-        const snapshot = await getDocs(imagesQuery);
-
-        // Get all images that have ALL current active filters
-        const matchingImages = [];
-        snapshot.forEach((doc) => {
-            const data = doc.data();
-            const imageTags = data.tags || [];
-            const hasAllTags = activeTagFilters.every(filterTag => imageTags.includes(filterTag));
-            if (hasAllTags) {
-                matchingImages.push(imageTags);
-            }
-        });
-
-        // Count co-occurring tags (exclude already active filters)
-        const tagCounts = {};
-        matchingImages.forEach(imageTags => {
-            imageTags.forEach(tag => {
-                if (!activeTagFilters.includes(tag)) {
-                    // Apply item exclusivity rule
-                    const hasItemInFilters = activeTagFilters.some(filterTag => isItemTag(filterTag));
-                    if (hasItemInFilters && isItemTag(tag)) {
-                        // Skip this tag - don't show other items if we already have an item
-                        return;
-                    }
-                    tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-                }
-            });
-        });
-
-        // Sort by count and get top 10
-        const topTags = Object.entries(tagCounts)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10);
-
-        if (topTags.length === 0) {
-            alert('No additional tags found for these images');
-            return;
-        }
-
-        // Show modal with quick filters
-        showQuickFiltersModal(topTags);
-
-    } catch (error) {
-        console.error('Error loading quick filters:', error);
-    }
-}
-
-// Show modal with quick filter options
-function showQuickFiltersModal(topTags) {
-    const modal = document.createElement('div');
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 3000; display: flex; justify-content: center; align-items: center;';
-
-    const content = document.createElement('div');
-    content.style.cssText = 'background: #f0e0d6; padding: 20px; border: 2px solid #8b7355; max-width: 400px; width: 90%; max-height: 70vh; overflow-y: auto; font-family: "Courier New", Courier, monospace;';
-
-    const title = document.createElement('h3');
-    title.textContent = 'quick filters';
-    title.style.cssText = 'margin-bottom: 15px; font-size: 14px;';
-    content.appendChild(title);
-
-    const tagList = document.createElement('div');
-    topTags.forEach(([tag, count]) => {
-        const tagBtn = document.createElement('button');
-        tagBtn.textContent = `${tag} (${count})`;
-        tagBtn.style.cssText = 'display: block; width: 100%; padding: 8px 12px; margin-bottom: 5px; background: #d4c5b0; border: 1px solid #8b7355; cursor: pointer; font-family: "Courier New", Courier, monospace; font-size: 12px; text-align: left;';
-        tagBtn.onclick = () => {
-            addTagFilter(tag);
-            document.body.removeChild(modal);
-        };
-        tagList.appendChild(tagBtn);
-    });
-    content.appendChild(tagList);
-
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = 'close';
-    closeBtn.style.cssText = 'width: 100%; padding: 10px; margin-top: 10px; background: #9ed2f5; border: 1px solid #7ab8db; cursor: pointer; font-family: "Courier New", Courier, monospace;';
-    closeBtn.onclick = () => document.body.removeChild(modal);
-    content.appendChild(closeBtn);
-
-    modal.appendChild(content);
-    modal.onclick = (e) => {
-        if (e.target === modal) document.body.removeChild(modal);
-    };
-
-    document.body.appendChild(modal);
-}
-
-// Show all tags filter with categories
-async function showAllTagsFilter() {
-    try {
-        const imagesQuery = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
-        const snapshot = await getDocs(imagesQuery);
-
-        // Get all images that have ALL current active filters
-        const matchingImages = [];
-        snapshot.forEach((doc) => {
-            const data = doc.data();
-            const imageTags = data.tags || [];
-            const hasAllTags = activeTagFilters.every(filterTag => imageTags.includes(filterTag));
-            if (hasAllTags) {
-                matchingImages.push(imageTags);
-            }
-        });
-
-        // Count all tags
-        const tagCounts = {};
-        matchingImages.forEach(imageTags => {
-            imageTags.forEach(tag => {
-                if (!activeTagFilters.includes(tag)) {
-                    tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-                }
-            });
-        });
-
-        // Organize by category with item exclusivity logic
-        const hasItemInFilters = activeTagFilters.some(filterTag => isItemTag(filterTag));
-        const categorizedTags = {};
-
-        Object.entries(TAG_CATEGORIES).forEach(([category, tags]) => {
-            // Skip Items category if we already have an item in filters
-            if (category === 'Items' && hasItemInFilters) {
-                return;
-            }
-
-            categorizedTags[category] = tags.map(tag => ({
-                tag,
-                count: tagCounts[tag] || 0
-            })).filter(item => {
-                // Only show tags that exist in the data or are already active
-                return item.count > 0 || activeTagFilters.includes(item.tag);
-            });
-        });
-
-        showAllTagsModal(categorizedTags);
-
-    } catch (error) {
-        console.error('Error loading all tags filter:', error);
-    }
-}
-
-// Show modal with all tags organized by category
-function showAllTagsModal(categorizedTags) {
-    const modal = document.createElement('div');
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 3000; display: flex; justify-content: center; align-items: center;';
-
-    const content = document.createElement('div');
-    content.style.cssText = 'background: #f0e0d6; padding: 20px; border: 2px solid #8b7355; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; font-family: "Courier New", Courier, monospace;';
-
-    const title = document.createElement('h3');
-    title.textContent = 'all tags';
-    title.style.cssText = 'margin-bottom: 15px; font-size: 14px;';
-    content.appendChild(title);
-
-    // Display each category
-    Object.entries(categorizedTags).forEach(([category, tags]) => {
-        if (tags.length === 0) return;
-
-        const categoryTitle = document.createElement('h4');
-        categoryTitle.textContent = category;
-        categoryTitle.style.cssText = 'margin-top: 15px; margin-bottom: 8px; font-size: 12px; color: #666; text-transform: uppercase;';
-        content.appendChild(categoryTitle);
-
-        const tagGrid = document.createElement('div');
-        tagGrid.style.cssText = 'display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px;';
-
-        tags.forEach(({ tag, count }) => {
-            const tagBtn = document.createElement('button');
-            tagBtn.textContent = `${tag} (${count})`;
-
-            const isDisabled = count === 0;
-            const btnStyle = isDisabled
-                ? 'padding: 6px 10px; background: #ccc; color: #999; border: 1px solid #aaa; cursor: not-allowed; font-family: "Courier New", Courier, monospace; font-size: 11px;'
-                : 'padding: 6px 10px; background: #d4c5b0; color: #000; border: 1px solid #8b7355; cursor: pointer; font-family: "Courier New", Courier, monospace; font-size: 11px;';
-
-            tagBtn.style.cssText = btnStyle;
-            tagBtn.disabled = isDisabled;
-
-            if (!isDisabled) {
-                tagBtn.onclick = () => {
-                    addTagFilter(tag);
-                    document.body.removeChild(modal);
-                };
-            }
-
-            tagGrid.appendChild(tagBtn);
-        });
-
-        content.appendChild(tagGrid);
-    });
-
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = 'close';
-    closeBtn.style.cssText = 'width: 100%; padding: 10px; margin-top: 15px; background: #9ed2f5; border: 1px solid #7ab8db; cursor: pointer; font-family: "Courier New", Courier, monospace;';
-    closeBtn.onclick = () => document.body.removeChild(modal);
-    content.appendChild(closeBtn);
-
-    modal.appendChild(content);
-    modal.onclick = (e) => {
-        if (e.target === modal) document.body.removeChild(modal);
-    };
-
-    document.body.appendChild(modal);
-}
         
         // Open chat unlock modal
         window.openChatUnlock = function() {
@@ -2016,40 +1394,19 @@ function showAllTagsModal(categorizedTags) {
             const collectionsList = document.getElementById('collectionsList');
             collectionsList.innerHTML = '';
             
-         try {
-    const collectionsSnapshot = await getDocs(collection(db, 'collections'));
-    collectionsSnapshot.forEach((doc) => {
-        const data = doc.data();
-        
-        const container = document.createElement('div');
-        container.style.display = 'flex';
-        container.style.justifyContent = 'space-between';
-        container.style.alignItems = 'center';
-        
-        const link = document.createElement('a');
-        link.href = '#';
-        link.textContent = `/ ${data.name}`;
-        link.onclick = () => {
-            loadCollection(doc.id, data.name);
-            return false;
-        };
-        
-        container.appendChild(link);
-        
-        // Admin can delete collections
-        if (isAdmin()) {
-            const deleteBtn = document.createElement('span');
-            deleteBtn.textContent = '×';
-            deleteBtn.style.cssText = 'cursor: pointer; color: #999; font-size: 18px; padding: 0 5px;';
-            deleteBtn.onclick = (e) => {
-                e.stopPropagation();
-                deleteCollection(doc.id, data.name);
-            };
-            container.appendChild(deleteBtn);
-        }
-        
-        collectionsList.appendChild(container);
-    });
+            try {
+                const collectionsSnapshot = await getDocs(collection(db, 'collections'));
+                collectionsSnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent = `/ ${data.name}`;
+                    link.onclick = () => {
+                        loadCollection(doc.id, data.name);
+                        return false;
+                    };
+                    collectionsList.appendChild(link);
+                });
             } catch (error) {
                 console.error('Error loading collections:', error);
             } finally {
@@ -2076,45 +1433,17 @@ function showAllTagsModal(categorizedTags) {
             }
         };
 
-        // Admin function: Delete collection
-async function deleteCollection(collectionId, collectionName) {
-    if (!confirm(`Delete collection "${collectionName}"? This cannot be undone.`)) return;
-    
-    try {
-        await deleteDoc(doc(db, 'collections', collectionId));
-        loadCollections(); // Reload the sidebar
-        
-        // If currently viewing this collection, go back to everything
-        if (currentContext.type === 'collection' && currentContext.id === collectionId) {
-            loadEverythingFeed();
-        }
-        
-        alert('Collection deleted!');
-    } catch (error) {
-        alert('Error deleting collection: ' + error.message);
-    }
-}
-
         // Load specific collection
-        async function loadCollection(collectionId, collectionName, addToHistory = true) {
-            closeSidebar();
-
-            // Add to navigation history
-            if (addToHistory) {
-                navigationHistory.push({ type: 'collection', id: collectionId, name: collectionName });
-            }
-
-            // Reset active tag filters
-            activeTagFilters = [];
-
-            document.getElementById('pageTitle').innerHTML = `/ ${collectionName}`;
+        async function loadCollection(collectionId, collectionName) {
+            toggleSidebar();
+            document.getElementById('pageTitle').textContent = `/ ${collectionName}`;
             currentContext = { type: 'collection', id: collectionId };
-
+            
             // Save current page to localStorage
-            localStorage.setItem('currentPage', JSON.stringify({
-                type: 'collection',
-                id: collectionId,
-                name: collectionName
+            localStorage.setItem('currentPage', JSON.stringify({ 
+                type: 'collection', 
+                id: collectionId, 
+                name: collectionName 
             }));
             
             const grid = document.getElementById('imageGrid');
@@ -2418,23 +1747,12 @@ async function deleteCollection(collectionId, collectionName) {
         };
 
         // Load user profile (for viewing other users)
-        window.loadUserProfile = async function(userId, username, addToHistory = true) {
-            closeSidebar(); // Close sidebar if open
-            if (document.getElementById('chatbox').classList.contains('open')) {
-                toggleChatbox(); // Close chatbox if open
-            }
-
-            // Add to navigation history
-            if (addToHistory) {
-                navigationHistory.push({ type: 'userProfile', id: userId, username: username });
-            }
-
-            // Reset active tag filters
-            activeTagFilters = [];
-
-            document.getElementById('pageTitle').innerHTML = `/ ${username}'s profile`;
+        window.loadUserProfile = async function(userId, username) {
+            toggleSidebar(); // Close sidebar if open
+            toggleChatbox(); // Close chatbox
+            document.getElementById('pageTitle').textContent = `/ ${username}'s profile`;
             currentContext = { type: 'userProfile', id: userId };
-
+            
             // Save current page to localStorage
             localStorage.setItem('currentPage', JSON.stringify({ type: 'userProfile', id: userId, username: username }));
             
@@ -2471,20 +1789,11 @@ async function deleteCollection(collectionId, collectionName) {
                 console.error('Error loading user profile:', error);
             }
         };
-        window.loadMyProfile = async function(addToHistory = true) {
-            closeSidebar();
-
-            // Add to navigation history
-            if (addToHistory) {
-                navigationHistory.push({ type: 'profile' });
-            }
-
-            // Reset active tag filters
-            activeTagFilters = [];
-
-            document.getElementById('pageTitle').innerHTML = '/ my profile';
+        window.loadMyProfile = async function() {
+            toggleSidebar();
+            document.getElementById('pageTitle').textContent = '/ my profile';
             currentContext = { type: 'profile', id: auth.currentUser.uid };
-
+            
             // Save current page to localStorage
             localStorage.setItem('currentPage', JSON.stringify({ type: 'profile' }));
             
@@ -2544,28 +1853,20 @@ async function deleteCollection(collectionId, collectionName) {
         };
 
         // Load everything feed
-        async function loadEverythingFeed(addToHistory = true) {
-            // Add to navigation history
-            if (addToHistory) {
-                navigationHistory.push({ type: 'everything' });
-            }
-
-            // Reset active tag filters
-            activeTagFilters = [];
-
+        async function loadEverythingFeed() {
             currentContext = { type: 'everything', id: null };
-            document.getElementById('pageTitle').innerHTML = '/ everything';
-
+            document.getElementById('pageTitle').textContent = '/ everything';
+            
             // Save current page to localStorage
             localStorage.setItem('currentPage', JSON.stringify({ type: 'everything' }));
-
+            
             const grid = document.getElementById('imageGrid');
             grid.innerHTML = '';
-
+            
             try {
                 const imagesQuery = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
                 const snapshot = await getDocs(imagesQuery);
-
+                
                 snapshot.forEach((doc) => {
                     const data = doc.data();
                     const item = document.createElement('div');
@@ -2576,9 +1877,9 @@ async function deleteCollection(collectionId, collectionName) {
                     item.dataset.link = data.link || '';
                     item.dataset.tags = JSON.stringify(data.tags || []);
                     item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
-
+                    
                     addGestureHandlers(item);
-
+                    
                     grid.appendChild(item);
                 });
             } catch (error) {
@@ -2592,25 +1893,19 @@ async function deleteCollection(collectionId, collectionName) {
                 const savedPage = localStorage.getItem('currentPage');
                 if (savedPage) {
                     const page = JSON.parse(savedPage);
-
+                    
                     if (page.type === 'profile') {
                         await loadMyProfile();
                     } else if (page.type === 'collection' && page.id && page.name) {
                         await loadCollection(page.id, page.name);
-                   } else if (page.type === 'userProfile' && page.id && page.username) {
+                    } else if (page.type === 'userProfile' && page.id && page.username) {
                         await loadUserProfile(page.id, page.username);
-                    } else if (page.type === 'tag') {
-                        // Handle both old (single tag) and new (tags array) format
-                        if (page.tags && Array.isArray(page.tags)) {
-                            activeTagFilters = page.tags;
-                            await loadTagFeed(page.tags[0], true, false);
-                        } else if (page.tag) {
-                            await loadTagFeed(page.tag);
-                        }
                     } else {
                         await loadEverythingFeed();
                     }
-                    }
+                } else {
+                    await loadEverythingFeed();
+                }
             } catch (error) {
                 console.error('Error restoring page:', error);
                 await loadEverythingFeed();
@@ -2853,27 +2148,22 @@ async function deleteCollection(collectionId, collectionName) {
         }
 
         // Handle delete
-       async function handleDelete(item) {
-    const imageId = item.dataset.imageId;
-    const userId = item.dataset.userId;
-    
-    // Allow admin to delete any image, or users to delete their own
-    if (userId !== auth.currentUser.uid && !isAdmin()) {
-        alert('You can only delete your own images');
-        return;
-    }
+        async function handleDelete(item) {
+            const imageId = item.dataset.imageId;
+            const userId = item.dataset.userId;
+            
+            if (userId !== auth.currentUser.uid) {
+                alert('You can only delete your own images');
+                return;
+            }
 
-    try {
-        await deleteDoc(doc(db, 'images', imageId));
-        item.remove();
-        
-        if (isAdmin()) {
-            console.log('Admin deleted image:', imageId);
+            try {
+                await deleteDoc(doc(db, 'images', imageId));
+                item.remove();
+            } catch (error) {
+                alert('Delete failed: ' + error.message);
+            }
         }
-    } catch (error) {
-        alert('Delete failed: ' + error.message);
-    }
-}
 
         // Handle add to collection
         let currentImageToAdd = null;
@@ -3168,13 +2458,6 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
             const overlay = document.getElementById('overlay');
             sidebar.classList.toggle('open');
             overlay.classList.toggle('active');
-        }
-
-        function closeSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const overlay = document.getElementById('overlay');
-            sidebar.classList.remove('open');
-            overlay.classList.remove('active');
         }
 
         function loadPage(page) {
