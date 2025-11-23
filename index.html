@@ -1064,8 +1064,8 @@ function isAdmin() {
         // Global variables
         let currentUser = null;
         let isSignupMode = false;
-        let currentContext = { type: null, id: null };
-        let navigationHistory = []; // Track page navigation for back button
+        let currentContext = { type: 'everything', id: null }; // Start on everything page
+        let navigationHistory = []; // Stack of previous pages
         let activeTagFilters = []; // Track active tag filters for multi-tag filtering
 
         // AI Tagging Configuration
@@ -1178,10 +1178,11 @@ function isAdmin() {
             }
         }
 
-        // AI Tagging Function
         // AI Tagging Function - calls Netlify backend
         async function getAITags(imageFile) {
             try {
+                console.log('Starting AI tagging...');
+
                 // Convert image to base64
                 const base64Image = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -1190,7 +1191,9 @@ function isAdmin() {
                     reader.readAsDataURL(imageFile);
                 });
 
-                // Call your Netlify function instead of OpenAI directly
+                console.log('Image converted to base64, calling Netlify function...');
+
+                // Call Netlify function
                 const response = await fetch('/.netlify/functions/ai-tagger', {
                     method: 'POST',
                     headers: {
@@ -1202,14 +1205,24 @@ function isAdmin() {
                 });
 
                 if (!response.ok) {
-                    console.error('AI tagging failed');
+                    const errorText = await response.text();
+                    console.error('AI tagging API error:', response.status, errorText);
+                    alert('AI tagging unavailable - image will upload without tags');
                     return [];
                 }
 
                 const data = await response.json();
-                return data.tags;
+                const tags = Array.isArray(data.tags) ? data.tags : [];
+                console.log('AI tags received:', tags);
+
+                if (tags.length === 0) {
+                    console.warn('AI returned no tags');
+                }
+
+                return tags;
             } catch (error) {
                 console.error('Error getting AI tags:', error);
+                alert('AI tagging failed - image will upload without tags');
                 return [];
             }
         }
@@ -1276,27 +1289,35 @@ window.openImageDetail = function(imageId, imageUrl, link, tags) {
     if (isAdmin()) {
         const tagInputWrapper = document.createElement('div');
         tagInputWrapper.style.cssText = 'position: relative; display: inline-block; margin-top: 10px;';
+        tagInputWrapper.id = 'tagInputWrapper-' + imageId; // Unique ID
 
         const addTagInput = document.createElement('input');
         addTagInput.type = 'text';
         addTagInput.placeholder = 'add tag...';
         addTagInput.style.cssText = 'padding: 6px 12px; border: 1px solid #8b7355; font-family: "Courier New", Courier, monospace; font-size: 11px; width: 150px;';
+        addTagInput.autocomplete = 'off';
 
         const autocompleteDropdown = document.createElement('div');
-        autocompleteDropdown.style.cssText = 'position: absolute; top: 100%; left: 0; width: 200px; max-height: 200px; overflow-y: auto; background: #fff; border: 1px solid #8b7355; z-index: 1000; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.2);';
+        autocompleteDropdown.style.cssText = 'position: absolute; top: 100%; left: 0; width: 200px; max-height: 200px; overflow-y: auto; background: #fff; border: 1px solid #8b7355; z-index: 10000; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.2);';
 
         // Load existing tags and setup autocomplete
         let existingTags = [];
-        getAllExistingTags().then(tags => {
-            existingTags = tags;
+
+        // Use MASTER_TAG_LIST as fallback + fetch from database
+        existingTags = [...MASTER_TAG_LIST];
+        getAllExistingTags().then(dbTags => {
+            // Merge with database tags (unique)
+            const allTags = new Set([...existingTags, ...dbTags]);
+            existingTags = Array.from(allTags).sort();
         });
 
         // Show autocomplete on input
-        addTagInput.addEventListener('input', () => {
+        addTagInput.addEventListener('input', (e) => {
+            e.stopPropagation();
             const value = addTagInput.value.trim().toLowerCase();
             autocompleteDropdown.innerHTML = '';
 
-            if (value.length > 0) {
+            if (value.length > 0 && existingTags.length > 0) {
                 const matches = existingTags.filter(tag =>
                     tag.toLowerCase().includes(value) && tag.toLowerCase() !== value
                 );
@@ -1308,7 +1329,8 @@ window.openImageDetail = function(imageId, imageUrl, link, tags) {
                         option.style.cssText = 'padding: 6px 10px; cursor: pointer; font-family: "Courier New", Courier, monospace; font-size: 11px; border-bottom: 1px solid #eee;';
                         option.onmouseover = () => option.style.background = '#f0e0d6';
                         option.onmouseout = () => option.style.background = '#fff';
-                        option.onclick = () => {
+                        option.onclick = (e) => {
+                            e.stopPropagation();
                             addTagInput.value = tag;
                             autocompleteDropdown.style.display = 'none';
                             addTagInput.focus();
@@ -1324,16 +1346,32 @@ window.openImageDetail = function(imageId, imageUrl, link, tags) {
             }
         });
 
-        // Hide dropdown when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!tagInputWrapper.contains(e.target)) {
-                autocompleteDropdown.style.display = 'none';
+        // Show dropdown on focus if there's text
+        addTagInput.addEventListener('focus', () => {
+            if (addTagInput.value.trim().length > 0) {
+                addTagInput.dispatchEvent(new Event('input'));
             }
         });
+
+        // Hide dropdown when clicking outside - use a specific handler
+        const outsideClickHandler = (e) => {
+            if (tagInputWrapper && !tagInputWrapper.contains(e.target)) {
+                autocompleteDropdown.style.display = 'none';
+            }
+        };
+        setTimeout(() => {
+            document.addEventListener('click', outsideClickHandler);
+        }, 100);
+
+        // Cleanup on modal close
+        const cleanupHandler = () => {
+            document.removeEventListener('click', outsideClickHandler);
+        };
 
         // Allow Enter key to add tag
         addTagInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
+                e.preventDefault();
                 const newTag = addTagInput.value.trim().toLowerCase();
                 if (newTag) {
                     addTag(imageId, newTag);
@@ -1346,7 +1384,8 @@ window.openImageDetail = function(imageId, imageUrl, link, tags) {
         const addTagBtn = document.createElement('button');
         addTagBtn.textContent = '+';
         addTagBtn.style.cssText = 'margin-left: 5px; padding: 6px 12px; background: #d4c5b0; border: 1px solid #8b7355; cursor: pointer; font-family: "Courier New", Courier, monospace;';
-        addTagBtn.onclick = () => {
+        addTagBtn.onclick = (e) => {
+            e.preventDefault();
             const newTag = addTagInput.value.trim().toLowerCase();
             if (newTag) {
                 addTag(imageId, newTag);
@@ -1361,6 +1400,9 @@ window.openImageDetail = function(imageId, imageUrl, link, tags) {
         tagsContainer.appendChild(document.createElement('br'));
         tagsContainer.appendChild(tagInputWrapper);
         tagsContainer.appendChild(addTagBtn);
+
+        // Store cleanup function for when modal closes
+        window.tagAutocompleteCleanup = cleanupHandler;
     }
             
             // Setup shop button
@@ -1432,25 +1474,20 @@ async function removeTag(imageId, tagToRemove) {
 
 // Load images filtered by tag(s) - supports multi-tag filtering
 async function loadTagFeed(tag, addToHistory = true, resetFilters = true) {
-    toggleSidebar(); // Close sidebar if open
+    closeSidebar(); // Close sidebar if open
+
+    // Save CURRENT page to history BEFORE navigating
+    if (addToHistory && currentContext.type !== 'tag') {
+        navigationHistory.push({ ...currentContext });
+    }
 
     // If resetFilters is true, start fresh with just this tag
     if (resetFilters) {
         activeTagFilters = [tag];
     }
 
-    // Add to navigation history
-    if (addToHistory && navigationHistory.length > 0) {
-        const lastPage = navigationHistory[navigationHistory.length - 1];
-        // Don't add duplicate if same page
-        if (!(lastPage.type === 'tag' && JSON.stringify(lastPage.tags) === JSON.stringify(activeTagFilters))) {
-            navigationHistory.push({ type: 'tag', tags: [...activeTagFilters] });
-        }
-    } else if (addToHistory) {
-        navigationHistory.push({ type: 'tag', tags: [...activeTagFilters] });
-    }
-
-    currentContext = { type: 'tag', id: activeTagFilters[0], tags: activeTagFilters };
+    // Update current context
+    currentContext = { type: 'tag', id: tag, tags: [...activeTagFilters] };
 
     // Build title with all active filters
     const titleText = activeTagFilters.map(t => `#${t}`).join(' + ');
@@ -1483,47 +1520,50 @@ async function loadTagFeed(tag, addToHistory = true, resetFilters = true) {
         existingFilterControls.remove();
     }
 
-    // Add filter controls section
-    const filterControls = document.createElement('div');
-    filterControls.className = 'tag-filter-controls';
-    filterControls.style.cssText = 'margin-bottom: 15px; padding: 10px; background: #eee; border: 1px solid #ccc;';
+    // Only show filter controls if we're on a tag page (not on everything/collection/profile pages)
+    if (currentContext.type === 'tag') {
+        // Add filter controls section
+        const filterControls = document.createElement('div');
+        filterControls.className = 'tag-filter-controls';
+        filterControls.style.cssText = 'margin-bottom: 15px; padding: 10px; background: #eee; border: 1px solid #ccc;';
 
-    // Active filters display
-    if (activeTagFilters.length > 0) {
-        const activeFiltersDiv = document.createElement('div');
-        activeFiltersDiv.style.cssText = 'margin-bottom: 10px; font-family: "Courier New", Courier, monospace; font-size: 12px;';
+        // Active filters display
+        if (activeTagFilters.length > 0) {
+            const activeFiltersDiv = document.createElement('div');
+            activeFiltersDiv.style.cssText = 'margin-bottom: 10px; font-family: "Courier New", Courier, monospace; font-size: 12px;';
 
-        activeTagFilters.forEach(filterTag => {
-            const filterPill = document.createElement('span');
-            filterPill.className = 'tag-pill';
-            filterPill.style.cssText = 'margin-right: 5px; margin-bottom: 5px; display: inline-block;';
-            filterPill.innerHTML = `${filterTag} <span style="cursor: pointer; font-weight: bold; margin-left: 4px;">×</span>`;
-            filterPill.querySelector('span').onclick = () => removeTagFilter(filterTag);
-            activeFiltersDiv.appendChild(filterPill);
-        });
+            activeTagFilters.forEach(filterTag => {
+                const filterPill = document.createElement('span');
+                filterPill.className = 'tag-pill';
+                filterPill.style.cssText = 'margin-right: 5px; margin-bottom: 5px; display: inline-block;';
+                filterPill.innerHTML = `${filterTag} <span style="cursor: pointer; font-weight: bold; margin-left: 4px;">×</span>`;
+                filterPill.querySelector('span').onclick = () => removeTagFilter(filterTag);
+                activeFiltersDiv.appendChild(filterPill);
+            });
 
-        filterControls.appendChild(activeFiltersDiv);
+            filterControls.appendChild(activeFiltersDiv);
+        }
+
+        // Filter buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = 'display: flex; gap: 10px;';
+
+        const quickFiltersBtn = document.createElement('button');
+        quickFiltersBtn.textContent = '+ quick filters';
+        quickFiltersBtn.style.cssText = 'padding: 8px 12px; background: #d4c5b0; border: 1px solid #8b7355; cursor: pointer; font-family: "Courier New", Courier, monospace; font-size: 11px;';
+        quickFiltersBtn.onclick = () => showQuickFilters();
+
+        const allTagsBtn = document.createElement('button');
+        allTagsBtn.textContent = '+ all tags';
+        allTagsBtn.style.cssText = 'padding: 8px 12px; background: #d4c5b0; border: 1px solid #8b7355; cursor: pointer; font-family: "Courier New", Courier, monospace; font-size: 11px;';
+        allTagsBtn.onclick = () => showAllTagsFilter();
+
+        buttonContainer.appendChild(quickFiltersBtn);
+        buttonContainer.appendChild(allTagsBtn);
+        filterControls.appendChild(buttonContainer);
+
+        grid.parentElement.insertBefore(filterControls, grid);
     }
-
-    // Filter buttons
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.cssText = 'display: flex; gap: 10px;';
-
-    const quickFiltersBtn = document.createElement('button');
-    quickFiltersBtn.textContent = '+ quick filters';
-    quickFiltersBtn.style.cssText = 'padding: 8px 12px; background: #d4c5b0; border: 1px solid #8b7355; cursor: pointer; font-family: "Courier New", Courier, monospace; font-size: 11px;';
-    quickFiltersBtn.onclick = () => showQuickFilters();
-
-    const allTagsBtn = document.createElement('button');
-    allTagsBtn.textContent = '+ all tags';
-    allTagsBtn.style.cssText = 'padding: 8px 12px; background: #d4c5b0; border: 1px solid #8b7355; cursor: pointer; font-family: "Courier New", Courier, monospace; font-size: 11px;';
-    allTagsBtn.onclick = () => showAllTagsFilter();
-
-    buttonContainer.appendChild(quickFiltersBtn);
-    buttonContainer.appendChild(allTagsBtn);
-    filterControls.appendChild(buttonContainer);
-
-    grid.parentElement.insertBefore(filterControls, grid);
 
     try {
         const imagesQuery = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
@@ -1566,25 +1606,26 @@ window.loadTagFeed = loadTagFeed;
 
 // Navigation: Go back to previous page
 function goBack() {
-    if (navigationHistory.length > 1) {
-        // Remove current page
-        navigationHistory.pop();
-        // Get previous page
-        const previousPage = navigationHistory[navigationHistory.length - 1];
+    if (navigationHistory.length > 0) {
+        // Pop the previous page from history
+        const previousPage = navigationHistory.pop();
 
-        // Navigate to previous page without adding to history again
+        // Navigate WITHOUT adding to history (addToHistory = false)
         if (previousPage.type === 'tag') {
-            activeTagFilters = [...previousPage.tags];
-            loadTagFeed(previousPage.tags[0], false, false);
+            activeTagFilters = previousPage.tags || [previousPage.id];
+            loadTagFeed(activeTagFilters[0], false, false);
         } else if (previousPage.type === 'everything') {
             loadEverythingFeed(false);
         } else if (previousPage.type === 'profile') {
             loadMyProfile(false);
         } else if (previousPage.type === 'collection') {
-            loadCollectionFeed(previousPage.id, previousPage.name, false);
+            loadCollection(previousPage.id, previousPage.name, false);
         } else if (previousPage.type === 'userProfile') {
             loadUserProfile(previousPage.id, previousPage.username, false);
         }
+    } else {
+        // No history - go to everything feed
+        loadEverythingFeed(false);
     }
 }
 
@@ -2094,18 +2135,23 @@ async function deleteCollection(collectionId, collectionName) {
 
         // Load specific collection
         async function loadCollection(collectionId, collectionName, addToHistory = true) {
-            toggleSidebar();
+            closeSidebar();
 
-            // Add to navigation history
-            if (addToHistory) {
-                navigationHistory.push({ type: 'collection', id: collectionId, name: collectionName });
+            // Save CURRENT page to history BEFORE navigating
+            if (addToHistory && !(currentContext.type === 'collection' && currentContext.id === collectionId)) {
+                navigationHistory.push({ ...currentContext });
             }
 
-            // Reset active tag filters
+            // Reset active tag filters and remove filter UI
             activeTagFilters = [];
+            const existingFilterControls = document.querySelector('.tag-filter-controls');
+            if (existingFilterControls) {
+                existingFilterControls.remove();
+            }
 
+            // Update current context
+            currentContext = { type: 'collection', id: collectionId, name: collectionName };
             document.getElementById('pageTitle').innerHTML = `/ ${collectionName}`;
-            currentContext = { type: 'collection', id: collectionId };
 
             // Save current page to localStorage
             localStorage.setItem('currentPage', JSON.stringify({
@@ -2416,19 +2462,26 @@ async function deleteCollection(collectionId, collectionName) {
 
         // Load user profile (for viewing other users)
         window.loadUserProfile = async function(userId, username, addToHistory = true) {
-            toggleSidebar(); // Close sidebar if open
-            toggleChatbox(); // Close chatbox
-
-            // Add to navigation history
-            if (addToHistory) {
-                navigationHistory.push({ type: 'userProfile', id: userId, username: username });
+            closeSidebar(); // Close sidebar if open
+            if (document.getElementById('chatbox').classList.contains('open')) {
+                toggleChatbox(); // Close chatbox if open
             }
 
-            // Reset active tag filters
-            activeTagFilters = [];
+            // Save CURRENT page to history BEFORE navigating
+            if (addToHistory && !(currentContext.type === 'userProfile' && currentContext.id === userId)) {
+                navigationHistory.push({ ...currentContext });
+            }
 
+            // Reset active tag filters and remove filter UI
+            activeTagFilters = [];
+            const existingFilterControls = document.querySelector('.tag-filter-controls');
+            if (existingFilterControls) {
+                existingFilterControls.remove();
+            }
+
+            // Update current context
+            currentContext = { type: 'userProfile', id: userId, username: username };
             document.getElementById('pageTitle').innerHTML = `/ ${username}'s profile`;
-            currentContext = { type: 'userProfile', id: userId };
 
             // Save current page to localStorage
             localStorage.setItem('currentPage', JSON.stringify({ type: 'userProfile', id: userId, username: username }));
@@ -2467,18 +2520,23 @@ async function deleteCollection(collectionId, collectionName) {
             }
         };
         window.loadMyProfile = async function(addToHistory = true) {
-            toggleSidebar();
+            closeSidebar();
 
-            // Add to navigation history
-            if (addToHistory) {
-                navigationHistory.push({ type: 'profile' });
+            // Save CURRENT page to history BEFORE navigating
+            if (addToHistory && currentContext.type !== 'profile') {
+                navigationHistory.push({ ...currentContext });
             }
 
-            // Reset active tag filters
+            // Reset active tag filters and remove filter UI
             activeTagFilters = [];
+            const existingFilterControls = document.querySelector('.tag-filter-controls');
+            if (existingFilterControls) {
+                existingFilterControls.remove();
+            }
 
-            document.getElementById('pageTitle').innerHTML = '/ my profile';
+            // Update current context
             currentContext = { type: 'profile', id: auth.currentUser.uid };
+            document.getElementById('pageTitle').innerHTML = '/ my profile';
 
             // Save current page to localStorage
             localStorage.setItem('currentPage', JSON.stringify({ type: 'profile' }));
@@ -2540,14 +2598,19 @@ async function deleteCollection(collectionId, collectionName) {
 
         // Load everything feed
         async function loadEverythingFeed(addToHistory = true) {
-            // Add to navigation history
-            if (addToHistory) {
-                navigationHistory.push({ type: 'everything' });
+            // Save CURRENT page to history BEFORE navigating
+            if (addToHistory && currentContext.type !== 'everything') {
+                navigationHistory.push({ ...currentContext });
             }
 
-            // Reset active tag filters
+            // Reset active tag filters and remove filter UI
             activeTagFilters = [];
+            const existingFilterControls = document.querySelector('.tag-filter-controls');
+            if (existingFilterControls) {
+                existingFilterControls.remove();
+            }
 
+            // Update current context
             currentContext = { type: 'everything', id: null };
             document.getElementById('pageTitle').innerHTML = '/ everything';
 
@@ -3163,6 +3226,13 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
             const overlay = document.getElementById('overlay');
             sidebar.classList.toggle('open');
             overlay.classList.toggle('active');
+        }
+
+        function closeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('overlay');
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
         }
 
         function loadPage(page) {
