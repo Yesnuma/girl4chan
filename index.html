@@ -1432,7 +1432,7 @@ async function removeTag(imageId, tagToRemove) {
 
 // Load images filtered by tag(s) - supports multi-tag filtering
 async function loadTagFeed(tag, addToHistory = true, resetFilters = true) {
-    toggleSidebar(); // Close sidebar if open
+    closeSidebar(); // Close sidebar if open
 
     // If resetFilters is true, start fresh with just this tag
     if (resetFilters) {
@@ -1483,47 +1483,50 @@ async function loadTagFeed(tag, addToHistory = true, resetFilters = true) {
         existingFilterControls.remove();
     }
 
-    // Add filter controls section
-    const filterControls = document.createElement('div');
-    filterControls.className = 'tag-filter-controls';
-    filterControls.style.cssText = 'margin-bottom: 15px; padding: 10px; background: #eee; border: 1px solid #ccc;';
+    // Only show filter controls if we're on a tag page (not on everything/collection/profile pages)
+    if (currentContext.type === 'tag') {
+        // Add filter controls section
+        const filterControls = document.createElement('div');
+        filterControls.className = 'tag-filter-controls';
+        filterControls.style.cssText = 'margin-bottom: 15px; padding: 10px; background: #eee; border: 1px solid #ccc;';
 
-    // Active filters display
-    if (activeTagFilters.length > 0) {
-        const activeFiltersDiv = document.createElement('div');
-        activeFiltersDiv.style.cssText = 'margin-bottom: 10px; font-family: "Courier New", Courier, monospace; font-size: 12px;';
+        // Active filters display
+        if (activeTagFilters.length > 0) {
+            const activeFiltersDiv = document.createElement('div');
+            activeFiltersDiv.style.cssText = 'margin-bottom: 10px; font-family: "Courier New", Courier, monospace; font-size: 12px;';
 
-        activeTagFilters.forEach(filterTag => {
-            const filterPill = document.createElement('span');
-            filterPill.className = 'tag-pill';
-            filterPill.style.cssText = 'margin-right: 5px; margin-bottom: 5px; display: inline-block;';
-            filterPill.innerHTML = `${filterTag} <span style="cursor: pointer; font-weight: bold; margin-left: 4px;">×</span>`;
-            filterPill.querySelector('span').onclick = () => removeTagFilter(filterTag);
-            activeFiltersDiv.appendChild(filterPill);
-        });
+            activeTagFilters.forEach(filterTag => {
+                const filterPill = document.createElement('span');
+                filterPill.className = 'tag-pill';
+                filterPill.style.cssText = 'margin-right: 5px; margin-bottom: 5px; display: inline-block;';
+                filterPill.innerHTML = `${filterTag} <span style="cursor: pointer; font-weight: bold; margin-left: 4px;">×</span>`;
+                filterPill.querySelector('span').onclick = () => removeTagFilter(filterTag);
+                activeFiltersDiv.appendChild(filterPill);
+            });
 
-        filterControls.appendChild(activeFiltersDiv);
+            filterControls.appendChild(activeFiltersDiv);
+        }
+
+        // Filter buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = 'display: flex; gap: 10px;';
+
+        const quickFiltersBtn = document.createElement('button');
+        quickFiltersBtn.textContent = '+ quick filters';
+        quickFiltersBtn.style.cssText = 'padding: 8px 12px; background: #d4c5b0; border: 1px solid #8b7355; cursor: pointer; font-family: "Courier New", Courier, monospace; font-size: 11px;';
+        quickFiltersBtn.onclick = () => showQuickFilters();
+
+        const allTagsBtn = document.createElement('button');
+        allTagsBtn.textContent = '+ all tags';
+        allTagsBtn.style.cssText = 'padding: 8px 12px; background: #d4c5b0; border: 1px solid #8b7355; cursor: pointer; font-family: "Courier New", Courier, monospace; font-size: 11px;';
+        allTagsBtn.onclick = () => showAllTagsFilter();
+
+        buttonContainer.appendChild(quickFiltersBtn);
+        buttonContainer.appendChild(allTagsBtn);
+        filterControls.appendChild(buttonContainer);
+
+        grid.parentElement.insertBefore(filterControls, grid);
     }
-
-    // Filter buttons
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.cssText = 'display: flex; gap: 10px;';
-
-    const quickFiltersBtn = document.createElement('button');
-    quickFiltersBtn.textContent = '+ quick filters';
-    quickFiltersBtn.style.cssText = 'padding: 8px 12px; background: #d4c5b0; border: 1px solid #8b7355; cursor: pointer; font-family: "Courier New", Courier, monospace; font-size: 11px;';
-    quickFiltersBtn.onclick = () => showQuickFilters();
-
-    const allTagsBtn = document.createElement('button');
-    allTagsBtn.textContent = '+ all tags';
-    allTagsBtn.style.cssText = 'padding: 8px 12px; background: #d4c5b0; border: 1px solid #8b7355; cursor: pointer; font-family: "Courier New", Courier, monospace; font-size: 11px;';
-    allTagsBtn.onclick = () => showAllTagsFilter();
-
-    buttonContainer.appendChild(quickFiltersBtn);
-    buttonContainer.appendChild(allTagsBtn);
-    filterControls.appendChild(buttonContainer);
-
-    grid.parentElement.insertBefore(filterControls, grid);
 
     try {
         const imagesQuery = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
@@ -2094,7 +2097,7 @@ async function deleteCollection(collectionId, collectionName) {
 
         // Load specific collection
         async function loadCollection(collectionId, collectionName, addToHistory = true) {
-            toggleSidebar();
+            closeSidebar();
 
             // Add to navigation history
             if (addToHistory) {
@@ -2416,8 +2419,10 @@ async function deleteCollection(collectionId, collectionName) {
 
         // Load user profile (for viewing other users)
         window.loadUserProfile = async function(userId, username, addToHistory = true) {
-            toggleSidebar(); // Close sidebar if open
-            toggleChatbox(); // Close chatbox
+            closeSidebar(); // Close sidebar if open
+            if (document.getElementById('chatbox').classList.contains('open')) {
+                toggleChatbox(); // Close chatbox if open
+            }
 
             // Add to navigation history
             if (addToHistory) {
@@ -2467,7 +2472,7 @@ async function deleteCollection(collectionId, collectionName) {
             }
         };
         window.loadMyProfile = async function(addToHistory = true) {
-            toggleSidebar();
+            closeSidebar();
 
             // Add to navigation history
             if (addToHistory) {
@@ -3163,6 +3168,13 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
             const overlay = document.getElementById('overlay');
             sidebar.classList.toggle('open');
             overlay.classList.toggle('active');
+        }
+
+        function closeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('overlay');
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
         }
 
         function loadPage(page) {
