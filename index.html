@@ -1151,18 +1151,20 @@ function isAdmin() {
             return TAG_CATEGORIES.Items.includes(tag);
         }
 
-        // Check auth state
+       // Check auth state
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUser = user;
                 document.getElementById('loginModal').style.display = 'none';
                 document.getElementById('logoutBtn').style.display = 'block';
+                document.getElementById('accountLink').style.display = 'inline';
                 await loadCollections();
                 await checkChatUnlock();
                 await restoreLastPage(); // Restore the page they were on
             } else {
                 document.getElementById('loginModal').style.display = 'flex';
                 document.getElementById('logoutBtn').style.display = 'none';
+                document.getElementById('accountLink').style.display = 'none';
             }
         });
 
