@@ -3306,7 +3306,7 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
 
                 // If they have a campaign ID and the link is an eBay link, add the campaign ID
                 let finalLink = linkInput.value || '';
-                if (campaignId && finalLink.includes('ebay.com')) {
+                if (campaignId && (finalLink.includes('ebay.com') || finalLink.includes('ebay.us'))) {
                     try {
                         const url = new URL(finalLink);
                         url.searchParams.set('campid', campaignId);
