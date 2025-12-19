@@ -46,10 +46,13 @@
         }
 
         .header h1 {
-            font-size: 18px;
-            font-weight: bold;
-            color: #0600ff;
-        }
+    font-size: 18px;
+    font-weight: bold;
+    color: #0600ff;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+}
 
         .menu-btn {
             background: none;
@@ -782,12 +785,14 @@
     </style>
 </head>
 <body>
-    <!-- Header -->
+  <!-- Header -->
     <div class="header">
         <button class="menu-btn" onclick="toggleSidebar()">☰</button>
         <h1>image board</h1>
-        <a href="#" onclick="loadAccountSettings(); return false;" id="accountLink" style="display: none; text-decoration: underline; font-size: 14px; margin-right: 15px; color: #000;">account</a>
-<button class="logout-btn" id="logoutBtn" onclick="handleLogout()" style="display: none;">logout</button>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <a href="#" onclick="loadAccountSettings(); return false;" id="accountLink" style="display: none; text-decoration: none; font-size: 18px; color: #000;">@</a>
+            <button class="logout-btn" id="logoutBtn" onclick="handleLogout()" style="display: none;">logout</button>
+        </div>
     </div>
 
     <!-- Sidebar -->
