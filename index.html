@@ -2548,7 +2548,7 @@ async function deleteCollection(collectionId, collectionName) {
             
             // Create settings form
             const settingsContainer = document.createElement('div');
-            settingsContainer.style.cssText = 'width: 100vw; margin-left: calc(-50vw + 50%); padding: 15px; box-sizing: border-box; font-family: "Courier New", Courier, monospace;';
+            settingsContainer.style.cssText = 'width: calc(100% - 30px); max-width: none; margin: 0 15px; padding: 0; box-sizing: border-box; font-family: "Courier New", Courier, monospace;';
             
             settingsContainer.innerHTML = `
                 <div style="background: #fff; padding: 15px; border: 2px solid #0600ff; margin-bottom: 20px;">
