@@ -3465,7 +3465,7 @@ await updateDoc(doc(db, 'images', docRef.id), { tags: allTags, aiTags: backgroun
                 if (latest && latest.data().imageUrl === imageUrl) {
                     await updateDoc(doc(db, 'images', latest.id), { tags: allTags, aiTags: backgroundTags });
                 }
-            }
+
         } catch (e) {
             console.log('Background tagging failed silently:', e);
         }
