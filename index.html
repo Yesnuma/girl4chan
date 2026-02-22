@@ -3451,25 +3451,29 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
     if (brand) aiTags.push(brand.toLowerCase());
     if (size) aiTags.push('size-' + size);
 
-    // AI tag in background after posting
+   // AI tag in background after posting
+if (isLinkTab) {
     setTimeout(async () => {
         try {
             const res = await fetch('/.netlify/functions/ai-tagger', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: extractedUrl })
-});
-await updateDoc(doc(db, 'images', docRef.id), { tags: allTags, aiTags: backgroundTags });
-                const snap = await getDocs(q);
-                const latest = snap.docs[0];
-                if (latest && latest.data().imageUrl === imageUrl) {
-                    await updateDoc(doc(db, 'images', latest.id), { tags: allTags, aiTags: backgroundTags });
-                }
-
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: extractedUrl })
+            });
+            const tagData = await res.json();
+            const backgroundTags = Array.isArray(tagData.tags) ? tagData.tags : [];
+            if (backgroundTags.length > 0) {
+                const allTags = [...new Set([...aiTags, ...backgroundTags])];
+                await updateDoc(doc(db, 'images', docRef.id), { 
+                    tags: allTags, 
+                    aiTags: backgroundTags 
+                });
+            }
         } catch (e) {
             console.log('Background tagging failed silently:', e);
         }
     }, 2000);
+}
 
                 } else {
                     // File upload path - same as before
