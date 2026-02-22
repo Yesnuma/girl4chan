@@ -3523,22 +3523,6 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
     }
 });
         
-    } catch (e) {
-        console.log('Background tagging failed silently:', e);
-    }
-}, 2000);
-
-                } else {
-                    // File upload path - same as before
-                    submitBtn.textContent = 'analyzing image...';
-                    aiTags = await getAITags(croppedBlob);
-
-                    submitBtn.textContent = 'uploading...';
-                    const fileName = `${Date.now()}_cropped.jpg`;
-                    const storageRef = ref(storage, `images/${fileName}`);
-                    await uploadBytes(storageRef, croppedBlob);
-                    imageUrl = await getDownloadURL(storageRef);
-                }
 
                 // Build final link with affiliate code if eBay
                 const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
