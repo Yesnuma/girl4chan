@@ -3454,12 +3454,12 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
     // AI tag in background after posting
     setTimeout(async () => {
         try {
-            const imgRes = await fetch(extractedUrl);
-            const blob = await imgRes.blob();
-            const backgroundTags = await getAITags(blob);
-            if (backgroundTags.length > 0) {
-                const allTags = [...new Set([...aiTags, ...backgroundTags])];
-                const q = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
+            const res = await fetch('/.netlify/functions/ai-tagger', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: extractedUrl })
+});
+await updateDoc(doc(db, 'images', docRef.id), { tags: allTags, aiTags: backgroundTags });
                 const snap = await getDocs(q);
                 const latest = snap.docs[0];
                 if (latest && latest.data().imageUrl === imageUrl) {
@@ -3501,7 +3501,7 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
                 }
 
                 // Save to Firestore
-                await addDoc(collection(db, 'images'), {
+                const docRef = await addDoc(collection(db, 'images'), {
                     imageUrl: imageUrl,
                     link: finalLink,
                     userId: auth.currentUser.uid,
