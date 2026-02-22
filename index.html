@@ -3452,7 +3452,7 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
     if (size) aiTags.push('size-' + size);
 
     // AI tag in background after posting
-    setTimeout(async () => {
+   setTimeout(async () => {
     try {
         const response = await fetch('/.netlify/functions/ai-tagger', {
             method: 'POST',
@@ -3463,12 +3463,10 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
         const backgroundTags = Array.isArray(data.tags) ? data.tags : [];
         if (backgroundTags.length > 0) {
             const allTags = [...new Set([...aiTags, ...backgroundTags])];
-            const q = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
-            const snap = await getDocs(q);
-            const latest = snap.docs[0];
-            if (latest && latest.data().imageUrl === imageUrl) {
-                await updateDoc(doc(db, 'images', latest.id), { tags: allTags, aiTags: backgroundTags });
-            }
+            await updateDoc(doc(db, 'images', docRef.id), { 
+                tags: allTags, 
+                aiTags: backgroundTags 
+            });
         }
     } catch (e) {
         console.log('Background tagging failed silently:', e);
@@ -3505,7 +3503,7 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
                 }
 
                 // Save to Firestore
-                await addDoc(collection(db, 'images'), {
+               const docRef = await addDoc(collection(db, 'images'), {
                     imageUrl: imageUrl,
                     link: finalLink,
                     userId: auth.currentUser.uid,
