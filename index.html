@@ -3522,53 +3522,7 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
         submitBtn.disabled = false;
     }
 });
-        
-
-                // Build final link with affiliate code if eBay
-                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-                const campaignId = userDoc.data()?.ebayAffiliateCode || null;
-                let finalLink = isLinkTab
-                    ? document.getElementById('productUrlInput').value.trim()
-                    : document.getElementById('linkInput').value.trim();
-
-                if (campaignId && (finalLink.includes('ebay.com') || finalLink.includes('ebay.us'))) {
-                    try {
-                        const url = new URL(finalLink);
-                        url.searchParams.set('campid', campaignId);
-                        finalLink = url.toString();
-                    } catch (err) {
-                        console.error('URL parse error:', err);
-                    }
-                }
-
-                // Save to Firestore
-               const docRef = await addDoc(collection(db, 'images'), {
-                    imageUrl: imageUrl,
-                    link: finalLink,
-                    userId: auth.currentUser.uid,
-                    createdAt: new Date(),
-                    tags: aiTags,
-                    aiTags: aiTags,
-                    source: isLinkTab ? 'link' : 'upload'
-                });
-
-                submitBtn.textContent = 'upload';
-                submitBtn.disabled = false;
-
-                closeUploadModal();
-                loadEverythingFeed();
-                alert('Find added!');
-
-            } catch (error) {
-                alert('Upload failed: ' + error.message);
-                console.error('Upload error:', error);
-                const submitBtn = e.target.querySelector('button[type="submit"]');
-                submitBtn.textContent = 'upload';
-                submitBtn.disabled = false;
-            }
-        });
-
-window.switchUploadTab = function(tab) {
+window.switchUploadTab
     const linkTab = document.getElementById('linkTab');
     const fileTab = document.getElementById('fileTab');
     const linkBtn = document.getElementById('tabLinkBtn');
