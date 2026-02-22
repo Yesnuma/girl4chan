@@ -3453,23 +3453,27 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
 
     // AI tag in background after posting
     setTimeout(async () => {
-        try {
-            const imgRes = await fetch(extractedUrl);
-            const blob = await imgRes.blob();
-            const backgroundTags = await getAITags(blob);
-            if (backgroundTags.length > 0) {
-                const allTags = [...new Set([...aiTags, ...backgroundTags])];
-                const q = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
-                const snap = await getDocs(q);
-                const latest = snap.docs[0];
-                if (latest && latest.data().imageUrl === imageUrl) {
-                    await updateDoc(doc(db, 'images', latest.id), { tags: allTags, aiTags: backgroundTags });
-                }
+    try {
+        const response = await fetch('/.netlify/functions/ai-tagger', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: extractedUrl })
+        });
+        const data = await response.json();
+        const backgroundTags = Array.isArray(data.tags) ? data.tags : [];
+        if (backgroundTags.length > 0) {
+            const allTags = [...new Set([...aiTags, ...backgroundTags])];
+            const q = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
+            const snap = await getDocs(q);
+            const latest = snap.docs[0];
+            if (latest && latest.data().imageUrl === imageUrl) {
+                await updateDoc(doc(db, 'images', latest.id), { tags: allTags, aiTags: backgroundTags });
             }
-        } catch (e) {
-            console.log('Background tagging failed silently:', e);
         }
-    }, 2000);
+    } catch (e) {
+        console.log('Background tagging failed silently:', e);
+    }
+}, 2000);
 
                 } else {
                     // File upload path - same as before
