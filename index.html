@@ -3443,19 +3443,33 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
                 let imageUrl;
                 let aiTags = [];
 
-                if (isLinkTab) {
-                    // Use extracted OG image URL directly - no re-upload needed
-                    imageUrl = extractedUrl;
+               if (isLinkTab) {
+    imageUrl = extractedUrl;
+    aiTags = [];
+    const brand = document.getElementById('brandInput').value.trim();
+    const size = document.getElementById('sizeInput').value.trim().toLowerCase();
+    if (brand) aiTags.push(brand.toLowerCase());
+    if (size) aiTags.push('size-' + size);
 
-                    // Get AI tags from the image URL (pass it to tagger as URL)
-                    // For now skip AI tagging on link uploads (can add later)
-                    aiTags = [];
-
-                    // Add brand/size as manual tags if detected
-                    const brand = document.getElementById('brandInput').value.trim();
-                    const size = document.getElementById('sizeInput').value.trim().toLowerCase();
-                    if (brand) aiTags.push(brand.toLowerCase());
-                    if (size) aiTags.push('size-' + size);
+    // AI tag in background after posting
+    setTimeout(async () => {
+        try {
+            const imgRes = await fetch(extractedUrl);
+            const blob = await imgRes.blob();
+            const backgroundTags = await getAITags(blob);
+            if (backgroundTags.length > 0) {
+                const allTags = [...new Set([...aiTags, ...backgroundTags])];
+                const q = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
+                const snap = await getDocs(q);
+                const latest = snap.docs[0];
+                if (latest && latest.data().imageUrl === imageUrl) {
+                    await updateDoc(doc(db, 'images', latest.id), { tags: allTags, aiTags: backgroundTags });
+                }
+            }
+        } catch (e) {
+            console.log('Background tagging failed silently:', e);
+        }
+    }, 2000);
 
                 } else {
                     // File upload path - same as before
