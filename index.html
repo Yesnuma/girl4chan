@@ -3418,56 +3418,111 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
         };
 
        // Handle image upload WITH AI TAGGING
-        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
+       document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
 
-            const isLinkTab = window.getCurrentUploadTab() === 'link';
-            const extractedUrl = window.getExtractedImageUrl();
-            const linkInput = document.getElementById(isLinkTab ? 'productUrlInput' : 'linkInput');
+    const isLinkTab = window.getCurrentUploadTab() === 'link';
+    const extractedUrl = window.getExtractedImageUrl();
 
-            // Validate
-            if (isLinkTab && !extractedUrl) {
-                alert('Please paste a link and hit fetch first');
-                return;
-            }
-            if (!isLinkTab && !croppedBlob) {
-                alert('Please select an image file');
-                return;
-            }
+    if (isLinkTab && !extractedUrl) {
+        alert('Please paste a link and hit fetch first');
+        return;
+    }
+    if (!isLinkTab && !croppedBlob) {
+        alert('Please select an image file');
+        return;
+    }
 
+    try {
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        submitBtn.textContent = 'uploading...';
+        submitBtn.disabled = true;
+
+        let imageUrl;
+        let aiTags = [];
+
+        if (isLinkTab) {
+            imageUrl = extractedUrl;
+            const brand = document.getElementById('brandInput').value.trim();
+            const size = document.getElementById('sizeInput').value.trim().toLowerCase();
+            if (brand) aiTags.push(brand.toLowerCase());
+            if (size) aiTags.push('size-' + size);
+        } else {
+            submitBtn.textContent = 'analyzing image...';
+            aiTags = await getAITags(croppedBlob);
+            submitBtn.textContent = 'uploading...';
+            const fileName = `${Date.now()}_cropped.jpg`;
+            const storageRef = ref(storage, `images/${fileName}`);
+            await uploadBytes(storageRef, croppedBlob);
+            imageUrl = await getDownloadURL(storageRef);
+        }
+
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        const campaignId = userDoc.data()?.ebayAffiliateCode || null;
+        let finalLink = isLinkTab
+            ? document.getElementById('productUrlInput').value.trim()
+            : document.getElementById('linkInput').value.trim();
+
+        if (campaignId && (finalLink.includes('ebay.com') || finalLink.includes('ebay.us'))) {
             try {
-                const submitBtn = e.target.querySelector('button[type="submit"]');
-                submitBtn.textContent = 'analyzing...';
-                submitBtn.disabled = true;
+                const url = new URL(finalLink);
+                url.searchParams.set('campid', campaignId);
+                finalLink = url.toString();
+            } catch (err) {
+                console.error('URL parse error:', err);
+            }
+        }
 
-                let imageUrl;
-                let aiTags = [];
+        const docRef = await addDoc(collection(db, 'images'), {
+            imageUrl: imageUrl,
+            link: finalLink,
+            userId: auth.currentUser.uid,
+            createdAt: new Date(),
+            tags: aiTags,
+            aiTags: aiTags,
+            source: isLinkTab ? 'link' : 'upload'
+        });
 
-                if (isLinkTab) {
-                    // Use extracted OG image URL directly - no re-upload needed
-                    imageUrl = extractedUrl;
-
-                    // Get AI tags from the image URL (pass it to tagger as URL)
-                    // For now skip AI tagging on link uploads (can add later)
-                    aiTags = [];
-
-                    // Add brand/size as manual tags if detected
-                    const brand = document.getElementById('brandInput').value.trim();
-                    const size = document.getElementById('sizeInput').value.trim().toLowerCase();
-                    if (brand) aiTags.push(brand.toLowerCase());
-                    if (size) aiTags.push('size-' + size);
-
-                } else {
-                    // File upload path - same as before
-                    submitBtn.textContent = 'analyzing image...';
-                    aiTags = await getAITags(croppedBlob);
-
-                    submitBtn.textContent = 'uploading...';
-                    const fileName = `${Date.now()}_cropped.jpg`;
+        // Background AI tagging for link uploads
+        if (isLinkTab) {
+            setTimeout(async () => {
+                try {
+                    const imgRes = await fetch(extractedUrl);
+                    const blob = await imgRes.blob();
+                    const fileName = `${Date.now()}_link.jpg`;
                     const storageRef = ref(storage, `images/${fileName}`);
-                    await uploadBytes(storageRef, croppedBlob);
-                    imageUrl = await getDownloadURL(storageRef);
+                    await uploadBytes(storageRef, blob);
+                    const storedImageUrl = await getDownloadURL(storageRef);
+                    const backgroundTags = await getAITags(blob);
+                    if (backgroundTags.length > 0) {
+                        const allTags = [...new Set([...aiTags, ...backgroundTags])];
+                        await updateDoc(doc(db, 'images', docRef.id), { 
+                            tags: allTags, 
+                            aiTags: backgroundTags,
+                            imageUrl: storedImageUrl
+                        });
+                    }
+                } catch (e) {
+                    console.log('Background tagging failed silently:', e);
                 }
+            }, 2000);
+        }
+
+        submitBtn.textContent = 'upload';
+        submitBtn.disabled = false;
+        closeUploadModal();
+        loadEverythingFeed();
+        alert('Find added!');
+
+    } catch (error) {
+        alert('Upload failed: ' + error.message);
+        console.error('Upload error:', error);
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        submitBtn.textContent = 'upload';
+        submitBtn.disabled = false;
+    }
+});
+        
 
                 // Build final link with affiliate code if eBay
                 const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
@@ -3487,7 +3542,7 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
                 }
 
                 // Save to Firestore
-                await addDoc(collection(db, 'images'), {
+               const docRef = await addDoc(collection(db, 'images'), {
                     imageUrl: imageUrl,
                     link: finalLink,
                     userId: auth.currentUser.uid,
