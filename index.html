@@ -1037,21 +1037,19 @@
 
             <!-- LINK TAB -->
             <div id="linkTab">
-                <div style="display:flex; gap:8px; margin-bottom:12px;">
-                    <input 
-                        type="text" 
-                        id="productUrlInput" 
-                        placeholder="paste ebay, depop, poshmark... link" 
-                        style="flex:1; min-width:0; padding:12px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:13px;"
-                    >
-                    <button 
-                        type="button" 
-                        onclick="extractLink()"
-                        id="fetchBtn"
-                        style="padding:12px 16px; background:#0600ff; color:white; border:2px solid #0600ff; font-family:'Courier New',monospace; cursor:pointer; white-space:nowrap;">
-                        fetch →
-                    </button>
-                </div>
+    <input 
+        type="text" 
+        id="productUrlInput" 
+        placeholder="paste ebay, depop, poshmark... link" 
+        style="width:100%; margin-bottom:8px;"
+    >
+    <button 
+        type="button" 
+        onclick="extractLink()"
+        id="fetchBtn"
+        style="width:100%; padding:12px; background:#0600ff; color:white; border:2px solid #0600ff; font-family:'Courier New',monospace; cursor:pointer; margin-bottom:12px;">
+        fetch →
+    </button>
 
                 <!-- Extracted preview - hidden until fetch -->
                 <div id="extractedPreview" style="display:none; margin-bottom:15px;">
