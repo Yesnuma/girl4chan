@@ -644,7 +644,7 @@
             border-color: #0600ff;
         }
 
-        .modal-content button:not(#tabLinkBtn):not(#tabFileBtn) {
+        .modal-content button {
             width: 100%;
             padding: 15px;
             border: 2px solid #0600ff;
@@ -1018,41 +1018,38 @@
         <h2>add a find</h2>
 
         <!-- Tab switcher -->
-        <div style="display:flex; gap:8px; margin-bottom:12px;">
-    <input 
-        type="text" 
-        id="productUrlInput" 
-        placeholder="paste ebay, depop, poshmark... link" 
-        style="width:auto; flex:1; min-width:0; margin-bottom:0;"
-    >
-    <button 
-        type="button" 
-        onclick="extractLink()"
-        id="fetchBtn"
-        style="padding:10px 16px; background:#0600ff; color:white; border:2px solid #0600ff; font-family:'Courier New',monospace; cursor:pointer; white-space:nowrap; flex-shrink:0;">
-        fetch →
-    </button>
-</div>
+        <div style="display: flex; margin-bottom: 0px; border: 2px solid #0600ff; overflow:hidden;">
+            <button 
+                id="tabLinkBtn"
+                onclick="switchUploadTab('link')"
+                style="flex:1; padding:10px; background:#0600ff; color:white; border:none; font-family:'Courier New',monospace; cursor:pointer; font-size:13px;">
+                paste a link
+            </button>
+            <button 
+                id="tabFileBtn"
+                onclick="switchUploadTab('file')"
+                style="flex:1; padding:10px; background:white; color:#0600ff; border:none; border-left: 2px solid #0600ff; font-family:'Courier New',monospace; cursor:pointer; font-size:13px;">
+                upload a file
+            </button>
+        </div>
 
         <form id="uploadForm">
 
             <!-- LINK TAB -->
             <div id="linkTab">
-    <div style="display:flex; gap:8px; margin-bottom:12px;">
     <input 
         type="text" 
         id="productUrlInput" 
         placeholder="paste ebay, depop, poshmark... link" 
-        style="flex:1; min-width:0; margin-bottom:0;"
+        style="width:100%; margin-bottom:8px;"
     >
     <button 
         type="button" 
         onclick="extractLink()"
         id="fetchBtn"
-        style="padding:10px 16px; background:#0600ff; color:white; border:2px solid #0600ff; font-family:'Courier New',monospace; cursor:pointer; white-space:nowrap; flex-shrink:0;">
+        style="width:100%; padding:12px; background:#0600ff; color:white; border:2px solid #0600ff; font-family:'Courier New',monospace; cursor:pointer; margin-bottom:12px;">
         fetch →
     </button>
-</div>
 
                 <!-- Extracted preview - hidden until fetch -->
                 <div id="extractedPreview" style="display:none; margin-bottom:15px;">
