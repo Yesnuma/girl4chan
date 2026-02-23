@@ -1012,58 +1012,82 @@
         </div>
     </div>
 
-<!-- Upload Modal -->
-<div class="modal" id="uploadModal">
+    <!-- Upload Modal -->
+    <div class="modal" id="uploadModal">
     <div class="modal-content">
         <h2>add a find</h2>
 
         <!-- Tab switcher -->
-        <div style="display:flex; margin-bottom:0;">
+        <div style="display: flex; margin-bottom: 20px; border: 2px solid #0600ff;">
             <button 
                 id="tabLinkBtn"
                 onclick="switchUploadTab('link')"
-                style="flex:1; padding:10px; background:#0600ff; color:white; border:2px solid #0600ff; border-bottom:none; font-family:'Courier New',monospace; cursor:pointer; font-size:13px;">
+                style="flex:1; padding:10px; background:#0600ff; color:white; border:none; font-family:'Courier New',monospace; cursor:pointer; font-size:13px;">
                 paste a link
             </button>
             <button 
                 id="tabFileBtn"
                 onclick="switchUploadTab('file')"
-                style="flex:1; padding:10px; background:white; color:#0600ff; border:2px solid #0600ff; border-left:none; border-bottom:none; font-family:'Courier New',monospace; cursor:pointer; font-size:13px;">
+                style="flex:1; padding:10px; background:white; color:#0600ff; border:none; font-family:'Courier New',monospace; cursor:pointer; font-size:13px;">
                 upload a file
             </button>
         </div>
 
         <form id="uploadForm">
-            <div style="border:2px solid #0600ff; padding:15px; margin-bottom:15px;">
 
-                <!-- LINK TAB -->
-                <div id="linkTab">
-                    <div style="display:flex; gap:8px; margin-bottom:12px;">
-                        <input 
-                            type="text" 
-                            id="productUrlInput" 
-                            placeholder="paste ebay, depop, poshmark... link" 
-                            style="flex:1; min-width:0; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:13px;"
-                        >
-                        <button 
-                            type="button" 
-                            onclick="extractLink()"
-                            id="fetchBtn"
-                            style="padding:10px 16px; background:#0600ff; color:white; border:2px solid #0600ff; font-family:'Courier New',monospace; cursor:pointer; white-space:nowrap; flex-shrink:0;">
-                            fetch →
-                        </button>
-                    </div>
-                    <div id="extractedPreview" style="display:none; margin-bottom:15px;">
-                        <div style="display:flex; gap:12px; margin-bottom:12px; align-items:flex-start;">
-                            <img id="extractedImg" src="" alt="" style="width:80px; height:100px; object-fit:cover; border:1px solid #ccc; flex-shrink:0;">
-                            <div style="flex:1;">
-                                <div id="extractedTitle" style="font-family:'Courier New',monospace; font-size:11px; color:#666; margin-bottom:8px; line-height:1.4;"></div>
-                            </div>
+            <!-- LINK TAB -->
+            <div id="linkTab">
+    <input 
+        type="text" 
+        id="productUrlInput" 
+        placeholder="paste ebay, depop, poshmark... link" 
+        style="width:100%; margin-bottom:8px;"
+    >
+    <button 
+        type="button" 
+        onclick="extractLink()"
+        id="fetchBtn"
+        style="width:100%; padding:12px; background:#0600ff; color:white; border:2px solid #0600ff; font-family:'Courier New',monospace; cursor:pointer; margin-bottom:12px;">
+        fetch →
+    </button>
+
+                <!-- Extracted preview - hidden until fetch -->
+                <div id="extractedPreview" style="display:none; margin-bottom:15px;">
+                    <div style="display:flex; gap:12px; margin-bottom:12px; align-items:flex-start;">
+                        <img id="extractedImg" src="" alt="" style="width:80px; height:100px; object-fit:cover; border:1px solid #ccc; flex-shrink:0;">
+                        <div style="flex:1;">
+                            <div id="extractedTitle" style="font-family:'Courier New',monospace; font-size:11px; color:#666; margin-bottom:8px; line-height:1.4;"></div>
                         </div>
-                        <input type="text" id="brandInput" placeholder="brand (auto-detected)" style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:13px; margin-bottom:10px; box-sizing:border-box;">
-                        <input type="text" id="sizeInput" placeholder="size (auto-detected)" style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:13px; margin-bottom:10px; box-sizing:border-box;">
                     </div>
-                    <div id="fetchStatus" style
+
+                    <input 
+                        type="text" 
+                        id="brandInput" 
+                        placeholder="brand (auto-detected)" 
+                        style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:13px; margin-bottom:10px; box-sizing:border-box;"
+                    >
+                    <input 
+                        type="text" 
+                        id="sizeInput" 
+                        placeholder="size (auto-detected)" 
+                        style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:13px; margin-bottom:10px; box-sizing:border-box;"
+                    >
+                </div>
+
+                <div id="fetchStatus" style="font-size:12px; color:#999; font-family:'Courier New',monospace; margin-bottom:10px; text-align:center;"></div>
+            </div>
+
+            <!-- FILE TAB -->
+            <div id="fileTab" style="display:none;">
+                <input type="file" id="imageInput" accept="image/*" style="margin-bottom: 15px;">
+                <input type="url" id="linkInput" placeholder="source link (optional)" style="margin-bottom: 15px;">
+            </div>
+
+            <button type="submit" id="uploadSubmitBtn" style="margin-bottom:10px;">upload</button>
+            <button type="button" onclick="closeUploadModal()" style="background-color: #ccc; margin-top: 10px;">cancel</button>
+        </form>
+    </div>
+</div>
     <!-- Login Modal -->
     <div class="modal" id="loginModal">
         <div class="modal-content">
