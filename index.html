@@ -658,11 +658,6 @@
             font-weight: bold;
             margin-bottom: 10px;
         }
-        #tabLinkBtn, #tabFileBtn {
-    width: 50%;
-    border: none;
-    margin-bottom: 0;
-}
 
         .modal-content button:hover {
             background: white;
@@ -1023,7 +1018,7 @@
         <h2>add a find</h2>
 
         <!-- Tab switcher -->
-        <div style="display: flex; margin-bottom: 20px; overflow:hidden;">
+        <div style="display: flex; margin-bottom: 0px; border: 2px solid #0600ff; overflow:hidden;">
             <button 
                 id="tabLinkBtn"
                 onclick="switchUploadTab('link')"
@@ -1042,21 +1037,20 @@
 
             <!-- LINK TAB -->
             <div id="linkTab">
-   <div style="display:flex; gap:8px; margin-bottom:12px;">
     <input 
         type="text" 
         id="productUrlInput" 
         placeholder="paste ebay, depop, poshmark... link" 
-        style="flex:1; min-width:0; margin-bottom:0;"
+        style="width:100%; margin-bottom:8px;"
     >
     <button 
         type="button" 
         onclick="extractLink()"
         id="fetchBtn"
-        style="padding:10px 16px; background:#0600ff; color:white; border:2px solid #0600ff; font-family:'Courier New',monospace; cursor:pointer; white-space:nowrap; flex-shrink:0;">
+        style="width:100%; padding:12px; background:#0600ff; color:white; border:2px solid #0600ff; font-family:'Courier New',monospace; cursor:pointer; margin-bottom:12px;">
         fetch →
     </button>
-</div>
+
                 <!-- Extracted preview - hidden until fetch -->
                 <div id="extractedPreview" style="display:none; margin-bottom:15px;">
                     <div style="display:flex; gap:12px; margin-bottom:12px; align-items:flex-start;">
