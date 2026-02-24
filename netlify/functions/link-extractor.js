@@ -68,16 +68,22 @@ exports.handler = async (event) => {
 
     // Resolve short URLs first
     let finalUrl = url;
+    const isShortEbayUrl = url.includes('ebay.us') || url.includes('ebay.to') || url.includes('rover.ebay.com');
+    
     try {
-        const headRes = await fetch(url, {
-            method: 'HEAD',
+        const res = await fetch(url, {
+            // eBay short links don't resolve with HEAD — must use GET
+            method: isShortEbayUrl ? 'GET' : 'HEAD',
             redirect: 'follow',
-            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
-            signal: AbortSignal.timeout(5000)
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15'
+            },
+            signal: AbortSignal.timeout(8000)
         });
-        finalUrl = headRes.url;
-console.log('Resolved URL:', finalUrl);
+        finalUrl = res.url;
+        console.log('Resolved URL:', finalUrl);
     } catch (e) {
+        console.error('URL resolution failed:', e.message);
         finalUrl = url;
     }
 
