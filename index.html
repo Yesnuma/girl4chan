@@ -788,6 +788,14 @@
 .tag-pill:hover {
     background-color: #c9b5a0;
 }
+        #recentTagsRow::-webkit-scrollbar {
+    display: none;
+}
+#recentTagsRow .tag-pill {
+    display: inline-block;
+    margin-right: 6px;
+    cursor: pointer;
+}
         /* Transparent modals */
 #uploadModal,
 #rulesModal,
@@ -1068,6 +1076,9 @@
     <!-- Main Content -->
     <div class="container">
         <div class="page-title" id="pageTitle">/ everything</div>
+        <!-- Recent Tags -->
+<div id="recentTagsRow" style="display:none; overflow-x:auto; white-space:nowrap; padding:8px 0 12px; scrollbar-width:none; -webkit-overflow-scrolling:touch;">
+</div>
         <div class="image-grid" id="imageGrid">
             <!-- Placeholder images -->
             <div class="image-item" style="background-color: #c9b5a0;"></div>
@@ -3133,6 +3144,39 @@ window.saveCampaignId = async function() {
                 });
             } catch (error) {
                 console.error('Error loading images:', error);
+            }
+            loadRecentTags();
+        }
+        // Load recent tags for homepage
+        async function loadRecentTags() {
+            const tagRow = document.getElementById('recentTagsRow');
+            if (!tagRow) return;
+            
+            try {
+                const snapshot = await getDocs(collection(db, 'images'));
+                const tagCounts = {};
+                
+                snapshot.forEach(doc => {
+                    const tags = doc.data().tags || [];
+                    tags.forEach(tag => {
+                        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+                    });
+                });
+                
+                const sortedTags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]);
+                
+                tagRow.innerHTML = '';
+                sortedTags.forEach(tag => {
+                    const pill = document.createElement('span');
+                    pill.className = 'tag-pill';
+                    pill.textContent = tag;
+                    pill.onclick = () => loadTagFeed(tag);
+                    tagRow.appendChild(pill);
+                });
+                
+                tagRow.style.display = sortedTags.length > 0 ? 'block' : 'none';
+            } catch (err) {
+                console.error('Error loading tags:', err);
             }
         }
 
