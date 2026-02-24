@@ -798,6 +798,234 @@
 #chatUnlockModal {
     background-color: transparent;
 }
+        /* Upload Modal - Retro Window */
+.upload-modal-box {
+    background: #fff;
+    border: 3px solid #0600ff;
+    width: 100%;
+    max-width: 340px;
+    box-shadow: 8px 8px 0px #0600ff;
+    overflow: hidden;
+}
+
+.upload-header-bar {
+    background: #9ed2f5;
+    padding: 8px 12px;
+    border-bottom: 2px solid #0600ff;
+    display: flex;
+    align-items: center;
+}
+
+.upload-header-dots {
+    display: flex;
+    gap: 5px;
+}
+
+.upload-header-dots span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid #0600ff;
+}
+
+.upload-header-dots span:nth-child(1) { background: #ff6b6b; }
+.upload-header-dots span:nth-child(2) { background: #ffd93d; }
+.upload-header-dots span:nth-child(3) { background: #6bcb77; }
+
+.upload-modal-body {
+    padding: 22px 20px 20px;
+}
+
+.upload-modal-body h2 {
+    text-align: center;
+    color: #0600ff;
+    font-size: 22px;
+    text-transform: lowercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.upload-subtitle {
+    text-align: center;
+    font-size: 10px;
+    color: #888;
+    margin-bottom: 18px;
+    min-height: 15px;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.upload-subtitle span {
+    color: #0600ff;
+}
+
+.upload-tab-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.upload-tab-row button {
+    flex: 1;
+    padding: 10px 0;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    border: 2px solid #0600ff;
+    transition: all 0.2s;
+}
+
+.upload-tab-row button.active {
+    background: #0600ff;
+    color: #fff;
+}
+
+.upload-tab-row button:not(.active) {
+    background: #fff;
+    color: #0600ff;
+}
+
+.upload-fetch-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.upload-fetch-row input {
+    flex: 1;
+    padding: 11px 12px;
+    border: 2px solid #0600ff;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    background: #f8f8ff;
+    text-align: center;
+}
+
+.upload-fetch-row input:focus {
+    outline: none;
+    background: #fff;
+    box-shadow: inset 0 0 0 1px #9ed2f5;
+}
+
+.upload-fetch-row button {
+    padding: 11px 14px;
+    background: #9ed2f5;
+    color: #0600ff;
+    border: 2px solid #0600ff;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    font-weight: bold;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.upload-fetch-row button:hover {
+    background: #0600ff;
+    color: #fff;
+}
+
+.upload-custom-file-btn {
+    width: 100%;
+    padding: 12px;
+    border: 2px dashed #0600ff;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #0600ff;
+    text-align: center;
+    cursor: pointer;
+    margin-bottom: 12px;
+    background: #f8f8ff;
+    transition: all 0.2s;
+}
+
+.upload-custom-file-btn:hover {
+    background: #eef4ff;
+    border-style: solid;
+}
+
+.upload-link-source input {
+    width: 100%;
+    padding: 11px 12px;
+    border: 2px solid #0600ff;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    background: #f8f8ff;
+    margin-bottom: 0;
+}
+
+.upload-link-source input:focus {
+    outline: none;
+    background: #fff;
+    box-shadow: inset 0 0 0 1px #9ed2f5;
+}
+
+.upload-decorative {
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: #0600ff;
+    letter-spacing: 3px;
+    padding-bottom: 12px;
+}
+
+.upload-btn-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.upload-btn-stack .upload-submit {
+    width: 100%;
+    padding: 14px;
+    background: #0600ff;
+    color: #fff;
+    border: 2px solid #0600ff;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    text-transform: lowercase;
+    text-align: center;
+}
+
+.upload-btn-stack .upload-submit:hover {
+    background: #fff;
+    color: #0600ff;
+}
+
+.upload-btn-stack .upload-cancel {
+    width: 100%;
+    padding: 10px;
+    background: #f0e0d6;
+    color: #666;
+    border: 2px solid #d4c4b0;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    text-align: center;
+}
+
+.upload-btn-stack .upload-cancel:hover {
+    background: #e0d0c0;
+}
+
+/* Extracted preview styling for new modal */
+#extractedPreview {
+    margin-bottom: 12px;
+}
+
+#extractedPreview input {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #0600ff;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    margin-bottom: 8px;
+    box-sizing: border-box;
+    background: #f8f8ff;
+}
     </style>
 </head>
 <body>
@@ -1023,82 +1251,72 @@
         </div>
     </div>
 
-    <!-- Upload Modal -->
-    <div class="modal" id="uploadModal">
-    <div class="modal-content">
-        <h2>add a find</h2>
-
-        <!-- Tab switcher -->
-        <div style="display: flex; margin-bottom: 20px; border: 2px solid #0600ff; overflow:hidden;">
-            <button 
-                id="tabLinkBtn"
-                onclick="switchUploadTab('link')"
-                style="flex:1; padding:10px; background:#0600ff; color:white; border:none; font-family:'Courier New',monospace; cursor:pointer; font-size:13px;">
-                paste a link
-            </button>
-            <button 
-    id="tabFileBtn"
-    onclick="switchUploadTab('file')"
-    style="flex:1; padding:10px; background:white; color:#0600ff; border:none; border-left: 2px solid #0600ff; font-family:'Courier New',monospace; cursor:pointer; font-size:13px;">
-    upload a file
-</button>
+ <!-- Upload Modal -->
+<div class="modal" id="uploadModal">
+    <div class="upload-modal-box">
+        <div class="upload-header-bar">
+            <div class="upload-header-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
         </div>
+        <div class="upload-modal-body">
+            <h2>add a find</h2>
+            <div class="upload-subtitle" id="uploadSubtitle">
+                <span>ebay</span> · <span>depop</span> · <span>poshmark</span> · <span>grailed</span>
+            </div>
 
-        <form id="uploadForm">
-
-            <!-- LINK TAB -->
-            <div id="linkTab">
-    <input 
-        type="text" 
-        id="productUrlInput" 
-        placeholder="paste ebay, depop, poshmark... link" 
-        style="width:100%; margin-bottom:8px;"
-    >
-    <button 
-        type="button" 
-        onclick="extractLink()"
-        id="fetchBtn"
-        style="width:100%; padding:12px; background:#0600ff; color:white; border:2px solid #0600ff; font-family:'Courier New',monospace; cursor:pointer; margin-bottom:12px;">
-        fetch →
-    </button>
-
-                <!-- Extracted preview - hidden until fetch -->
-                <div id="extractedPreview" style="display:none; margin-bottom:15px;">
-                    <div style="display:flex; gap:12px; margin-bottom:12px; align-items:flex-start;">
-                        <img id="extractedImg" src="" alt="" style="width:80px; height:100px; object-fit:cover; border:1px solid #ccc; flex-shrink:0;">
-                        <div style="flex:1;">
-                            <div id="extractedTitle" style="font-family:'Courier New',monospace; font-size:11px; color:#666; margin-bottom:8px; line-height:1.4;"></div>
-                        </div>
-                    </div>
-
-                    <input 
-                        type="text" 
-                        id="brandInput" 
-                        placeholder="brand (auto-detected)" 
-                        style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:13px; margin-bottom:10px; box-sizing:border-box;"
-                    >
-                    <input 
-                        type="text" 
-                        id="sizeInput" 
-                        placeholder="size (auto-detected)" 
-                        style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:13px; margin-bottom:10px; box-sizing:border-box;"
-                    >
+            <form id="uploadForm">
+                <div class="upload-tab-row">
+                    <button type="button" class="active" id="tabLinkBtn" onclick="switchUploadTab('link')">paste a link</button>
+                    <button type="button" id="tabFileBtn" onclick="switchUploadTab('file')">upload a file</button>
                 </div>
 
-                <div id="fetchStatus" style="font-size:12px; color:#999; font-family:'Courier New',monospace; margin-bottom:10px; text-align:center;"></div>
-            </div>
+                <!-- LINK TAB -->
+                <div id="linkTab">
+                    <div class="upload-fetch-row">
+                        <input type="text" id="productUrlInput" placeholder="paste link from ebay, depop, poshmark, grailed">
+                        <button type="button" onclick="extractLink()" id="fetchBtn">fetch →</button>
+                    </div>
 
-            <!-- FILE TAB -->
-            <div id="fileTab" style="display:none;">
-                <input type="file" id="imageInput" accept="image/*" style="margin-bottom: 15px;">
-                <input type="url" id="linkInput" placeholder="source link (optional)" style="margin-bottom: 15px;">
-            </div>
+                    <!-- Extracted preview - hidden until fetch -->
+                    <div id="extractedPreview" style="display:none; margin-bottom:12px;">
+                        <div style="display:flex; gap:12px; margin-bottom:12px; align-items:flex-start;">
+                            <img id="extractedImg" src="" alt="" style="width:80px; height:100px; object-fit:cover; border:1px solid #ccc; flex-shrink:0;">
+                            <div style="flex:1;">
+                                <div id="extractedTitle" style="font-family:'Courier New',monospace; font-size:11px; color:#666; line-height:1.4;"></div>
+                            </div>
+                        </div>
+                        <input type="text" id="brandInput" placeholder="brand (auto-detected)">
+                        <input type="text" id="sizeInput" placeholder="size (auto-detected)">
+                    </div>
 
-            <button type="submit" id="uploadSubmitBtn" style="margin-bottom:10px;">upload</button>
-            <button type="button" onclick="closeUploadModal()" style="background-color: #ccc; margin-top: 10px;">cancel</button>
-        </form>
+                    <div id="fetchStatus" style="font-size:11px; color:#999; font-family:'Courier New',monospace; margin-bottom:10px; text-align:center;"></div>
+
+                    <div class="upload-decorative">⊹₊˚‧︵‿₊୨ᰔ୧₊‿︵‧˚₊⊹</div>
+                </div>
+
+                <!-- FILE TAB -->
+                <div id="fileTab" style="display:none;">
+                    <input type="file" id="imageInput" accept="image/*" style="display:none;">
+                    <div class="upload-custom-file-btn" onclick="document.getElementById('imageInput').click()">
+                        <span id="fileLabel">upload from camera roll</span>
+                    </div>
+                    <div class="upload-link-source">
+                        <input type="url" id="linkInput" placeholder="source link (optional)">
+                    </div>
+                </div>
+
+                <div class="upload-btn-stack">
+                    <button type="submit" class="upload-submit" id="uploadSubmitBtn">upload</button>
+                    <button type="button" class="upload-cancel" onclick="closeUploadModal()">cancel</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
+
     <!-- Login Modal -->
     <div class="modal" id="loginModal">
         <div class="modal-content">
@@ -3547,23 +3765,33 @@ window.switchUploadTab = function(tab) {
     const fileTab = document.getElementById('fileTab');
     const linkBtn = document.getElementById('tabLinkBtn');
     const fileBtn = document.getElementById('tabFileBtn');
+    const subtitle = document.getElementById('uploadSubtitle');
 
     if (tab === 'link') {
         linkTab.style.display = 'block';
         fileTab.style.display = 'none';
-        linkBtn.style.background = '#0600ff';
-        linkBtn.style.color = 'white';
-        fileBtn.style.background = 'white';
-        fileBtn.style.color = '#0600ff';
+        linkBtn.classList.add('active');
+        fileBtn.classList.remove('active');
+        subtitle.innerHTML = '<span>ebay</span> · <span>depop</span> · <span>poshmark</span> · <span>grailed</span>';
     } else {
         fileTab.style.display = 'block';
         linkTab.style.display = 'none';
-        fileBtn.style.background = '#0600ff';
-        fileBtn.style.color = 'white';
-        linkBtn.style.background = 'white';
-        linkBtn.style.color = '#0600ff';
+        fileBtn.classList.add('active');
+        linkBtn.classList.remove('active');
+        subtitle.innerHTML = '<span>upload from any resale site</span>';
     }
 };
+        // Update file label when file is chosen
+document.getElementById('imageInput').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const label = document.getElementById('fileLabel');
+    if (file) {
+        label.textContent = file.name;
+        croppedBlob = file;
+    } else {
+        label.textContent = 'upload from camera roll';
+    }
+});
 
 // ── Brand list ───────────────────────────────────────────────
 const BRAND_LIST = [
@@ -3717,6 +3945,7 @@ window.closeUploadModal = function() {
     document.getElementById('productUrlInput').value = '';
     document.getElementById('brandInput').value = '';
     document.getElementById('sizeInput').value = '';
+    document.getElementById('fileLabel').textContent = 'upload from camera roll';
     extractedImageUrl = null;
     croppedBlob = null;
     document.getElementById('uploadModal').style.display = 'none';
