@@ -76,6 +76,7 @@ exports.handler = async (event) => {
             signal: AbortSignal.timeout(5000)
         });
         finalUrl = headRes.url;
+console.log('Resolved URL:', finalUrl);
     } catch (e) {
         finalUrl = url;
     }
