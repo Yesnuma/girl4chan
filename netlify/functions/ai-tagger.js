@@ -44,7 +44,31 @@ const MASTER_TAG_LIST = [
 'mini', 'maxi', 'midi', 'oversized-fit',
 '90s-sportswear', 'track-jacket', 'windbreaker', 'varsity',
 'pearl', 'chain', 'hoop-earrings', 'pendant',
-'tote-bag', 'crossbody', 'clutch', 'shoulder-bag', 'backpack'
+'tote-bag', 'crossbody', 'clutch', 'shoulder-bag', 'backpack' 'retro', 'band-tee', 'graphic-sweatshirt', 'cable-knit', 'tailored',
+'monochrome', 'neutral', 'earth-tones', 'pastel',
+'silk', 'cashmere', 'linen', 'wool', 'corduroy', 'suede',
+'chunky-sole', 'kitten-heel', 'mules', 'sandals', 'loafers',
+'track-jacket', 'windbreaker', 'varsity',
+'pearl', 'chain', 'hoop-earrings', 'pendant',
+'tote-bag', 'crossbody', 'clutch', 'shoulder-bag', 'backpack',
+'wrap-dress', 'shirt-dress', 'sweater-vest', 'puffer', 'trench-coat',
+'duster', 'cape', 'poncho', 'kimono',
+'high-neck', 'v-neck', 'scoop-neck', 'square-neck',
+'ruched', 'smocked', 'tiered', 'pleated', 'ribbed', 'quilted',
+'color-block', 'ombre', 'abstract-print', 'geometric',
+'neon', 'metallic', 'iridescent', 'holographic',
+'cargo', 'utility', 'military', 'nautical',
+'lingerie-style', 'corset-detail', 'bustier',
+'platform-boots', 'cowboy-boots', 'combat-boots', 'knee-high', 'ankle-boots',
+'watch', 'scarf', 'hat', 'beanie', 'beret', 'headband',
+'ring', 'bracelet', 'necklace', 'choker', 'anklet',
+'mini-bag', 'bucket-bag', 'satchel', 'fanny-pack',
+'set', 'coord', 'button-up', 'henley', 'cami',
+'wide-collar', 'peter-pan-collar', 'mandarin-collar',
+'raw-hem', 'frayed', 'patchwork', 'crochet', 'macrame',
+'tropical', 'hawaiian', 'paisley', 'damask', 'houndstooth',
+'pinstripe', 'gingham', 'argyle', 'herringbone',
+'multi-color', 'two-tone', 'cream', 'burgundy', 'navy', 'olive', 'mustard', 'coral', 'teal', 'mauve'
 ];
 
 exports.handler = async (event) => {
