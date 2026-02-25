@@ -3476,6 +3476,9 @@ async function handleDelete(item) {
     showUndoToast(action, () => {
         // UNDO: bring it back
         item.style.display = '';
+        if (pendingDelete) {
+            clearTimeout(pendingDelete.timer);
+        }
         pendingDelete = null;
     });
     
