@@ -1124,17 +1124,48 @@
     </div>
 
     <!-- Rules Modal -->
-    <div class="modal" id="rulesModal">
-        <div class="rules-modal-content">
-            <h2>* <span class="clickable-secret" onclick="secretWordClicked('title')">secret</span> rules *</h2>
-            <p><strong>TO DELETE:</strong><br>Tap top-right corner, then bottom-right corner of your image</p>
-            <p><strong>TO ADD TO COLLECTION:</strong><br>Tap top-left corner, then bottom-left corner</p>
-            <p><strong>TO OPEN LINK:</strong><br>Tap center of image</p>
-            <p><strong>TO REORDER:</strong><br>Hold for 1 second, then drag to new position</p>
-            <p><strong>TO SECRET <span class="clickable-secret" onclick="secretWordClicked('body')">SECRET</span> RULES:</strong><br>Three secrets hide in plain sight - tap the first and last</p>
-            <button onclick="closeRulesModal()" style="width: 100%; background-color: #d4c5b0; padding: 10px; border: 1px solid #8b7355;">close</button>
+<div class="modal" id="rulesModal">
+    <div class="rules-modal-content">
+        <h2>* <span class="clickable-secret" onclick="secretWordClicked('title')" style="cursor:pointer;">secret</span> rules *</h2>
+
+        <!-- DELETE -->
+        <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px;">
+            <div style="width:56px; height:68px; border:2px solid #8b7355; position:relative; flex-shrink:0; background:#efe5d0;">
+                <div style="width:10px; height:10px; border-radius:50%; background:#000; position:absolute; top:4px; right:4px;"></div>
+                <span style="position:absolute; top:4px; right:4px; font-size:7px; color:#fff; font-weight:bold; width:10px; text-align:center; line-height:10px;">1</span>
+                <div style="width:10px; height:10px; border-radius:50%; background:#8b7355; position:absolute; bottom:4px; right:4px;"></div>
+                <span style="position:absolute; bottom:4px; right:4px; font-size:7px; color:#fff; font-weight:bold; width:10px; text-align:center; line-height:10px;">2</span>
+            </div>
+            <div style="font-size:12px; line-height:1.4; font-family:'Courier New',monospace;">
+                <strong>delete</strong><br>tap ↗ then ↘
+            </div>
         </div>
+
+        <div style="height:1px; background:#d4c5b0; margin-bottom:14px;"></div>
+
+        <!-- ADD TO COLLECTION -->
+        <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px;">
+            <div style="width:56px; height:68px; border:2px solid #8b7355; position:relative; flex-shrink:0; background:#efe5d0;">
+                <div style="width:10px; height:10px; border-radius:50%; background:#000; position:absolute; top:4px; left:4px;"></div>
+                <span style="position:absolute; top:4px; left:4px; font-size:7px; color:#fff; font-weight:bold; width:10px; text-align:center; line-height:10px;">1</span>
+                <div style="width:10px; height:10px; border-radius:50%; background:#8b7355; position:absolute; bottom:4px; left:4px;"></div>
+                <span style="position:absolute; bottom:4px; left:4px; font-size:7px; color:#fff; font-weight:bold; width:10px; text-align:center; line-height:10px;">2</span>
+            </div>
+            <div style="font-size:12px; line-height:1.4; font-family:'Courier New',monospace;">
+                <strong>add to collection</strong><br>tap ↖ then ↙
+            </div>
+        </div>
+
+        <div style="height:1px; background:#d4c5b0; margin-bottom:14px;"></div>
+
+        <!-- SECRET -->
+        <div style="font-size:12px; line-height:1.4; margin-bottom:14px; font-family:'Courier New',monospace;">
+            <strong>for super secret rules</strong> — three <strong><span class="clickable-secret" onclick="secretWordClicked('body')" style="cursor:pointer;">secrets</span></strong> hide in plain sight, tap first + last
+        </div>
+
+        <button onclick="closeRulesModal()" style="width:100%; background-color:#d4c5b0; padding:10px; border:1px solid #8b7355; font-family:'Courier New',monospace; font-size:12px; cursor:pointer;">close</button>
     </div>
+</div>
 
     <!-- Secret Secret Rules Overlay -->
     <div class="secret-secret-overlay" id="secretSecretOverlay">
