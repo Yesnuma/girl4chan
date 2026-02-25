@@ -20,7 +20,31 @@ const MASTER_TAG_LIST = [
     'lime-green', 'silver', 'gold', 'red', 'purple', 'yellow', 'brown',
     'grey', 'orange', 'green', 'blue',
     'party', 'casual', 'edgy', 'girly', 'preppy', 'vintage', 'sexy',
-    'cute', 'sporty', 'elegant', 'grunge', 'romantic'
+    'cute', 'sporty', 'elegant', 'grunge', 'romantic' 'cute', 'sporty', 'elegant', 'grunge', 'romantic',
+    'boho', 'minimalist', 'maximalist', 'old-money', 'clean-girl', 'mob-wife', 'coastal',
+    '70s', '80s', '2010s',
+    'fringe', 'embroidered', 'beaded', 'sheer', 'cropped',
+    'animal-print', 'stripes', 'polka-dot', 'camo', 'checkered',
+    'numbers',
+    'office-siren', 'off-shoulder', 'oversized', 'fitted', 'high-waisted',
+    'low-rise', 'backless', 'strapless', 'asymmetric',
+    'western', 'biker', 'ballet-core', 'quiet-luxury', 'dark-academia',
+    'light-academia', 'fairy-grunge', 'coastal-grandmother',
+    'matching-set', 'two-piece', 'layered',
+    'logo', 'brand-name', 'designer', 'handmade',
+    'chunky', 'dainty', 'statement-piece',
+    'summer', 'winter', 'fall', 'spring',
+    'going-out', 'date-night', 'festival', 'workwear' 'retro', 'retro-sportswear', 'ooak', 'rare', 'deadstock',
+'sustainable', 'secondhand', 'thrifted',
+'band-tee', 'graphic-sweatshirt', 'cable-knit', 'tailored',
+'indie', 'indie-vanguard', 'contemporary-classic',
+'monochrome', 'neutral', 'earth-tones', 'pastel',
+'silk', 'cashmere', 'linen', 'wool', 'corduroy', 'suede',
+'platform', 'chunky-sole', 'kitten-heel', 'mules', 'sandals', 'loafers',
+'mini', 'maxi', 'midi', 'oversized-fit',
+'90s-sportswear', 'track-jacket', 'windbreaker', 'varsity',
+'pearl', 'chain', 'hoop-earrings', 'pendant',
+'tote-bag', 'crossbody', 'clutch', 'shoulder-bag', 'backpack'
 ];
 
 exports.handler = async (event) => {
