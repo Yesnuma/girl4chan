@@ -1369,6 +1369,7 @@
             <form id="authForm">
                 <input type="email" id="emailInput" placeholder="email" required>
                 <input type="password" id="passwordInput" placeholder="password" required>
+<p id="forgotPassword" style="text-align:right; margin:-8px 0 8px;"><a href="#" onclick="resetPassword(); return false;" style="color:#8b7355; font-size:11px;">forgot password?</a></p>
                 <input type="text" id="usernameInput" placeholder="username" style="display: none;">
                 <button type="submit" id="authSubmit">login</button>
                 <p id="authSwitch">need an account? <a href="#" onclick="toggleAuthMode(); return false;">sign up</a></p>
@@ -1379,7 +1380,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, collection, addDoc, doc, setDoc, getDoc, getDocs, query, orderBy, updateDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
@@ -3645,9 +3646,23 @@ function removeUndoToast() {
             document.getElementById('rulesModal').style.display = 'flex';
         };
 
-        window.closeRulesModal = function() {
+       window.closeRulesModal = function() {
             document.getElementById('rulesModal').style.display = 'none';
         };
+        window.resetPassword = async function() {
+            const email = document.getElementById('emailInput').value.trim();
+            if (!email) {
+                alert('Enter your email first, then tap forgot password');
+                return;
+            }
+            try {
+                await sendPasswordResetEmail(auth, email);
+                alert('Password reset link sent! Check your email.');
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        };
+        
 
         // Secret secret rules unlock
         let secretClicks = { title: false, body: false };
