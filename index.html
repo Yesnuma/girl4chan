@@ -1061,6 +1061,10 @@
                 <a href="#" onclick="loadMyProfile()">/ my profile</a>
             </div>
             <div class="sidebar-section">
+    <h3>PREMIUM</h3>
+    <a href="#" onclick="upgradeToPremium(); return false;" style="color:#0600ff; font-weight:bold;">★ upgrade — $5/mo</a>
+</div>
+            <div class="sidebar-section">
                 <h3>COLLECTIONS</h3>
                 <div id="collectionsList">
                     <!-- Collections will load here -->
@@ -3662,6 +3666,26 @@ function removeUndoToast() {
                 alert('Error: ' + error.message);
             }
         };
+        window.upgradeToPremium = async function() {
+    try {
+        const res = await fetch('/.netlify/functions/create-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: auth.currentUser.uid,
+                email: auth.currentUser.email
+            })
+        });
+        const data = await res.json();
+        if (data.url) {
+            window.location.href = data.url;
+        } else {
+            alert('Error starting checkout');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+};
         
 
         // Secret secret rules unlock
