@@ -3213,50 +3213,6 @@ window.loadMyProfile = async function(addToHistory = true) {
                     sortBar.appendChild(pill);
                 });
                 
-                // Tag filter dropdown
-                if (topTags.length > 0) {
-                    const dropWrap = document.createElement('div');
-                    dropWrap.style.cssText = 'position:relative; flex-shrink:0;';
-                    
-                    const dropBtn = document.createElement('span');
-                    dropBtn.style.cssText = 'padding:5px 12px; font-family:Courier New,monospace; font-size:9px; font-weight:bold; border:1.5px solid #8b7355; background:#f5ecd7; color:#333; cursor:pointer; white-space:nowrap;';
-                    dropBtn.textContent = 'filter by tag ▾';
-                    
-                    const dropMenu = document.createElement('div');
-                    dropMenu.style.cssText = 'display:none; position:absolute; top:100%; left:0; background:#fff; border:2px solid #8b7355; z-index:10; min-width:140px; margin-top:2px; box-shadow:2px 2px 0 rgba(0,0,0,0.1); max-height:200px; overflow-y:auto;';
-                    
-                    topTags.forEach(tag => {
-                        const item = document.createElement('div');
-                        item.style.cssText = 'padding:8px 12px; font-size:10px; font-family:Courier New,monospace; cursor:pointer; border-bottom:1px solid #eee;';
-                        item.textContent = tag;
-                        item.onclick = () => {
-                            const idx = activeProfileTags.indexOf(tag);
-                            if (idx > -1) {
-                                activeProfileTags.splice(idx, 1);
-                                item.style.color = '#333';
-                                item.style.fontWeight = 'normal';
-                            } else {
-                                activeProfileTags.push(tag);
-                                item.style.color = '#0600ff';
-                                item.style.fontWeight = 'bold';
-                            }
-                            renderProfileTagPills(activeProfileTags, userImages, currentSort, customOrder);
-                            renderProfileImages(userImages, currentSort, activeProfileTags, customOrder);
-                        };
-                        dropMenu.appendChild(item);
-                    });
-                    
-                    dropBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        dropMenu.style.display = dropMenu.style.display === 'none' ? 'block' : 'none';
-                    };
-                    
-                    document.addEventListener('click', () => { dropMenu.style.display = 'none'; }, { once: false });
-                    
-                    dropWrap.appendChild(dropBtn);
-                    dropWrap.appendChild(dropMenu);
-                    sortBar.appendChild(dropWrap);
-                }
                 
                 grid.parentNode.insertBefore(sortBar, grid);
                 
