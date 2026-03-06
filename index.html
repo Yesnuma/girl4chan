@@ -2521,6 +2521,12 @@ async function deleteCollection(collectionId, collectionName) {
             
             const grid = document.getElementById('imageGrid');
             grid.innerHTML = '';
+            const oldHeader = document.getElementById('profileHeader');
+            if (oldHeader) oldHeader.remove();
+            const oldSortBar = document.getElementById('profileSortBar');
+            if (oldSortBar) oldSortBar.remove();
+            const oldTagFilters = document.getElementById('profileTagFilters');
+            if (oldTagFilters) oldTagFilters.remove();
             
             
             try {
@@ -3305,6 +3311,12 @@ window.loadMyProfile = async function(addToHistory = true) {
 
             const grid = document.getElementById('imageGrid');
             grid.innerHTML = '';
+            const oldHeader = document.getElementById('profileHeader');
+            if (oldHeader) oldHeader.remove();
+            const oldSortBar = document.getElementById('profileSortBar');
+            if (oldSortBar) oldSortBar.remove();
+            const oldTagFilters = document.getElementById('profileTagFilters');
+            if (oldTagFilters) oldTagFilters.remove();
 
             try {
                 const imagesQuery = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
