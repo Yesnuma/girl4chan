@@ -3065,7 +3065,9 @@ window.saveCampaignId = async function() {
         statusDiv.style.color = '#ff0000';
     }
 };
-       window.loadMyProfile = async function(addToHistory = true) {
+       // REPLACE your entire loadMyProfile function with this:
+
+window.loadMyProfile = async function(addToHistory = true) {
             closeSidebar();
             if (addToHistory && currentContext.type !== 'profile') {
                 navigationHistory.push({ ...currentContext });
@@ -3081,8 +3083,12 @@ window.saveCampaignId = async function() {
             
             const grid = document.getElementById('imageGrid');
             grid.innerHTML = '';
-           const oldHeader = document.getElementById('profileHeader');
-if (oldHeader) oldHeader.remove();
+            const oldHeader = document.getElementById('profileHeader');
+            if (oldHeader) oldHeader.remove();
+            const oldSortBar = document.getElementById('profileSortBar');
+            if (oldSortBar) oldSortBar.remove();
+            const oldTagFilters = document.getElementById('profileTagFilters');
+            if (oldTagFilters) oldTagFilters.remove();
             
             try {
                 const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
@@ -3092,10 +3098,9 @@ if (oldHeader) oldHeader.remove();
                 
                 // Build profile header
                 const profileHeader = document.createElement('div');
-                profileHeader.style.cssText = 'width:100%; padding:20px 16px; display:flex; flex-direction:column; align-items:center; border-bottom:1px solid #d4c5b0; margin-bottom:12px;';
+                profileHeader.style.cssText = 'width:100%; padding:20px 16px; display:flex; flex-direction:column; align-items:center; border-bottom:1px solid #d4c5b0; margin-bottom:0;';
                 profileHeader.id = 'profileHeader';
-
-        
+                
                 // Profile photo
                 const photoSrc = userData.profilePhoto || '';
                 const photoEl = document.createElement('div');
@@ -3112,6 +3117,19 @@ if (oldHeader) oldHeader.remove();
                 nameEl.style.cssText = 'font-size:16px; font-weight:bold; font-family:Courier New,monospace; margin-bottom:2px;';
                 nameEl.textContent = (userData.username || 'user') + '.finds';
                 profileHeader.appendChild(nameEl);
+                
+                // Get all user's images (shared between premium and free)
+                const imagesQuery = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
+                const snapshot = await getDocs(imagesQuery);
+                let uploadCount = 0;
+                const userImages = [];
+                snapshot.forEach((d) => {
+                    const data = d.data();
+                    if (data.userId === auth.currentUser.uid) {
+                        uploadCount++;
+                        userImages.push({ id: d.id, data: data });
+                    }
+                });
                 
                 if (isPremium) {
                     // Bio
@@ -3132,65 +3150,13 @@ if (oldHeader) oldHeader.remove();
                     // Stats
                     const statsEl = document.createElement('div');
                     statsEl.style.cssText = 'display:flex; gap:14px; font-size:10px; font-family:Courier New,monospace; margin-bottom:8px;';
-                    
-                    const imagesQuery = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
-                    const snapshot = await getDocs(imagesQuery);
-                    let uploadCount = 0;
-                    const userImages = [];
-                    snapshot.forEach((d) => {
-                        const data = d.data();
-                        if (data.userId === auth.currentUser.uid) {
-                            uploadCount++;
-                            userImages.push({ id: d.id, data: data });
-                        }
-                    });
-                    
                     statsEl.innerHTML = `<span><strong style="color:#0600ff;">${uploadCount}</strong> uploads</span>`;
                     profileHeader.appendChild(statsEl);
                     
-                    grid.parentNode.insertBefore(profileHeader, grid);
-                    
-                    // Sort and render
-                    if (customOrder && customOrder.length > 0) {
-                        userImages.sort((a, b) => {
-                            const indexA = customOrder.indexOf(a.id);
-                            const indexB = customOrder.indexOf(b.id);
-                            if (indexA === -1) return 1;
-                            if (indexB === -1) return -1;
-                            return indexA - indexB;
-                        });
-                    }
-                    
-                    userImages.forEach(({ id, data }) => {
-                        const item = document.createElement('div');
-                        item.className = 'image-item';
-                        item.dataset.imageId = id;
-                        item.dataset.userId = data.userId;
-                        item.dataset.imageUrl = data.imageUrl;
-                        item.dataset.link = data.link || '';
-                        item.dataset.tags = JSON.stringify(data.tags || []);
-                        item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
-                        addGestureHandlers(item, true);
-                        grid.appendChild(item);
-                    });
-                    
                 } else {
-                    // Free user - basic profile + upgrade prompt
+                    // Free user stats
                     const statsEl = document.createElement('div');
                     statsEl.style.cssText = 'display:flex; gap:14px; font-size:10px; font-family:Courier New,monospace; margin-bottom:8px;';
-                    
-                    const imagesQuery = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
-                    const snapshot = await getDocs(imagesQuery);
-                    let uploadCount = 0;
-                    const userImages = [];
-                    snapshot.forEach((d) => {
-                        const data = d.data();
-                        if (data.userId === auth.currentUser.uid) {
-                            uploadCount++;
-                            userImages.push({ id: d.id, data: data });
-                        }
-                    });
-                    
                     statsEl.innerHTML = `<span><strong style="color:#0600ff;">${uploadCount}</strong> uploads</span>`;
                     profileHeader.appendChild(statsEl);
                     
@@ -3203,21 +3169,125 @@ if (oldHeader) oldHeader.remove();
                         <p style="font-size:9px; color:#999; margin-top:6px;">founding members get first month free</p>
                     `;
                     profileHeader.appendChild(upgradeEl);
+                }
+                
+                grid.parentNode.insertBefore(profileHeader, grid);
+                
+                // ── Sort Bar ──
+                const sortBar = document.createElement('div');
+                sortBar.id = 'profileSortBar';
+                sortBar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:10px 12px 4px; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch;';
+                
+                // Collect all tags from user images
+                const allTags = {};
+                userImages.forEach(({ data }) => {
+                    (data.tags || []).forEach(tag => {
+                        allTags[tag] = (allTags[tag] || 0) + 1;
+                    });
+                });
+                const topTags = Object.entries(allTags).sort((a, b) => b[1] - a[1]).slice(0, 15).map(t => t[0]);
+                
+                // Sort pills
+                const sortOptions = ['newest', 'oldest'];
+                let currentSort = 'newest';
+                let activeProfileTags = [];
+                
+                sortOptions.forEach(opt => {
+                    const pill = document.createElement('span');
+                    pill.style.cssText = 'flex-shrink:0; padding:5px 12px; font-family:Courier New,monospace; font-size:9px; font-weight:bold; border:1.5px solid #8b7355; background:' + (opt === 'newest' ? '#0600ff; color:#fff; border-color:#0600ff;' : '#f5ecd7; color:#333;') + ' cursor:pointer; white-space:nowrap;';
+                    pill.textContent = opt;
+                    pill.onclick = () => {
+                        currentSort = opt;
+                        // Update pill styles
+                        sortBar.querySelectorAll('[data-sort]').forEach(p => {
+                            p.style.background = '#f5ecd7';
+                            p.style.color = '#333';
+                            p.style.borderColor = '#8b7355';
+                        });
+                        pill.style.background = '#0600ff';
+                        pill.style.color = '#fff';
+                        pill.style.borderColor = '#0600ff';
+                        renderProfileImages(userImages, currentSort, activeProfileTags, customOrder);
+                    };
+                    pill.dataset.sort = opt;
+                    sortBar.appendChild(pill);
+                });
+                
+                // Tag filter dropdown
+                if (topTags.length > 0) {
+                    const dropWrap = document.createElement('div');
+                    dropWrap.style.cssText = 'position:relative; flex-shrink:0;';
                     
-                    grid.parentNode.insertBefore(profileHeader, grid);
+                    const dropBtn = document.createElement('span');
+                    dropBtn.style.cssText = 'padding:5px 12px; font-family:Courier New,monospace; font-size:9px; font-weight:bold; border:1.5px solid #8b7355; background:#f5ecd7; color:#333; cursor:pointer; white-space:nowrap;';
+                    dropBtn.textContent = 'filter by tag ▾';
                     
-                    // Sort and render
-                    if (customOrder && customOrder.length > 0) {
-                        userImages.sort((a, b) => {
-                            const indexA = customOrder.indexOf(a.id);
-                            const indexB = customOrder.indexOf(b.id);
-                            if (indexA === -1) return 1;
-                            if (indexB === -1) return -1;
-                            return indexA - indexB;
+                    const dropMenu = document.createElement('div');
+                    dropMenu.style.cssText = 'display:none; position:absolute; top:100%; left:0; background:#fff; border:2px solid #8b7355; z-index:10; min-width:140px; margin-top:2px; box-shadow:2px 2px 0 rgba(0,0,0,0.1); max-height:200px; overflow-y:auto;';
+                    
+                    topTags.forEach(tag => {
+                        const item = document.createElement('div');
+                        item.style.cssText = 'padding:8px 12px; font-size:10px; font-family:Courier New,monospace; cursor:pointer; border-bottom:1px solid #eee;';
+                        item.textContent = tag;
+                        item.onclick = () => {
+                            const idx = activeProfileTags.indexOf(tag);
+                            if (idx > -1) {
+                                activeProfileTags.splice(idx, 1);
+                                item.style.color = '#333';
+                                item.style.fontWeight = 'normal';
+                            } else {
+                                activeProfileTags.push(tag);
+                                item.style.color = '#0600ff';
+                                item.style.fontWeight = 'bold';
+                            }
+                            renderProfileTagPills(activeProfileTags, userImages, currentSort, customOrder);
+                            renderProfileImages(userImages, currentSort, activeProfileTags, customOrder);
+                        };
+                        dropMenu.appendChild(item);
+                    });
+                    
+                    dropBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        dropMenu.style.display = dropMenu.style.display === 'none' ? 'block' : 'none';
+                    };
+                    
+                    document.addEventListener('click', () => { dropMenu.style.display = 'none'; }, { once: false });
+                    
+                    dropWrap.appendChild(dropBtn);
+                    dropWrap.appendChild(dropMenu);
+                    sortBar.appendChild(dropWrap);
+                }
+                
+                grid.parentNode.insertBefore(sortBar, grid);
+                
+                // ── Active Tag Pills Container ──
+                const tagPillsContainer = document.createElement('div');
+                tagPillsContainer.id = 'profileTagFilters';
+                tagPillsContainer.style.cssText = 'display:flex; flex-wrap:wrap; gap:4px; padding:4px 12px 8px;';
+                grid.parentNode.insertBefore(tagPillsContainer, grid);
+                
+                // ── Render function ──
+                window.renderProfileImages = function(images, sort, tags, customOrd) {
+                    grid.innerHTML = '';
+                    
+                    let filtered = [...images];
+                    
+                    // Filter by tags
+                    if (tags.length > 0) {
+                        filtered = filtered.filter(({ data }) => {
+                            const imgTags = data.tags || [];
+                            return tags.every(t => imgTags.includes(t));
                         });
                     }
                     
-                    userImages.forEach(({ id, data }) => {
+                    // Sort
+                    if (sort === 'newest') {
+                        filtered.sort((a, b) => (b.data.createdAt?.seconds || 0) - (a.data.createdAt?.seconds || 0));
+                    } else if (sort === 'oldest') {
+                        filtered.sort((a, b) => (a.data.createdAt?.seconds || 0) - (b.data.createdAt?.seconds || 0));
+                    }
+                    
+                    filtered.forEach(({ id, data }) => {
                         const item = document.createElement('div');
                         item.className = 'image-item';
                         item.dataset.imageId = id;
@@ -3229,7 +3299,27 @@ if (oldHeader) oldHeader.remove();
                         addGestureHandlers(item, true);
                         grid.appendChild(item);
                     });
-                }
+                };
+                
+                window.renderProfileTagPills = function(tags, images, sort, customOrd) {
+                    const container = document.getElementById('profileTagFilters');
+                    container.innerHTML = '';
+                    tags.forEach(tag => {
+                        const pill = document.createElement('span');
+                        pill.style.cssText = 'padding:3px 8px; font-family:Courier New,monospace; font-size:8px; background:#8b7355; color:#fff; cursor:pointer; border:1px solid #8b7355;';
+                        pill.textContent = tag + ' ×';
+                        pill.onclick = () => {
+                            const idx = activeProfileTags.indexOf(tag);
+                            if (idx > -1) activeProfileTags.splice(idx, 1);
+                            renderProfileTagPills(activeProfileTags, images, sort, customOrd);
+                            renderProfileImages(images, sort, activeProfileTags, customOrd);
+                        };
+                        container.appendChild(pill);
+                    });
+                };
+                
+                // Initial render
+                renderProfileImages(userImages, currentSort, activeProfileTags, customOrder);
                 
             } catch (error) {
                 console.error('Error loading profile:', error);
