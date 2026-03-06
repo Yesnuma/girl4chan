@@ -2522,6 +2522,7 @@ async function deleteCollection(collectionId, collectionName) {
             const grid = document.getElementById('imageGrid');
             grid.innerHTML = '';
             
+            
             try {
                 const collectionDoc = await getDoc(doc(db, 'collections', collectionId));
                 const imageIds = collectionDoc.data().images || [];
@@ -3080,6 +3081,8 @@ window.saveCampaignId = async function() {
             
             const grid = document.getElementById('imageGrid');
             grid.innerHTML = '';
+           const oldHeader = document.getElementById('profileHeader');
+if (oldHeader) oldHeader.remove();
             
             try {
                 const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
@@ -3090,7 +3093,9 @@ window.saveCampaignId = async function() {
                 // Build profile header
                 const profileHeader = document.createElement('div');
                 profileHeader.style.cssText = 'width:100%; padding:20px 16px; display:flex; flex-direction:column; align-items:center; border-bottom:1px solid #d4c5b0; margin-bottom:12px;';
-                
+                profileHeader.id = 'profileHeader';
+
+        
                 // Profile photo
                 const photoSrc = userData.profilePhoto || '';
                 const photoEl = document.createElement('div');
@@ -3143,7 +3148,7 @@ window.saveCampaignId = async function() {
                     statsEl.innerHTML = `<span><strong style="color:#0600ff;">${uploadCount}</strong> uploads</span>`;
                     profileHeader.appendChild(statsEl);
                     
-                    grid.appendChild(profileHeader);
+                    grid.parentNode.insertBefore(profileHeader, grid);
                     
                     // Sort and render
                     if (customOrder && customOrder.length > 0) {
@@ -3198,7 +3203,7 @@ window.saveCampaignId = async function() {
                     `;
                     profileHeader.appendChild(upgradeEl);
                     
-                    grid.appendChild(profileHeader);
+                    grid.parentNode.insertBefore(profileHeader, grid);
                     
                     // Sort and render
                     if (customOrder && customOrder.length > 0) {
