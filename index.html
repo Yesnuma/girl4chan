@@ -1607,7 +1607,7 @@ async function getAllExistingTags() {
 }
 
 // Open image detail modal
-window.openImageDetail = function(imageId, imageUrl, link, tags) {
+window.openImageDetail = async function(imageId, imageUrl, link, tags) {
     document.getElementById('detailImage').src = imageUrl;
     
     // Display tags
@@ -1763,7 +1763,53 @@ window.openImageDetail = function(imageId, imageUrl, link, tags) {
         // Store cleanup function for when modal closes
         window.tagAutocompleteCleanup = cleanupHandler;
     }
+// Setup like/heart button
+            const existingHeart = document.getElementById('likeButton');
+            if (existingHeart) existingHeart.remove();
             
+            const heartBtn = document.createElement('button');
+            heartBtn.id = 'likeButton';
+            heartBtn.style.cssText = 'background:none; border:2px solid #8b7355; padding:8px 16px; font-family:Courier New,monospace; font-size:14px; cursor:pointer; margin:10px 0;';
+            
+            // Check if already liked
+            if (window.isPremium && auth.currentUser) {
+                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+                const likes = userDoc.data()?.likes || [];
+                const isLiked = likes.includes(imageId);
+                heartBtn.textContent = isLiked ? '♥ liked' : '♡ like';
+                heartBtn.style.color = isLiked ? '#ff007a' : '#333';
+                heartBtn.style.borderColor = isLiked ? '#ff007a' : '#8b7355';
+            } else {
+                heartBtn.textContent = '♡ like';
+                heartBtn.style.color = '#333';
+            }
+            
+            heartBtn.onclick = async () => {
+                if (!window.isPremium) {
+                    if (confirm('Likes are a premium feature! Upgrade for $5/mo?')) {
+                        upgradeToPremium();
+                    }
+                    return;
+                }
+                const userRef = doc(db, 'users', auth.currentUser.uid);
+                const userDoc2 = await getDoc(userRef);
+                const currentLikes = userDoc2.data()?.likes || [];
+                
+                if (currentLikes.includes(imageId)) {
+                    await updateDoc(userRef, { likes: arrayRemove(imageId) });
+                    heartBtn.textContent = '♡ like';
+                    heartBtn.style.color = '#333';
+                    heartBtn.style.borderColor = '#8b7355';
+                } else {
+                    await updateDoc(userRef, { likes: arrayUnion(imageId) });
+                    heartBtn.textContent = '♥ liked';
+                    heartBtn.style.color = '#ff007a';
+                    heartBtn.style.borderColor = '#ff007a';
+                }
+            };
+            
+            document.getElementById('detailTags').after(heartBtn);
+    
             // Setup shop button
             const shopBtn = document.getElementById('shopButton');
             if (link) {
