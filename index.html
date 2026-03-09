@@ -2532,6 +2532,7 @@ async function deleteCollection(collectionId, collectionName) {
             try {
                 const collectionDoc = await getDoc(doc(db, 'collections', collectionId));
                 const imageIds = collectionDoc.data().images || [];
+                imageIds.reverse();
                 
                 for (const imageId of imageIds) {
                     const imageDoc = await getDoc(doc(db, 'images', imageId));
