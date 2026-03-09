@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Profile Photo Picker - Live Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #f0e0d6;
+            max-width: 375px;
+            margin: 0 auto;
+            min-height: 100vh;
+            padding: 16px;
+        }
+
+        h1 { font-size: 16px; margin-bottom: 4px; }
+        .subtitle { font-size: 10px; color: #666; margin-bottom: 20px; }
+
+        .step { display: none; }
+        .step.active { display: block; }
+
+        .category { margin-bottom: 16px; }
+        .category-label { font-size: 11px; font-weight: bold; margin-bottom: 6px; }
+        .category-hint { font-size: 9px; color: #999; margin-bottom: 8px; }
+
+        .tag-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+
+        .vibe-tag {
+            padding: 6px 14px;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            border: 1.5px solid #8b7355;
+            background: #f5ecd7;
+            color: #333;
+            cursor: pointer;
+        }
+
+        .vibe-tag.selected {
+            background: #0600ff;
+            color: #fff;
+            border-color: #0600ff;
+        }
+
+        .counter { text-align: center; font-size: 11px; color: #666; margin: 12px 0; }
+        .counter strong { color: #0600ff; }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            font-weight: bold;
+            border: 2px solid #000;
+            cursor: pointer;
+            text-align: center;
+            margin-top: 16px;
+        }
+
+        .btn-primary { background: #0600ff; color: #fff; box-shadow: 3px 3px 0 #000; }
+        .btn-primary:disabled { background: #999; cursor: not-allowed; box-shadow: none; }
+        .btn-secondary { background: #f5ecd7; color: #333; }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin-top: 16px;
+        }
+
+        .result-item {
+            aspect-ratio: 1;
+            border: 2px solid #8b7355;
+            overflow: hidden;
+            cursor: pointer;
+            position: relative;
+            background: #e8dcc8;
+        }
+
+        .result-item img { width: 100%; height: 100%; object-fit: cover; }
+
+        .result-item.selected { border-color: #0600ff; border-width: 3px; }
+
+        .result-item.selected::after {
+            content: '✓';
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: #0600ff;
+            color: #fff;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .preview-section { display: flex; flex-direction: column; align-items: center; margin-top: 20px; }
+
+        .preview-photo {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 3px solid #8b7355;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .preview-photo img { width: 100%; height: 100%; object-fit: cover; }
+        .preview-name { font-size: 16px; font-weight: bold; }
+        .preview-note { font-size: 9px; color: #999; margin-top: 8px; text-align: center; }
+
+        .loading-msg {
+            text-align: center;
+            padding: 30px;
+            font-size: 11px;
+            color: #666;
+        }
+
+        .search-label {
+            font-size: 9px;
+            color: #8b7355;
+            margin-top: 12px;
+            margin-bottom: 4px;
+        }
+
+        .section-divider { height: 1px; background: #d4c5b0; margin: 12px 0; }
+
+        .debug {
+            margin-top: 20px;
+            padding: 12px;
+            background: #fff;
+            border: 1px solid #ddd;
+            font-size: 9px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .debug-label { font-size: 10px; font-weight: bold; margin-top: 16px; margin-bottom: 4px; }
+
+        .manual-search {
+            margin-top: 16px;
+            padding: 12px;
+            background: #fff;
+            border: 2px solid #8b7355;
+        }
+
+        .manual-search input {
+            width: 100%;
+            padding: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            border: 1px solid #8b7355;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ═══════════════════════════ -->
+    <!-- STEP 1: Pick Your Vibes    -->
+    <!-- ═══════════════════════════ -->
+    <div class="step active" id="step1">
+        <h1>pick your vibe</h1>
+        <div class="subtitle">choose 5-10 tags that describe your energy. this determines your profile photo options!</div>
+
+        <div class="category">
+            <div class="category-label">COLORS</div>
+            <div class="category-hint">pick 1-3</div>
+            <div class="tag-grid">
+                <span class="vibe-tag" data-cat="color">pink</span>
+                <span class="vibe-tag" data-cat="color">red</span>
+                <span class="vibe-tag" data-cat="color">purple</span>
+                <span class="vibe-tag" data-cat="color">blue</span>
+                <span class="vibe-tag" data-cat="color">green</span>
+                <span class="vibe-tag" data-cat="color">yellow</span>
+                <span class="vibe-tag" data-cat="color">orange</span>
+                <span class="vibe-tag" data-cat="color">black</span>
+                <span class="vibe-tag" data-cat="color">white</span>
+                <span class="vibe-tag" data-cat="color">rainbow</span>
+            </div>
+        </div>
+
+        <div class="category">
+            <div class="category-label">ENERGY</div>
+            <div class="category-hint">pick 2-3</div>
+            <div class="tag-grid">
+                <span class="vibe-tag" data-cat="energy">sweet</span>
+                <span class="vibe-tag" data-cat="energy">edgy</span>
+                <span class="vibe-tag" data-cat="energy">chaotic</span>
+                <span class="vibe-tag" data-cat="energy">chill</span>
+                <span class="vibe-tag" data-cat="energy">weird</span>
+                <span class="vibe-tag" data-cat="energy">elegant</span>
+                <span class="vibe-tag" data-cat="energy">sporty</span>
+                <span class="vibe-tag" data-cat="energy">romantic</span>
+                <span class="vibe-tag" data-cat="energy">dark</span>
+                <span class="vibe-tag" data-cat="energy">loud</span>
+                <span class="vibe-tag" data-cat="energy">funny</span>
+                <span class="vibe-tag" data-cat="energy">spooky</span>
+            </div>
+        </div>
+
+        <div class="category">
+            <div class="category-label">ERA</div>
+            <div class="category-hint">pick 1-2</div>
+            <div class="tag-grid">
+                <span class="vibe-tag" data-cat="era">y2k</span>
+                <span class="vibe-tag" data-cat="era">90s</span>
+                <span class="vibe-tag" data-cat="era">80s</span>
+                <span class="vibe-tag" data-cat="era">70s</span>
+                <span class="vibe-tag" data-cat="era">vintage</span>
+                <span class="vibe-tag" data-cat="era">retro</span>
+                <span class="vibe-tag" data-cat="era">modern</span>
+            </div>
+        </div>
+
+        <div class="category">
+            <div class="category-label">STYLE</div>
+            <div class="category-hint">pick 1-3</div>
+            <div class="tag-grid">
+                <span class="vibe-tag" data-cat="style">girly</span>
+                <span class="vibe-tag" data-cat="style">grunge</span>
+                <span class="vibe-tag" data-cat="style">preppy</span>
+                <span class="vibe-tag" data-cat="style">streetwear</span>
+                <span class="vibe-tag" data-cat="style">cottagecore</span>
+                <span class="vibe-tag" data-cat="style">goth</span>
+                <span class="vibe-tag" data-cat="style">coquette</span>
+                <span class="vibe-tag" data-cat="style">minimal</span>
+                <span class="vibe-tag" data-cat="style">boho</span>
+                <span class="vibe-tag" data-cat="style">punk</span>
+                <span class="vibe-tag" data-cat="style">anime</span>
+                <span class="vibe-tag" data-cat="style">artsy</span>
+            </div>
+        </div>
+
+        <div class="category">
+            <div class="category-label">TYPE</div>
+            <div class="category-hint">pick 1 — what kind of object speaks to you?</div>
+            <div class="tag-grid">
+                <span class="vibe-tag" data-cat="type">plush</span>
+                <span class="vibe-tag" data-cat="type">doll</span>
+                <span class="vibe-tag" data-cat="type">figurine</span>
+                <span class="vibe-tag" data-cat="type">action figure</span>
+                <span class="vibe-tag" data-cat="type">vinyl toy</span>
+                <span class="vibe-tag" data-cat="type">miniature</span>
+            </div>
+        </div>
+
+        <div class="counter">
+            <strong id="tagCount">0</strong> / 10 selected
+        </div>
+
+        <button class="btn btn-primary" id="generateBtn" disabled onclick="generateSearches()">
+            show me my options →
+        </button>
+
+        <div class="section-divider"></div>
+
+        <!-- Manual search for testing -->
+        <div class="manual-search">
+            <div class="category-label">🔧 MANUAL TEST SEARCH</div>
+            <div class="category-hint">type any query to test eBay results directly</div>
+            <input type="text" id="manualQuery" placeholder="e.g. pink bratz doll">
+            <button class="btn btn-secondary" onclick="manualSearch()" style="margin-top:0;">search eBay →</button>
+            <div id="manualResults" class="results-grid" style="margin-top:8px;"></div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════ -->
+    <!-- STEP 2: Browse Results     -->
+    <!-- ═══════════════════════════ -->
+    <div class="step" id="step2">
+        <h1>choose your forever photo</h1>
+        <div class="subtitle">tap one to select — this is permanent!</div>
+
+        <button class="btn btn-secondary" onclick="goBack()" style="margin-bottom:12px;">← pick different vibes</button>
+
+        <div id="resultsContainer"></div>
+        
+        <button class="btn btn-primary" id="confirmBtn" disabled onclick="confirmPhoto()" style="margin-top:16px;">
+            this is the one ♡
+        </button>
+    </div>
+
+    <!-- ═══════════════════════════ -->
+    <!-- STEP 3: Confirmation       -->
+    <!-- ═══════════════════════════ -->
+    <div class="step" id="step3">
+        <div class="preview-section">
+            <h1>your profile photo</h1>
+            <div class="subtitle">locked in forever ✦</div>
+            <div class="preview-photo">
+                <img id="previewImg" src="" alt="">
+            </div>
+            <div class="preview-name">username.finds</div>
+            <div class="preview-note">this photo is permanently yours.<br>nobody else can choose it.</div>
+        </div>
+    </div>
+
+    <!-- Debug -->
+    <div class="section-divider" style="margin-top:30px;"></div>
+    <div class="debug-label">🔧 debug: search query mapping</div>
+    <div class="debug" id="debugOutput">Select vibes to see generated queries...</div>
+
+    <script>
+        const API_URL = 'https://girlchan.shopfinds.app/.netlify/functions/ebay-toy-search';
+
+        const VIBE_SEARCH_MAP = {
+            color: {
+                'pink': ['pink'], 'red': ['red'], 'purple': ['purple'],
+                'blue': ['blue'], 'green': ['green'], 'yellow': ['yellow'],
+                'orange': ['orange'], 'black': ['black'], 'white': ['white'],
+                'rainbow': ['rainbow', 'colorful']
+            },
+            energy: {
+                'sweet': ['cute', 'kawaii'], 'edgy': ['punk', 'alternative'],
+                'chaotic': ['weird', 'wacky'], 'chill': ['soft', 'calm'],
+                'weird': ['strange', 'creepy cute'], 'elegant': ['porcelain', 'delicate'],
+                'sporty': ['sports', 'mascot'], 'romantic': ['angel', 'heart'],
+                'dark': ['gothic', 'dark'], 'loud': ['neon', 'bold'],
+                'funny': ['funny', 'silly'], 'spooky': ['halloween', 'skeleton']
+            },
+            era: {
+                'y2k': ['bratz', 'polly pocket', 'littlest pet shop'],
+                '90s': ['90s toy', 'beanie baby', 'furby', 'troll doll'],
+                '80s': ['care bears', 'my little pony vintage', 'strawberry shortcake'],
+                '70s': ['70s vintage toy', 'retro doll'],
+                'vintage': ['vintage toy', 'antique doll', 'vintage figurine'],
+                'retro': ['retro toy', 'classic toy'],
+                'modern': ['designer toy', 'art toy']
+            },
+            style: {
+                'girly': ['barbie', 'fairy figurine', 'princess doll'],
+                'grunge': ['monster high', 'ugly doll', 'rag doll'],
+                'preppy': ['sylvanian families', 'calico critters'],
+                'streetwear': ['bearbrick', 'kaws', 'kidrobot'],
+                'cottagecore': ['woodland figurine', 'bunny figurine', 'mushroom figurine'],
+                'goth': ['gothic doll', 'living dead dolls', 'vampire figurine'],
+                'coquette': ['angel figurine', 'cherub', 'ballerina doll'],
+                'minimal': ['wooden toy', 'simple figurine'],
+                'boho': ['handmade doll', 'folk art figurine'],
+                'punk': ['punk figure', 'rebel toy'],
+                'anime': ['anime figure', 'nendoroid', 'sanrio'],
+                'artsy': ['art toy', 'designer vinyl figure']
+            },
+            type: {
+                'plush': ['plush', 'stuffed animal'],
+                'doll': ['doll', 'fashion doll'],
+                'figurine': ['figurine', 'collectible figure'],
+                'action figure': ['action figure'],
+                'vinyl toy': ['vinyl figure', 'designer toy'],
+                'miniature': ['miniature', 'mini figure']
+            }
+        };
+
+        let selectedVibes = { color: [], energy: [], era: [], style: [], type: [] };
+        let selectedPhoto = null;
+
+        // Tag selection
+        document.querySelectorAll('.vibe-tag').forEach(tag => {
+            tag.onclick = () => {
+                const cat = tag.dataset.cat;
+                const value = tag.textContent;
+                if (tag.classList.contains('selected')) {
+                    tag.classList.remove('selected');
+                    selectedVibes[cat] = selectedVibes[cat].filter(v => v !== value);
+                } else {
+                    tag.classList.add('selected');
+                    selectedVibes[cat].push(value);
+                }
+                updateCounter();
+                updateDebug();
+            };
+        });
+
+        function getTotalSelected() {
+            return Object.values(selectedVibes).flat().length;
+        }
+
+        function updateCounter() {
+            const count = getTotalSelected();
+            document.getElementById('tagCount').textContent = count;
+            document.getElementById('generateBtn').disabled = count < 5;
+        }
+
+        // Generate queries from vibes
+        function generateSearchQueries() {
+            const queries = [];
+            const colors = selectedVibes.color.flatMap(c => VIBE_SEARCH_MAP.color[c] || []);
+            const energies = selectedVibes.energy.flatMap(e => VIBE_SEARCH_MAP.energy[e] || []);
+            const eras = selectedVibes.era.flatMap(e => VIBE_SEARCH_MAP.era[e] || []);
+            const styles = selectedVibes.style.flatMap(s => VIBE_SEARCH_MAP.style[s] || []);
+            const types = selectedVibes.type.flatMap(t => VIBE_SEARCH_MAP.type[t] || []);
+
+            // Era + type combos
+            eras.forEach(era => {
+                if (types.length > 0) {
+                    types.slice(0, 2).forEach(type => queries.push(`${era} ${type}`));
+                } else {
+                    queries.push(era);
+                }
+            });
+
+            // Style terms (these are already specific toy searches)
+            styles.forEach(style => {
+                queries.push(style);
+                if (colors.length > 0) queries.push(`${colors[0]} ${style}`);
+            });
+
+            // Energy + type
+            energies.slice(0, 2).forEach(energy => {
+                if (types.length > 0) {
+                    queries.push(`${energy} ${types[0]}`);
+                } else {
+                    queries.push(`${energy} toy figurine`);
+                }
+            });
+
+            // Color + type
+            colors.slice(0, 2).forEach(color => {
+                if (types.length > 0) queries.push(`${color} ${types[0]}`);
+            });
+
+            return [...new Set(queries)].slice(0, 6);
+        }
+
+        // Search eBay
+        async function searchEbay(query) {
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+                const data = await res.json();
+                return data.items || [];
+            } catch (e) {
+                console.error('Search error:', e);
+                return [];
+            }
+        }
+
+        // Generate and show results
+        async function generateSearches() {
+            const queries = generateSearchQueries();
+
+            document.getElementById('step1').classList.remove('active');
+            document.getElementById('step2').classList.add('active');
+
+            const container = document.getElementById('resultsContainer');
+            container.innerHTML = '<div class="loading-msg">searching eBay for your vibe...</div>';
+
+            let allResults = [];
+
+            for (const q of queries) {
+                const items = await searchEbay(q);
+                if (items.length > 0) {
+                    allResults.push({ query: q, items });
+                }
+            }
+
+            container.innerHTML = '';
+
+            if (allResults.length === 0) {
+                container.innerHTML = '<div class="loading-msg">no results found — try different vibes</div>';
+                return;
+            }
+
+            allResults.forEach(({ query, items }) => {
+                const label = document.createElement('div');
+                label.className = 'search-label';
+                label.textContent = `"${query}"`;
+                container.appendChild(label);
+
+                const grid = document.createElement('div');
+                grid.className = 'results-grid';
+
+                items.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = 'result-item';
+                    el.innerHTML = `<img src="${item.image}" alt="${item.title}">`;
+                    el.onclick = () => selectPhoto(el, item.image, item.id);
+                    grid.appendChild(el);
+                });
+
+                container.appendChild(grid);
+            });
+
+            updateDebug();
+        }
+
+        function selectPhoto(item, url, itemId) {
+            document.querySelectorAll('.result-item').forEach(r => r.classList.remove('selected'));
+            item.classList.add('selected');
+            selectedPhoto = { url, itemId };
+            document.getElementById('confirmBtn').disabled = false;
+        }
+
+        function confirmPhoto() {
+            document.getElementById('step2').classList.remove('active');
+            document.getElementById('step3').classList.add('active');
+            document.getElementById('previewImg').src = selectedPhoto.url;
+        }
+
+        function goBack() {
+            document.getElementById('step2').classList.remove('active');
+            document.getElementById('step1').classList.add('active');
+            selectedPhoto = null;
+        }
+
+        // Manual test search
+        async function manualSearch() {
+            const query = document.getElementById('manualQuery').value.trim();
+            if (!query) return;
+
+            const grid = document.getElementById('manualResults');
+            grid.innerHTML = '<div class="loading-msg">searching...</div>';
+
+            const items = await searchEbay(query);
+            grid.innerHTML = '';
+
+            if (items.length === 0) {
+                grid.innerHTML = '<div style="font-size:10px; color:#999; padding:8px;">no results</div>';
+                return;
+            }
+
+            items.forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'result-item';
+                el.innerHTML = `<img src="${item.image}" alt="${item.title}">`;
+                grid.appendChild(el);
+            });
+        }
+
+        function updateDebug() {
+            const debug = document.getElementById('debugOutput');
+            const queries = generateSearchQueries();
+            let output = 'SELECTED VIBES:\n';
+            Object.entries(selectedVibes).forEach(([cat, vals]) => {
+                if (vals.length > 0) output += `  ${cat}: ${vals.join(', ')}\n`;
+            });
+            output += '\nGENERATED QUERIES:\n';
+            queries.forEach((q, i) => output += `  ${i+1}. "${q}"\n`);
+            debug.textContent = output;
+        }
+    </script>
+
+</body>
+</html>
