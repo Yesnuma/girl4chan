@@ -3211,7 +3211,8 @@ window.loadMyProfile = async function(addToHistory = true) {
                     if (userLikes.length > 0) {
                         const likesLabel = document.createElement('div');
                         likesLabel.style.cssText = 'width:100%; font-size:13px; font-weight:bold; font-family:Courier New,monospace; margin-top:12px; margin-bottom:6px;';
-                        likesLabel.textContent = '♡ likes';
+                        likesLabel.innerHTML = '♡ likes <span style="font-size:9px; color:#8b7355; font-weight:normal; cursor:pointer; margin-left:8px;">see all →</span>';
+likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                         profileHeader.appendChild(likesLabel);
                         
                         const likesRow = document.createElement('div');
@@ -3360,6 +3361,57 @@ window.loadMyProfile = async function(addToHistory = true) {
                 
             } catch (error) {
                 console.error('Error loading profile:', error);
+            }
+        };
+    
+        window.loadLikesFeed = async function() {
+            const oldHeader = document.getElementById('profileHeader');
+            if (oldHeader) oldHeader.remove();
+            const oldSortBar = document.getElementById('profileSortBar');
+            if (oldSortBar) oldSortBar.remove();
+            const oldTagFilters = document.getElementById('profileTagFilters');
+            if (oldTagFilters) oldTagFilters.remove();
+            
+            currentContext = { type: 'likes', id: null };
+            document.getElementById('pageTitle').innerHTML = '';
+            
+            const backBtn = document.createElement('span');
+            backBtn.textContent = '← back ';
+            backBtn.style.cssText = 'cursor:pointer; color:#0600ff; margin-right:5px;';
+            backBtn.onclick = () => loadMyProfile();
+            document.getElementById('pageTitle').appendChild(backBtn);
+            
+            const titleSpan = document.createElement('span');
+            titleSpan.textContent = '/ my likes';
+            document.getElementById('pageTitle').appendChild(titleSpan);
+            
+            const grid = document.getElementById('imageGrid');
+            grid.innerHTML = '';
+            
+            try {
+                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+                const likes = userDoc.data()?.likes || [];
+                
+                for (const likeId of likes) {
+                    try {
+                        const imgDoc = await getDoc(doc(db, 'images', likeId));
+                        if (imgDoc.exists()) {
+                            const data = imgDoc.data();
+                            const item = document.createElement('div');
+                            item.className = 'image-item';
+                            item.dataset.imageId = likeId;
+                            item.dataset.userId = data.userId;
+                            item.dataset.imageUrl = data.imageUrl;
+                            item.dataset.link = data.link || '';
+                            item.dataset.tags = JSON.stringify(data.tags || []);
+                            item.innerHTML = `<img src="${data.imageUrl}" alt="" draggable="false">`;
+                            addGestureHandlers(item);
+                            grid.appendChild(item);
+                        }
+                    } catch (e) {}
+                }
+            } catch (error) {
+                console.error('Error loading likes:', error);
             }
         };
 
