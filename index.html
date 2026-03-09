@@ -3206,6 +3206,34 @@ window.loadMyProfile = async function(addToHistory = true) {
                     statsEl.innerHTML = `<span><strong style="color:#0600ff;">${uploadCount}</strong> uploads</span>`;
                     profileHeader.appendChild(statsEl);
                     
+                    // Likes row
+                    const userLikes = userData.likes || [];
+                    if (userLikes.length > 0) {
+                        const likesLabel = document.createElement('div');
+                        likesLabel.style.cssText = 'width:100%; font-size:13px; font-weight:bold; font-family:Courier New,monospace; margin-top:12px; margin-bottom:6px;';
+                        likesLabel.textContent = '♡ likes';
+                        profileHeader.appendChild(likesLabel);
+                        
+                        const likesRow = document.createElement('div');
+                        likesRow.style.cssText = 'display:flex; gap:5px; width:100%; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; padding-bottom:8px;';
+                        
+                        for (const likeId of userLikes.slice(0, 10)) {
+                            try {
+                                const likeDoc = await getDoc(doc(db, 'images', likeId));
+                                if (likeDoc.exists()) {
+                                    const likeData = likeDoc.data();
+                                    const thumb = document.createElement('img');
+                                    thumb.src = likeData.imageUrl;
+                                    thumb.style.cssText = 'width:58px; height:72px; flex-shrink:0; object-fit:cover; border:1px solid #8b7355; cursor:pointer;';
+                                    thumb.onclick = () => openImageDetail(likeId, likeData.imageUrl, likeData.link, likeData.tags);
+                                    likesRow.appendChild(thumb);
+                                }
+                            } catch (e) {}
+                        }
+                        
+                        profileHeader.appendChild(likesRow);
+                    }
+                    
                 } else {
                     // Free user stats
                     const statsEl = document.createElement('div');
