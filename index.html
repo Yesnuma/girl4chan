@@ -1769,7 +1769,7 @@ window.openImageDetail = async function(imageId, imageUrl, link, tags) {
             
             const heartBtn = document.createElement('button');
             heartBtn.id = 'likeButton';
-            heartBtn.style.cssText = 'background:none; border:2px solid #8b7355; padding:8px 16px; font-family:Courier New,monospace; font-size:14px; cursor:pointer; margin:10px 0;';
+            heartBtn.style.cssText = 'background:none; border:none; padding:4px 0; font-size:22px; cursor:pointer; display:block; margin:8px 0;';
             
             // Check if already liked
             if (window.isPremium && auth.currentUser) {
@@ -1808,10 +1808,7 @@ window.openImageDetail = async function(imageId, imageUrl, link, tags) {
                 }
             };
             
-            const detailImage = document.getElementById('detailImage');
-            detailImage.parentElement.style.position = 'relative';
-            heartBtn.style.cssText = 'position:absolute; bottom:10px; right:10px; background:rgba(255,255,255,0.85); border:none; padding:8px; font-size:22px; cursor:pointer; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,0.2);';
-            detailImage.parentElement.appendChild(heartBtn);
+            document.getElementById('detailTags').after(heartBtn);
     
             // Setup shop button
             const shopBtn = document.getElementById('shopButton');
