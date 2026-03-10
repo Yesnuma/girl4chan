@@ -31,16 +31,17 @@ exports.handler = async (event) => {
     }
 
     try {
-        const { query } = JSON.parse(event.body);
+        const { query, limit = 20, offset = 0 } = JSON.parse(event.body);
         const token = await getEbayToken();
 
-        const searchUrl = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=12&category_ids=220&filter=deliveryCountry:US`;
+        const searchUrl = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}&category_ids=220&filter=deliveryCountry:US`;
 
         const res = await fetch(searchUrl, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
         const data = await res.json();
+        const total = data.total || 0;
         const items = (data.itemSummaries || []).map(item => ({
             id: item.itemId,
             title: item.title,
@@ -50,7 +51,7 @@ exports.handler = async (event) => {
 
         return {
             statusCode: 200,
-            body: JSON.stringify({ items })
+            body: JSON.stringify({ items, total })
         };
     } catch (error) {
         return {
