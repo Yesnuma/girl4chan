@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <title>Profile Photo Picker - Live Test</title>
+    <title>Profile Photo Picker - v3</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
         body {
             font-family: 'Courier New', Courier, monospace;
             background-color: #f0e0d6;
@@ -15,19 +14,11 @@
             min-height: 100vh;
             padding: 16px;
         }
-
         h1 { font-size: 16px; margin-bottom: 4px; }
         .subtitle { font-size: 10px; color: #666; margin-bottom: 20px; }
-
         .step { display: none; }
         .step.active { display: block; }
-
-        .category { margin-bottom: 16px; }
-        .category-label { font-size: 11px; font-weight: bold; margin-bottom: 6px; }
-        .category-hint { font-size: 9px; color: #999; margin-bottom: 8px; }
-
-        .tag-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-
+        .tag-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
         .vibe-tag {
             padding: 6px 14px;
             font-family: 'Courier New', monospace;
@@ -37,16 +28,13 @@
             color: #333;
             cursor: pointer;
         }
-
         .vibe-tag.selected {
             background: #0600ff;
             color: #fff;
             border-color: #0600ff;
         }
-
         .counter { text-align: center; font-size: 11px; color: #666; margin: 12px 0; }
         .counter strong { color: #0600ff; }
-
         .btn {
             display: block;
             width: 100%;
@@ -57,20 +45,17 @@
             border: 2px solid #000;
             cursor: pointer;
             text-align: center;
-            margin-top: 16px;
+            margin-top: 12px;
         }
-
         .btn-primary { background: #0600ff; color: #fff; box-shadow: 3px 3px 0 #000; }
         .btn-primary:disabled { background: #999; cursor: not-allowed; box-shadow: none; }
         .btn-secondary { background: #f5ecd7; color: #333; }
-
         .results-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 6px;
             margin-top: 8px;
         }
-
         .result-item {
             aspect-ratio: 1;
             border: 2px solid #8b7355;
@@ -79,163 +64,91 @@
             position: relative;
             background: #e8dcc8;
         }
-
         .result-item img { width: 100%; height: 100%; object-fit: cover; }
-
         .result-item.selected { border-color: #0600ff; border-width: 3px; }
-
         .result-item.selected::after {
             content: '✓';
-            position: absolute;
-            top: 4px;
-            right: 4px;
-            background: #0600ff;
-            color: #fff;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
+            position: absolute; top: 4px; right: 4px;
+            background: #0600ff; color: #fff;
+            width: 20px; height: 20px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; font-size: 12px;
         }
-
         .preview-section { display: flex; flex-direction: column; align-items: center; margin-top: 20px; }
-
         .preview-photo {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            border: 3px solid #8b7355;
-            overflow: hidden;
-            margin-bottom: 12px;
+            width: 120px; height: 120px; border-radius: 50%;
+            border: 3px solid #8b7355; overflow: hidden; margin-bottom: 12px;
         }
-
         .preview-photo img { width: 100%; height: 100%; object-fit: cover; }
         .preview-name { font-size: 16px; font-weight: bold; }
         .preview-note { font-size: 9px; color: #999; margin-top: 8px; text-align: center; }
-
-        .loading-msg {
-            text-align: center;
-            padding: 30px;
-            font-size: 11px;
-            color: #666;
-        }
-
-        .search-label {
-            font-size: 9px;
-            color: #8b7355;
-            margin-top: 12px;
-            margin-bottom: 4px;
-        }
-
+        .loading-msg { text-align: center; padding: 30px; font-size: 11px; color: #666; }
+        .search-label { font-size: 9px; color: #8b7355; margin-top: 12px; margin-bottom: 4px; }
         .section-divider { height: 1px; background: #d4c5b0; margin: 12px 0; }
-
         .debug {
-            margin-top: 20px;
-            padding: 12px;
-            background: #fff;
-            border: 1px solid #ddd;
-            font-size: 9px;
-            white-space: pre-wrap;
-            max-height: 300px;
-            overflow-y: auto;
+            margin-top: 20px; padding: 12px; background: #fff; border: 1px solid #ddd;
+            font-size: 9px; white-space: pre-wrap; max-height: 400px; overflow-y: auto;
         }
-
         .debug-label { font-size: 10px; font-weight: bold; margin-top: 16px; margin-bottom: 4px; }
-
         .manual-search {
-            margin-top: 16px;
-            padding: 12px;
-            background: #fff;
-            border: 2px solid #8b7355;
+            margin-top: 16px; padding: 12px; background: #fff; border: 2px solid #8b7355;
         }
-
         .manual-search input {
-            width: 100%;
-            padding: 8px;
-            font-family: 'Courier New', monospace;
-            font-size: 11px;
-            border: 1px solid #8b7355;
-            margin-bottom: 8px;
+            width: 100%; padding: 8px; font-family: 'Courier New', monospace;
+            font-size: 11px; border: 1px solid #8b7355; margin-bottom: 8px;
+        }
+        .combo-tag { 
+            display: inline-block; padding: 2px 6px; font-size: 8px; 
+            background: #ff007a; color: #fff; margin: 1px; border-radius: 2px;
         }
     </style>
 </head>
 <body>
 
-    <!-- STEP 1: Pick Your Vibes -->
+    <!-- STEP 1 -->
     <div class="step active" id="step1">
         <h1>pick your vibe</h1>
-        <div class="subtitle">choose 5-10 tags that describe your energy. this determines your profile photo options!</div>
+        <div class="subtitle">choose 3-5 tags that describe you. your combo unlocks unique results!</div>
 
-        <div class="category">
-            <div class="category-label">ENERGY</div>
-            <div class="category-hint">pick 2-3</div>
-            <div class="tag-grid">
-                <span class="vibe-tag" data-cat="energy">sweet</span>
-                <span class="vibe-tag" data-cat="energy">edgy</span>
-                <span class="vibe-tag" data-cat="energy">chaotic</span>
-                <span class="vibe-tag" data-cat="energy">chill</span>
-                <span class="vibe-tag" data-cat="energy">weird</span>
-                <span class="vibe-tag" data-cat="energy">elegant</span>
-                <span class="vibe-tag" data-cat="energy">sporty</span>
-                <span class="vibe-tag" data-cat="energy">romantic</span>
-                <span class="vibe-tag" data-cat="energy">dark</span>
-                <span class="vibe-tag" data-cat="energy">loud</span>
-                <span class="vibe-tag" data-cat="energy">funny</span>
-                <span class="vibe-tag" data-cat="energy">spooky</span>
-                <span class="vibe-tag" data-cat="energy">macho</span>
-            </div>
-        </div>
-
-        <div class="category">
-            <div class="category-label">ERA</div>
-            <div class="category-hint">pick 1-2</div>
-            <div class="tag-grid">
-                <span class="vibe-tag" data-cat="era">y2k</span>
-                <span class="vibe-tag" data-cat="era">90s</span>
-                <span class="vibe-tag" data-cat="era">80s</span>
-                <span class="vibe-tag" data-cat="era">70s</span>
-                <span class="vibe-tag" data-cat="era">vintage</span>
-                <span class="vibe-tag" data-cat="era">retro</span>
-                <span class="vibe-tag" data-cat="era">modern</span>
-            </div>
-        </div>
-
-        <div class="category">
-            <div class="category-label">STYLE</div>
-            <div class="category-hint">pick 1-3</div>
-            <div class="tag-grid">
-                <span class="vibe-tag" data-cat="style">girly</span>
-                <span class="vibe-tag" data-cat="style">grunge</span>
-                <span class="vibe-tag" data-cat="style">preppy</span>
-                <span class="vibe-tag" data-cat="style">streetwear</span>
-                <span class="vibe-tag" data-cat="style">cottagecore</span>
-                <span class="vibe-tag" data-cat="style">goth</span>
-                <span class="vibe-tag" data-cat="style">coquette</span>
-                <span class="vibe-tag" data-cat="style">minimal</span>
-                <span class="vibe-tag" data-cat="style">boho</span>
-                <span class="vibe-tag" data-cat="style">punk</span>
-                <span class="vibe-tag" data-cat="style">anime</span>
-                <span class="vibe-tag" data-cat="style">artsy</span>
-            </div>
-        </div>
-
-        <div class="category">
-            <div class="category-label">TYPE</div>
-            <div class="category-hint">pick 1 — what kind of object speaks to you?</div>
-            <div class="tag-grid">
-                <span class="vibe-tag" data-cat="type">plush</span>
-                <span class="vibe-tag" data-cat="type">doll</span>
-                <span class="vibe-tag" data-cat="type">figurine</span>
-                <span class="vibe-tag" data-cat="type">action figure</span>
-                <span class="vibe-tag" data-cat="type">vinyl toy</span>
-                <span class="vibe-tag" data-cat="type">miniature</span>
-            </div>
+        <div class="tag-grid" id="tagPool">
+            <!-- Vibes -->
+            <span class="vibe-tag">sweet</span>
+            <span class="vibe-tag">chaotic</span>
+            <span class="vibe-tag">weird</span>
+            <span class="vibe-tag">elegant</span>
+            <span class="vibe-tag">sporty</span>
+            <span class="vibe-tag">loud</span>
+            <span class="vibe-tag">funny</span>
+            <span class="vibe-tag">spooky</span>
+            <span class="vibe-tag">macho</span>
+            <span class="vibe-tag">squishy</span>
+            <span class="vibe-tag">derpy</span>
+            <span class="vibe-tag">mischievous</span>
+            <span class="vibe-tag">adventurous</span>
+            <span class="vibe-tag">fantasy</span>
+            <!-- Styles -->
+            <span class="vibe-tag">girly</span>
+            <span class="vibe-tag">grunge</span>
+            <span class="vibe-tag">preppy</span>
+            <span class="vibe-tag">streetwear</span>
+            <span class="vibe-tag">cottagecore</span>
+            <span class="vibe-tag">goth</span>
+            <span class="vibe-tag">coquette</span>
+            <span class="vibe-tag">minimal</span>
+            <span class="vibe-tag">boho</span>
+            <span class="vibe-tag">punk</span>
+            <span class="vibe-tag">anime</span>
+            <span class="vibe-tag">artsy</span>
+            <!-- Eras as vibes -->
+            <span class="vibe-tag">y2k</span>
+            <span class="vibe-tag">90s</span>
+            <span class="vibe-tag">vintage</span>
+            <span class="vibe-tag">neon</span>
+            <span class="vibe-tag">colorful</span>
+            <span class="vibe-tag">traditional</span>
         </div>
 
         <div class="counter">
-            <strong id="tagCount">0</strong> / 10 selected
+            <strong id="tagCount">0</strong> / 5 selected
         </div>
 
         <button class="btn btn-primary" id="generateBtn" disabled onclick="generateSearches()">
@@ -245,36 +158,30 @@
         <div class="section-divider"></div>
 
         <div class="manual-search">
-            <div class="category-label">🔧 MANUAL TEST SEARCH</div>
-            <div class="category-hint">type any query to test eBay results directly</div>
-            <input type="text" id="manualQuery" placeholder="e.g. pink bratz doll">
+            <div class="debug-label">🔧 MANUAL TEST SEARCH</div>
+            <input type="text" id="manualQuery" placeholder="e.g. littlest pet shop plush">
             <button class="btn btn-secondary" onclick="manualSearch()" style="margin-top:0;">search eBay →</button>
             <div id="manualResults" class="results-grid" style="margin-top:8px;"></div>
         </div>
     </div>
 
-    <!-- STEP 2: Browse Results -->
+    <!-- STEP 2 -->
     <div class="step" id="step2">
         <h1>choose your forever photo</h1>
         <div class="subtitle">tap one to select — this is permanent!</div>
-
         <button class="btn btn-secondary" onclick="goBack()" style="margin-bottom:12px;">← pick different vibes</button>
-
         <div id="resultsContainer"></div>
-        
         <button class="btn btn-primary" id="confirmBtn" disabled onclick="confirmPhoto()" style="margin-top:16px;">
             this is the one ♡
         </button>
     </div>
 
-    <!-- STEP 3: Confirmation -->
+    <!-- STEP 3 -->
     <div class="step" id="step3">
         <div class="preview-section">
             <h1>your profile photo</h1>
             <div class="subtitle">locked in forever ✦</div>
-            <div class="preview-photo">
-                <img id="previewImg" src="" alt="">
-            </div>
+            <div class="preview-photo"><img id="previewImg" src="" alt=""></div>
             <div class="preview-name">username.finds</div>
             <div class="preview-note">this photo is permanently yours.<br>nobody else can choose it.</div>
         </div>
@@ -282,125 +189,431 @@
 
     <!-- Debug -->
     <div class="section-divider" style="margin-top:30px;"></div>
-    <div class="debug-label">🔧 debug: search query mapping</div>
-    <div class="debug" id="debugOutput">Select vibes to see generated queries...</div>
+    <div class="debug-label">🔧 debug panel</div>
+    <div class="debug" id="debugOutput">Select vibes to see what searches will run...</div>
 
     <script>
         const API_URL = 'https://girlchan.shopfinds.app/.netlify/functions/ebay-toy-search';
 
-        const VIBE_SEARCH_MAP = {
-            energy: {
-                'sweet': ['cute', 'kawaii', 'adorable', 'sanrio', 'my melody', 'hello kitty'],
-                'edgy': ['punk', 'alternative', 'rebel', 'chain', 'spike'],
-                'chaotic': ['weird', 'wacky', 'funky', 'silly', 'random'],
-                'chill': ['soft', 'calm', 'zen', 'peaceful', 'sleepy'],
-                'weird': ['strange', 'creepy cute', 'oddity', 'bizarre', 'alien'],
-                'elegant': ['porcelain', 'delicate', 'crystal', 'glass', 'royal'],
-                'sporty': ['sports', 'mascot', 'athletic', 'jersey', 'champion'],
-                'romantic': ['angel', 'heart', 'cherub', 'love', 'cupid', 'rose'],
-                'dark': ['gothic', 'dark', 'shadow', 'midnight', 'black cat'],
-                'loud': ['neon', 'bold', 'oversized', 'giant', 'flashy'],
-                'funny': ['funny', 'silly', 'goofy', 'bobblehead', 'comedy'],
-                'spooky': ['halloween', 'skeleton', 'ghost', 'witch', 'bat', 'spider'],
-                'macho': ['weightlifting', 'muscles', 'wrestler figure', 'bodybuilder', 'strong man', 'boxing figure', 'hulk']
-            },
-            era: {
-                'y2k': ['bratz', 'polly pocket', 'littlest pet shop', 'powerpuff girls', 'totally spies', 'winx'],
-                '90s': ['90s toy', 'beanie baby', 'furby', 'troll doll', 'tamagotchi', 'power rangers', 'rugrats'],
-                '80s': ['care bears', 'my little pony vintage', 'strawberry shortcake', 'rainbow brite', 'jem doll', 'popples'],
-                '70s': ['70s vintage toy', 'retro doll', 'holly hobbie', 'liddle kiddles'],
-                'vintage': ['vintage toy', 'antique doll', 'vintage figurine', 'retro collectible', 'vintage plush'],
-                'retro': ['retro toy', 'classic toy', 'throwback toy', 'nostalgia toy'],
-                'modern': ['designer toy', 'art toy', 'contemporary collectible', 'sonny angel']
-            },
-            style: {
-                'girly': ['barbie', 'fairy figurine', 'princess doll', 'ballerina figurine', 'mermaid doll', 'butterfly figurine'],
-                'grunge': ['monster high', 'ugly doll', 'rag doll', 'voodoo doll', 'zombie figure'],
-                'preppy': ['sylvanian families', 'calico critters', 'precious moments', 'madeline doll', 'american girl mini'],
-                'streetwear': ['bearbrick', 'kaws', 'kidrobot', 'funko pop', 'medicom', 'dunny'],
-                'cottagecore': ['woodland figurine', 'bunny figurine', 'mushroom figurine', 'forest animal', 'garden fairy', 'fawn figurine'],
-                'goth': ['gothic doll', 'living dead dolls', 'vampire figurine', 'dark fairy', 'black cat figurine', 'skull figurine', 'bat figurine'],
-                'coquette': ['angel figurine', 'cherub', 'ballerina', 'bow doll', 'porcelain doll', 'ballet figurine', 'swan figurine'],
-                'minimal': ['wooden toy', 'simple figurine', 'scandinavian toy', 'muji', 'plain doll'],
-                'boho': ['handmade doll', 'folk art figurine', 'ceramic animal', 'dreamcatcher', 'macrame doll'],
-                'punk': ['punk figure', 'mohawk doll', 'anarchy', 'safety pin', 'studded'],
-                'anime': ['anime figure', 'nendoroid', 'sanrio', 'chibi figure', 'sailor moon figure', 'studio ghibli', 'totoro'],
-                'artsy': ['art toy', 'designer vinyl', 'sculpture figure', 'abstract figurine', 'pop art toy', 'museum figure']
-            },
-            type: {
-                'plush': ['plush', 'stuffed animal', 'plushie'],
-                'doll': ['doll', 'fashion doll', 'mini doll'],
-                'figurine': ['figurine', 'collectible figure', 'statue'],
-                'action figure': ['action figure', 'poseable figure', 'articulated figure'],
-                'vinyl toy': ['vinyl figure', 'designer toy', 'art toy'],
-                'miniature': ['miniature', 'mini figure', 'tiny toy', 'micro figure']
-            }
+        // ═══════════════════════════════════════
+        // BASE SEARCHES: each tag triggers these
+        // ═══════════════════════════════════════
+        const BASE_SEARCHES = {
+            'sweet': [
+                'littlest pet shop plush', 'sanrio plush', 'hello kitty figurine',
+                'my melody plush', 'care bears plush', 'mamegoma plush',
+                'sumikko gurashi plush', 'shopkins plush', 'pound puppies',
+                'holly hobbie doll', 'angel figurine', 'sad sam plush'
+            ],
+            'chaotic': [
+                'furby', 'trollz doll', 'uglydoll', 'trash pack',
+                'grossery gang', 'food fighters toy', 'boglin',
+                'stitch plush', 'tasmanian devil figure'
+            ],
+            'weird': [
+                'fuggler', 'gashapon figure', 'creepy cute doll',
+                'oddity figurine', 'alien figure', 'novi stars doll',
+                'enchantimals', 'betty spaghetty', 'rat fink figure',
+                'rushton doll'
+            ],
+            'elegant': [
+                'porcelain doll', 'willow tree figurine', 'hummel figurine',
+                'crystal figurine', 'glass animal figure', 'royal doll',
+                'corpse bride doll', 'delicate figurine', 'swan figurine',
+                'ballet figurine'
+            ],
+            'sporty': [
+                'sports mascot plush', 'bobblehead', 'sports figurine',
+                'mascot doll', 'champion figure', 'olympic mascot'
+            ],
+            'loud': [
+                'neon toy', 'giant plush', 'oversized doll',
+                'bold figurine', 'rainbow brite', 'popples',
+                'trollz doll', 'equestria girls doll'
+            ],
+            'funny': [
+                'bobblehead', 'silly figurine', 'goofy plush',
+                'pee-wee herman figure', 'comedy figure', 'weird bobblehead',
+                'garbage pail kids figure', 'madballs'
+            ],
+            'spooky': [
+                'halloween figurine', 'skeleton doll', 'ghost plush',
+                'witch figure', 'bat plush', 'creepy doll',
+                'haunted doll', 'day of the dead figurine', 'sugar skull doll',
+                'coraline doll', 'nightmare before christmas figure',
+                'cthulhu plush', 'mothman plush', 'cryptid plush'
+            ],
+            'macho': [
+                'wrestler figure', 'bodybuilder toy', 'muscles plush',
+                'boxing figure', 'hulk figure', 'he-man figure',
+                'wwe figure', 'lucha libre figure', 'sumo wrestler figure',
+                'she-ra doll', 'street fighter figure'
+            ],
+            'squishy': [
+                'squishmallow', 'pusheen plush', 'sumikko gurashi',
+                'molang plush', 'mamegoma', 'kirby plush',
+                'round plush', 'blob plush', 'pillow pet'
+            ],
+            'derpy': [
+                'puffkins', 'ugly cute plush', 'derpy animal plush',
+                'pound puppies', 'webkinz', 'ty beanie boo',
+                'dumbo plush', 'goofy plush'
+            ],
+            'mischievous': [
+                'mogwai plush', 'gizmo plush', 'stitch plush',
+                'cheshire cat figure', 'jack skellington figure',
+                'gremlin figure', 'beetlejuice figure'
+            ],
+            'adventurous': [
+                'kirby plush adventure', 'explorer figurine',
+                'pirate figure', 'treasure figure',
+                'indiana jones figure', 'adventure plush',
+                'playmobil adventurous', 'lego minifigure adventure'
+            ],
+            'fantasy': [
+                'fairy figurine', 'mermaid figurine', 'dragon figure',
+                'unicorn plush', 'neopets plush', 'ever after high doll',
+                'enchanted figurine', 'mythical creature figure',
+                'wizard figurine', 'elf doll'
+            ],
+            'girly': [
+                'barbie doll', 'bratz doll', 'polly pocket',
+                'princess doll', 'fairy doll', 'ballerina figurine',
+                'mermaid doll', 'butterfly figurine', 'winx club doll',
+                'diva starz', 'tinkerbell doll', 'popples'
+            ],
+            'grunge': [
+                'monster high doll', 'ugly doll', 'rag doll',
+                'voodoo doll', 'zombie figure', 'grungy plush',
+                'lalaloopsy', 'bratz rock angelz'
+            ],
+            'preppy': [
+                'sylvanian families', 'calico critters', 'precious moments',
+                'madeline doll', 'american girl mini', 'groovy girls'
+            ],
+            'streetwear': [
+                'bearbrick', 'kaws figure', 'kidrobot dunny',
+                'funko pop', 'medicom figure', 'superplastic janky',
+                'supreme figure', 'tokidoki'
+            ],
+            'cottagecore': [
+                'woodland figurine', 'bunny figurine', 'mushroom figurine',
+                'forest animal toy', 'garden fairy figurine', 'fawn figurine',
+                'hedgehog figurine', 'owl figurine', 'fox figurine',
+                'deer figurine', 'pikmin plush', 'schleich animal',
+                'holly hobbie doll', 'cottagecore doll'
+            ],
+            'goth': [
+                'gothic doll', 'living dead dolls', 'vampire figurine',
+                'dark fairy figurine', 'black cat figurine', 'skull figurine',
+                'bat figurine', 'corpse bride doll', 'elvira figure',
+                'addams family figure', 'edward scissorhands figure',
+                'pullip doll'
+            ],
+            'coquette': [
+                'angel figurine', 'cherub figurine', 'ballerina doll',
+                'bow doll', 'porcelain doll', 'swan figurine',
+                'ballet figurine', 'cupid figurine', 'rose figurine',
+                'ever after high doll', 'betty boop figurine'
+            ],
+            'minimal': [
+                'wooden toy figure', 'simple figurine', 'scandinavian toy',
+                'muji figure', 'plain doll', 'kokeshi doll',
+                'sonny angel', 'kewpie doll'
+            ],
+            'boho': [
+                'handmade doll', 'folk art figurine', 'ceramic animal figure',
+                'macrame doll', 'matryoshka doll', 'dreamcatcher doll',
+                'bohemian figurine'
+            ],
+            'punk': [
+                'punk figure', 'mohawk doll', 'studded toy',
+                'safety pin doll', 'anarchy figure', 'jem holograms doll',
+                'rebel doll', 'sid vicious figure'
+            ],
+            'anime': [
+                'nendoroid', 'sailor moon figure', 'studio ghibli figure',
+                'totoro plush', 'sanrio figure', 'chibi figure',
+                'hatsune miku figure', 'pokemon plush', 'kirby plush',
+                'doraemon plush', 'hamtaro plush', 'rilakkuma plush',
+                'kuromi plush', 'cinnamoroll plush', 'gudetama figure',
+                'aggretsuko figure'
+            ],
+            'artsy': [
+                'art toy designer', 'designer vinyl figure', 'sculpture figurine',
+                'pop art toy', 'museum figure', 'takashi murakami figure',
+                'gary baseman figure', 'mark ryden figure', 'low brow art toy',
+                'pullip doll'
+            ],
+            'y2k': [
+                'bratz doll', 'polly pocket compact', 'littlest pet shop',
+                'powerpuff girls figure', 'totally spies doll', 'winx doll',
+                'idog', 'diva starz', 'betty spaghetty',
+                'trollz doll', 'bratz babyz'
+            ],
+            '90s': [
+                'beanie baby', 'furby', 'troll doll', 'tamagotchi',
+                'power rangers figure', 'rugrats figure', 'polly pocket vintage',
+                'gak toy', 'skip it toy', 'lisa frank figure',
+                'pound puppies vintage', 'neopets plush'
+            ],
+            'vintage': [
+                'vintage doll', 'antique figurine', 'retro toy',
+                'vintage plush', 'vintage figurine', 'liddle kiddles',
+                'dawn doll vintage', 'flatsy doll', 'hummel figurine',
+                'matryoshka doll', 'holly hobbie vintage'
+            ],
+            'neon': [
+                'neon toy', 'rainbow brite', 'popples', 'trollz neon',
+                'equestria girls', 'jem holograms', 'neon plush',
+                'glow toy', 'blacklight figure', 'lisa frank'
+            ],
+            'colorful': [
+                'rainbow toy', 'colorful plush', 'rainbow figurine',
+                'tie dye plush', 'multicolor doll', 'care bears',
+                'rainbow brite', 'lisa frank', 'popples'
+            ],
+            'traditional': [
+                'kokeshi doll', 'matryoshka doll', 'hummel figurine',
+                'willow tree figurine', 'precious moments', 'angel figurine',
+                'folk doll', 'cultural doll', 'handmade traditional doll'
+            ]
         };
 
-        let selectedVibes = { energy: [], era: [], style: [], type: [] };
+        // ═══════════════════════════════════════
+        // COMBO SEARCHES: triggered by specific pairs
+        // ═══════════════════════════════════════
+        const COMBO_SEARCHES = {
+            'sweet+spooky': [
+                'cute ghost plush', 'kawaii skeleton', 'adorable witch doll',
+                'pastel halloween', 'ty beanie boo halloween', 'coraline doll',
+                'lalaloopsy', 'gloomy bear'
+            ],
+            'sweet+girly': [
+                'hello kitty pink plush', 'sanrio my melody', 'fairy kei doll',
+                'pink princess plush', 'littlest pet shop plush pink',
+                'popples pink', 'mamegoma pink'
+            ],
+            'sweet+cottagecore': [
+                'cute bunny plush', 'kawaii mushroom figurine', 'sweet garden fairy',
+                'fawn plush cute', 'hedgehog plush', 'sylvanian families baby'
+            ],
+            'sweet+anime': [
+                'cinnamoroll plush', 'my melody plush', 'pompompurin plush',
+                'rilakkuma plush', 'molang plush', 'hamtaro plush',
+                'chi sweet home cat'
+            ],
+            'sweet+squishy': [
+                'squishmallow pink', 'pusheen plush', 'sumikko gurashi',
+                'mamegoma seal', 'kirby plush sleepy', 'molang round plush'
+            ],
+            'spooky+elegant': [
+                'haunted porcelain doll', 'creepy vintage doll', 'gothic angel figurine',
+                'corpse bride figure', 'ghostly figurine', 'dark swan figurine'
+            ],
+            'spooky+weird': [
+                'haunted doll', 'creepy doll vintage', 'possessed doll',
+                'bizarre figurine scary', 'chucky doll', 'annabelle doll',
+                'cryptid plush', 'mothman plush'
+            ],
+            'spooky+coquette': [
+                'haunted ballerina doll', 'creepy angel figurine',
+                'dark cherub figure', 'gothic ballet doll'
+            ],
+            'spooky+cute': [
+                'cute ghost plush', 'kawaii bat plush', 'adorable skeleton figure',
+                'mogwai plush', 'gizmo plush'
+            ],
+            'weird+elegant': [
+                'strange porcelain doll', 'odd vintage figurine',
+                'surreal doll', 'uncanny figurine'
+            ],
+            'weird+girly': [
+                'betty spaghetty', 'novi stars doll', 'enchantimals',
+                'monster high', 'bratz weird', 'alien doll cute'
+            ],
+            'macho+funny': [
+                'silly wrestler toy', 'funny bodybuilder figurine',
+                'goofy muscles plush', 'comedy wrestling figure',
+                'sumo wrestler cute'
+            ],
+            'macho+sweet': [
+                'cute wrestler plush', 'kawaii bodybuilder',
+                'adorable muscles toy', 'sweet strong man figure'
+            ],
+            'macho+anime': [
+                'anime muscle figure', 'dragon ball figure',
+                'one piece figure', 'jojo bizarre adventure figure',
+                'buff anime figurine'
+            ],
+            'goth+girly': [
+                'monster high doll', 'gothic barbie', 'dark fairy doll',
+                'vampire princess', 'living dead dolls pretty',
+                'pullip doll gothic'
+            ],
+            'goth+elegant': [
+                'gothic porcelain doll', 'dark crystal figurine',
+                'vampire elegant figure', 'corpse bride doll',
+                'dark swan figurine', 'black glass figurine'
+            ],
+            'goth+anime': [
+                'dark anime figure', 'gothic nendoroid', 'kuromi plush',
+                'death note figure', 'tokyo ghoul figure', 'gothic sailor moon'
+            ],
+            'punk+girly': [
+                'monster high doll', 'rebel barbie', 'punk princess doll',
+                'jem holograms doll', 'bratz rock angelz',
+                'ever after high rebel'
+            ],
+            'cottagecore+weird': [
+                'frog figurine', 'weird mushroom toy', 'strange woodland creature',
+                'creepy garden gnome', 'odd forest figurine', 'pikmin plush'
+            ],
+            'cottagecore+fantasy': [
+                'fairy garden figurine', 'enchanted forest toy',
+                'magical woodland creature', 'unicorn cottagecore',
+                'fairy mushroom house'
+            ],
+            'streetwear+artsy': [
+                'kaws figure', 'bearbrick art', 'designer vinyl limited',
+                'takashi murakami figure', 'superplastic janky',
+                'ron english figure'
+            ],
+            'anime+mischievous': [
+                'stitch plush', 'mewtwo figure', 'gengar plush',
+                'jigglypuff angry', 'team rocket figure'
+            ],
+            'vintage+sweet': [
+                'vintage care bears', 'retro strawberry shortcake',
+                'vintage my little pony', 'antique kewpie doll',
+                'vintage angel figurine'
+            ],
+            'vintage+spooky': [
+                'vintage halloween toy', 'antique creepy doll',
+                'retro skeleton', 'vintage witch figurine',
+                'haunted antique doll'
+            ],
+            'y2k+girly': [
+                'bratz doll pink', 'polly pocket compact', 'diva starz',
+                'totally spies doll', 'winx club doll', 'bratz babyz'
+            ],
+            'y2k+weird': [
+                'furby', 'idog toy', 'betty spaghetty',
+                'novi stars', 'trollz doll', 'tamagotchi'
+            ],
+            '90s+sweet': [
+                'beanie baby cute', 'pound puppies 90s', 'precious moments 90s',
+                'polly pocket 90s', 'littlest pet shop 90s'
+            ],
+            '90s+chaotic': [
+                'furby boom', 'troll doll wild', 'rugrats figure',
+                'ren stimpy figure', 'beavis butthead figure'
+            ],
+            'minimal+elegant': [
+                'kokeshi doll', 'sonny angel', 'wooden figurine simple',
+                'scandinavian doll', 'porcelain minimal'
+            ],
+            'minimal+anime': [
+                'sonny angel', 'nendoroid simple', 'chibi figure minimal',
+                'gudetama figure', 'sumikko gurashi'
+            ],
+            'fantasy+girly': [
+                'mermaid doll', 'fairy princess figurine', 'unicorn doll',
+                'enchanted barbie', 'ever after high', 'tinkerbell doll'
+            ],
+            'adventurous+anime': [
+                'pokemon plush', 'one piece figure', 'naruto figure',
+                'kirby plush adventure', 'zelda figure', 'pikmin plush'
+            ],
+            'adventurous+sporty': [
+                'adventure figure', 'explorer doll', 'gi joe',
+                'action man figure', 'playmobil adventure'
+            ],
+            'neon+girly': [
+                'neon bratz', 'rainbow high doll', 'equestria girls',
+                'jem holograms', 'trollz neon', 'lisa frank'
+            ],
+            'colorful+sweet': [
+                'care bears rainbow', 'rainbow plush', 'tie dye plush cute',
+                'colorful sanrio', 'lisa frank figure'
+            ],
+            'derpy+sweet': [
+                'puffkins plush', 'ugly cute plush', 'derpy beanie baby',
+                'pound puppies derpy', 'webkinz', 'dumbo plush cute'
+            ],
+            'squishy+spooky': [
+                'squishmallow halloween', 'ghost squishmallow',
+                'bat plush round', 'skeleton squishy', 'gloomy bear'
+            ],
+            'mischievous+spooky': [
+                'mogwai plush', 'gizmo plush', 'gremlin figure',
+                'cheshire cat figure', 'jack skellington',
+                'beetlejuice figure', 'chucky figure'
+            ],
+            'boho+traditional': [
+                'matryoshka doll', 'folk art figurine', 'handmade cloth doll',
+                'cultural doll traditional', 'ceramic folk animal'
+            ]
+        };
+
+        // ═══════════════════════════════════════
+        // STATE
+        // ═══════════════════════════════════════
+        let selectedTags = [];
         let selectedPhoto = null;
 
         document.querySelectorAll('.vibe-tag').forEach(tag => {
             tag.onclick = () => {
-                const cat = tag.dataset.cat;
                 const value = tag.textContent;
                 if (tag.classList.contains('selected')) {
                     tag.classList.remove('selected');
-                    selectedVibes[cat] = selectedVibes[cat].filter(v => v !== value);
+                    selectedTags = selectedTags.filter(v => v !== value);
                 } else {
+                    if (selectedTags.length >= 5) return; // max 5
                     tag.classList.add('selected');
-                    selectedVibes[cat].push(value);
+                    selectedTags.push(value);
                 }
                 updateCounter();
                 updateDebug();
             };
         });
 
-        function getTotalSelected() {
-            return Object.values(selectedVibes).flat().length;
-        }
-
         function updateCounter() {
-            const count = getTotalSelected();
-            document.getElementById('tagCount').textContent = count;
-            document.getElementById('generateBtn').disabled = count < 5;
+            document.getElementById('tagCount').textContent = selectedTags.length;
+            document.getElementById('generateBtn').disabled = selectedTags.length < 3;
         }
 
+        // ═══════════════════════════════════════
+        // GENERATE QUERIES
+        // ═══════════════════════════════════════
         function generateSearchQueries() {
-            const queries = [];
-            const energies = selectedVibes.energy.flatMap(e => VIBE_SEARCH_MAP.energy[e] || []);
-            const eras = selectedVibes.era.flatMap(e => VIBE_SEARCH_MAP.era[e] || []);
-            const styles = selectedVibes.style.flatMap(s => VIBE_SEARCH_MAP.style[s] || []);
-            const types = selectedVibes.type.flatMap(t => VIBE_SEARCH_MAP.type[t] || []);
+            let comboQueries = [];
+            let baseQueries = [];
 
-            eras.forEach(era => {
-                if (types.length > 0) {
-                    types.slice(0, 2).forEach(type => queries.push(`${era} ${type}`));
-                } else {
-                    queries.push(era);
+            // 1. Check for combo matches (these show FIRST)
+            for (const [combo, searches] of Object.entries(COMBO_SEARCHES)) {
+                const tags = combo.split('+');
+                if (tags.every(t => selectedTags.includes(t))) {
+                    comboQueries.push(...searches);
                 }
-            });
-
-            styles.forEach(style => queries.push(style));
-
-            energies.slice(0, 4).forEach(energy => {
-                if (types.length > 0) {
-                    queries.push(`${energy} ${types[0]}`);
-                } else {
-                    queries.push(`${energy} toy figurine`);
-                }
-            });
-
-            if (energies.length > 0 && eras.length > 0) {
-                queries.push(`${energies[0]} ${eras[0]}`);
-            }
-            if (energies.length > 0 && styles.length > 0) {
-                queries.push(`${energies[0]} ${styles[0]}`);
             }
 
-            return [...new Set(queries)].slice(0, 10);
+            // 2. Add base searches for each selected tag
+            selectedTags.forEach(tag => {
+                const searches = BASE_SEARCHES[tag] || [];
+                // Pick up to 4 random ones from each tag
+                const shuffled = searches.sort(() => Math.random() - 0.5);
+                baseQueries.push(...shuffled.slice(0, 4));
+            });
+
+            // Deduplicate, combos first
+            const allQueries = [...new Set([...comboQueries, ...baseQueries])];
+            return allQueries.slice(0, 12);
         }
 
+        // ═══════════════════════════════════════
+        // EBAY SEARCH
+        // ═══════════════════════════════════════
         async function searchEbay(query, limit = 20, offset = 0) {
             try {
                 const res = await fetch(API_URL, {
@@ -418,7 +631,6 @@
 
         async function generateSearches() {
             const queries = generateSearchQueries();
-
             document.getElementById('step1').classList.remove('active');
             document.getElementById('step2').classList.add('active');
 
@@ -450,7 +662,7 @@
             const total = allResults.reduce((sum, r) => sum + r.items.length, 0);
             const countLabel = document.createElement('div');
             countLabel.style.cssText = 'text-align:center; font-size:10px; color:#666; margin-bottom:12px;';
-            countLabel.textContent = `${total} options found`;
+            countLabel.textContent = `${total} options found from ${allResults.length} searches`;
             container.appendChild(countLabel);
 
             allResults.forEach(({ query, items }) => {
@@ -461,7 +673,6 @@
 
                 const grid = document.createElement('div');
                 grid.className = 'results-grid';
-
                 items.forEach(item => {
                     const el = document.createElement('div');
                     el.className = 'result-item';
@@ -469,11 +680,8 @@
                     el.onclick = () => selectPhoto(el, item.image, item.id);
                     grid.appendChild(el);
                 });
-
                 container.appendChild(grid);
             });
-
-            updateDebug();
         }
 
         function selectPhoto(item, url, itemId) {
@@ -496,43 +704,36 @@
             selectedPhoto = null;
         }
 
-        // Manual search with see more
+        // ═══════════════════════════════════════
+        // MANUAL SEARCH
+        // ═══════════════════════════════════════
         let manualOffset = 0;
         let currentManualQuery = '';
 
         async function manualSearch(loadMore = false) {
             const query = document.getElementById('manualQuery').value.trim();
             if (!query) return;
-
             const grid = document.getElementById('manualResults');
-            
             if (!loadMore || query !== currentManualQuery) {
                 grid.innerHTML = '<div class="loading-msg">searching...</div>';
                 manualOffset = 0;
                 currentManualQuery = query;
             }
-
             const items = await searchEbay(query, 20, manualOffset);
-            
             if (manualOffset === 0) grid.innerHTML = '';
-
             if (items.length === 0 && manualOffset === 0) {
                 grid.innerHTML = '<div style="font-size:10px; color:#999; padding:8px;">no results</div>';
                 return;
             }
-
             items.forEach(item => {
                 const el = document.createElement('div');
                 el.className = 'result-item';
                 el.innerHTML = `<img src="${item.image}" alt="${item.title}">`;
                 grid.appendChild(el);
             });
-
             manualOffset += 20;
-
             const oldBtn = document.getElementById('seeMoreBtn');
             if (oldBtn) oldBtn.remove();
-
             if (items.length >= 20) {
                 const moreBtn = document.createElement('button');
                 moreBtn.id = 'seeMoreBtn';
@@ -544,16 +745,34 @@
             }
         }
 
+        // ═══════════════════════════════════════
+        // DEBUG
+        // ═══════════════════════════════════════
         function updateDebug() {
             const debug = document.getElementById('debugOutput');
             const queries = generateSearchQueries();
-            let output = 'SELECTED VIBES:\n';
-            Object.entries(selectedVibes).forEach(([cat, vals]) => {
-                if (vals.length > 0) output += `  ${cat}: ${vals.join(', ')}\n`;
-            });
-            output += '\nGENERATED QUERIES (' + queries.length + '):\n';
+            
+            let output = 'SELECTED: ' + selectedTags.join(', ') + '\n\n';
+
+            // Show combo matches
+            let comboMatches = [];
+            for (const [combo, searches] of Object.entries(COMBO_SEARCHES)) {
+                const tags = combo.split('+');
+                if (tags.every(t => selectedTags.includes(t))) {
+                    comboMatches.push(combo);
+                }
+            }
+            if (comboMatches.length > 0) {
+                output += '🔥 COMBO UNLOCKED:\n';
+                comboMatches.forEach(c => {
+                    output += `  ${c} → ${COMBO_SEARCHES[c].slice(0, 3).join(', ')}...\n`;
+                });
+                output += '\n';
+            }
+
+            output += 'SEARCHES (' + queries.length + '):\n';
             queries.forEach((q, i) => output += `  ${i+1}. "${q}"\n`);
-            output += '\nESTIMATED RESULTS: ~' + (queries.length * 20) + ' photos';
+            
             debug.textContent = output;
         }
     </script>
