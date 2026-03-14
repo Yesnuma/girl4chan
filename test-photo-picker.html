@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <title>Profile Photo Picker - v4</title>
+    <title>Profile Photo Picker - v5</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -68,6 +68,8 @@
             width: 100%; padding: 8px; font-family: 'Courier New', monospace;
             font-size: 11px; border: 1px solid #8b7355; margin-bottom: 8px;
         }
+        .btn-row { display: flex; gap: 8px; margin-top: 12px; }
+        .btn-row .btn { flex: 1; margin-top: 0; }
     </style>
 </head>
 <body>
@@ -134,12 +136,10 @@
         <button class="btn btn-secondary" onclick="goBack()" style="margin-bottom:12px;">← pick different vibes</button>
         <div class="result-count" id="resultCount"></div>
         <div class="results-grid" id="mainGrid"></div>
-        <button class="btn btn-secondary" id="showMoreBtn" onclick="loadMoreResults()" style="margin-top:12px; display:none;">
-            show me more →
-        </button>
-        <button class="btn btn-primary" id="confirmBtn" disabled onclick="confirmPhoto()" style="margin-top:12px;">
-            this is the one ♡
-        </button>
+        <div class="btn-row">
+            <button class="btn btn-secondary" onclick="refreshResults()">↻ refresh</button>
+            <button class="btn btn-primary" id="confirmBtn" disabled onclick="confirmPhoto()">this is the one ♡</button>
+        </div>
     </div>
 
     <!-- STEP 3 -->
@@ -160,10 +160,9 @@
 
     <script>
         const API_URL = 'https://girlchan.shopfinds.app/.netlify/functions/ebay-toy-search';
+        const MAX_PER_SEARCH = 3;
+        const TARGET_RESULTS = 50;
 
-        // ═══════════════════════════════════════
-        // BASE SEARCHES
-        // ═══════════════════════════════════════
         const BASE_SEARCHES = {
             'sweet': [
                 'littlest pet shop plush', 'sanrio plush', 'hello kitty figurine',
@@ -270,8 +269,7 @@
                 'woodland figurine', 'bunny figurine', 'mushroom figurine',
                 'forest animal toy', 'garden fairy figurine', 'fawn figurine',
                 'hedgehog figurine', 'owl figurine', 'fox figurine',
-                'deer figurine', 'pikmin plush', 'schleich animal',
-                'holly hobbie doll'
+                'deer figurine', 'pikmin plush', 'schleich animal', 'holly hobbie doll'
             ],
             'goth': [
                 'gothic doll', 'living dead dolls', 'vampire figurine',
@@ -319,8 +317,7 @@
             '90s': [
                 'beanie baby', 'furby', 'troll doll', 'tamagotchi',
                 'power rangers figure', 'rugrats figure', 'polly pocket vintage',
-                'lisa frank figure', 'pound puppies vintage', 'neopets plush',
-                'gak toy'
+                'lisa frank figure', 'pound puppies vintage', 'neopets plush'
             ],
             'vintage': [
                 'vintage doll', 'antique figurine', 'retro toy',
@@ -345,9 +342,6 @@
             ]
         };
 
-        // ═══════════════════════════════════════
-        // COMBO SEARCHES
-        // ═══════════════════════════════════════
         const COMBO_SEARCHES = {
             'sweet+spooky': [
                 'cute ghost plush', 'kawaii skeleton', 'adorable witch doll',
@@ -384,7 +378,7 @@
             ],
             'spooky+coquette': [
                 'haunted ballerina doll', 'creepy angel figurine',
-                'dark cherub figure', 'gothic ballet doll', 'phantom opera figurine'
+                'dark cherub figure', 'gothic ballet doll'
             ],
             'spooky+preppy': [
                 'halloween calico critters', 'spooky sylvanian families',
@@ -404,11 +398,11 @@
             ],
             'weird+elegant': [
                 'strange porcelain doll', 'odd vintage figurine',
-                'surreal doll', 'uncanny figurine', 'bizarre porcelain'
+                'surreal doll', 'uncanny figurine'
             ],
             'weird+girly': [
                 'betty spaghetty', 'novi stars doll', 'enchantimals',
-                'monster high', 'alien doll cute', 'bratz weird'
+                'monster high', 'alien doll cute'
             ],
             'macho+funny': [
                 'silly wrestler toy', 'funny bodybuilder figurine',
@@ -436,11 +430,11 @@
             ],
             'punk+girly': [
                 'monster high doll', 'rebel barbie', 'punk princess doll',
-                'jem holograms doll', 'bratz rock angelz', 'ever after high rebel'
+                'jem holograms doll', 'bratz rock angelz'
             ],
             'cottagecore+weird': [
                 'frog figurine', 'weird mushroom toy', 'strange woodland creature',
-                'odd forest figurine', 'pikmin plush', 'creepy garden gnome'
+                'odd forest figurine', 'pikmin plush'
             ],
             'cottagecore+fantasy': [
                 'fairy garden figurine', 'enchanted forest toy',
@@ -448,7 +442,7 @@
             ],
             'streetwear+artsy': [
                 'kaws figure', 'bearbrick art', 'designer vinyl limited',
-                'takashi murakami figure', 'superplastic janky', 'ron english figure'
+                'takashi murakami figure', 'superplastic janky'
             ],
             'anime+mischievous': [
                 'gengar plush', 'mewtwo figure', 'team rocket figure',
@@ -480,7 +474,7 @@
             ],
             'fantasy+girly': [
                 'mermaid doll', 'fairy princess figurine', 'unicorn doll',
-                'ever after high', 'tinkerbell doll', 'enchanted barbie'
+                'ever after high', 'tinkerbell doll'
             ],
             'adventurous+anime': [
                 'pokemon plush', 'one piece figure', 'naruto figure',
@@ -506,9 +500,9 @@
                 'kirby plush round', 'squishmallow sanrio', 'pusheen',
                 'sumikko gurashi', 'molang plush', 'rilakkuma round'
             ],
-            'funny+macho': [
-                'silly wrestler toy', 'comedy bodybuilder', 'funny muscles figure',
-                'goofy wrestling plush', 'ridiculous action figure'
+            'squishy+spooky': [
+                'squishmallow halloween', 'ghost squishmallow',
+                'bat plush round', 'gloomy bear', 'skeleton squishy'
             ],
             'grunge+vintage': [
                 'vintage rag doll', 'retro monster doll', 'grunge 90s doll',
@@ -520,14 +514,9 @@
             ]
         };
 
-        // ═══════════════════════════════════════
-        // STATE
-        // ═══════════════════════════════════════
         let selectedTags = [];
         let selectedPhoto = null;
-        let allSearchQueries = [];
-        let currentQueryIndex = 0;
-        let seenImages = new Set();
+        let allItems = [];
 
         document.querySelectorAll('.vibe-tag').forEach(tag => {
             tag.onclick = () => {
@@ -550,14 +539,10 @@
             document.getElementById('generateBtn').disabled = selectedTags.length < 3;
         }
 
-        // ═══════════════════════════════════════
-        // GENERATE ALL QUERIES (combo first, then base shuffled)
-        // ═══════════════════════════════════════
         function buildAllQueries() {
             let comboQueries = [];
             let baseQueries = [];
 
-            // Combo matches first
             for (const [combo, searches] of Object.entries(COMBO_SEARCHES)) {
                 const tags = combo.split('+');
                 if (tags.every(t => selectedTags.includes(t))) {
@@ -565,23 +550,16 @@
                 }
             }
 
-            // Base searches — all of them, shuffled
             selectedTags.forEach(tag => {
                 const searches = BASE_SEARCHES[tag] || [];
                 baseQueries.push(...searches);
             });
 
-            // Shuffle base
             baseQueries.sort(() => Math.random() - 0.5);
-
-            // Deduplicate, combos first
             const all = [...new Set([...comboQueries, ...baseQueries])];
             return all;
         }
 
-        // ═══════════════════════════════════════
-        // SEARCH + RENDER
-        // ═══════════════════════════════════════
         async function searchEbay(query, limit = 20, offset = 0) {
             try {
                 const res = await fetch(API_URL, {
@@ -603,61 +581,83 @@
 
             const grid = document.getElementById('mainGrid');
             grid.innerHTML = '';
-            document.getElementById('resultCount').textContent = 'searching your vibe...';
-            document.getElementById('showMoreBtn').style.display = 'none';
+            document.getElementById('resultCount').textContent = 'curating your vibe...';
+            document.getElementById('confirmBtn').disabled = true;
+            selectedPhoto = null;
 
-            // Build all queries
-            allSearchQueries = buildAllQueries();
-            currentQueryIndex = 0;
-            seenImages = new Set();
+            allItems = [];
+            const seenImages = new Set();
+            const queries = buildAllQueries();
 
-            await loadBatch(grid);
-        }
+            // Search until we have ~50 results
+            for (const q of queries) {
+                if (allItems.length >= TARGET_RESULTS) break;
 
-        async function loadBatch(grid) {
-            if (!grid) grid = document.getElementById('mainGrid');
-            
-            let loaded = 0;
-            const batchSize = 6; // number of search queries per batch
-            const endIndex = Math.min(currentQueryIndex + batchSize, allSearchQueries.length);
-
-            for (let i = currentQueryIndex; i < endIndex; i++) {
-                const q = allSearchQueries[i];
-                const items = await searchEbay(q, 10);
-                const unique = items.filter(item => {
-                    if (seenImages.has(item.image)) return false;
+                const items = await searchEbay(q, 8);
+                let count = 0;
+                for (const item of items) {
+                    if (count >= MAX_PER_SEARCH) break;
+                    if (seenImages.has(item.image)) continue;
                     seenImages.add(item.image);
-                    return true;
-                });
-
-                unique.forEach(item => {
-                    const el = document.createElement('div');
-                    el.className = 'result-item';
-                    el.innerHTML = `<img src="${item.image}" alt="${item.title}">`;
-                    el.onclick = () => selectPhoto(el, item.image, item.id);
-                    grid.appendChild(el);
-                    loaded++;
-                });
+                    allItems.push(item);
+                    count++;
+                }
             }
 
-            currentQueryIndex = endIndex;
+            // Shuffle everything
+            allItems.sort(() => Math.random() - 0.5);
 
-            // Update count
-            const totalShown = grid.querySelectorAll('.result-item').length;
-            document.getElementById('resultCount').textContent = `${totalShown} options`;
-
-            // Show "more" button if there are more queries
-            if (currentQueryIndex < allSearchQueries.length) {
-                document.getElementById('showMoreBtn').style.display = 'block';
-            } else {
-                document.getElementById('showMoreBtn').style.display = 'none';
-            }
+            renderGrid();
         }
 
-        async function loadMoreResults() {
-            document.getElementById('showMoreBtn').textContent = 'loading...';
-            await loadBatch();
-            document.getElementById('showMoreBtn').textContent = 'show me more →';
+        function renderGrid() {
+            const grid = document.getElementById('mainGrid');
+            grid.innerHTML = '';
+
+            document.getElementById('resultCount').textContent = `${allItems.length} options`;
+
+            allItems.forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'result-item';
+                el.innerHTML = `<img src="${item.image}" alt="${item.title}">`;
+                el.onclick = () => selectPhoto(el, item.image, item.id);
+                grid.appendChild(el);
+            });
+        }
+
+        async function refreshResults() {
+            const grid = document.getElementById('mainGrid');
+            grid.innerHTML = '';
+            document.getElementById('resultCount').textContent = 'refreshing your vibe...';
+            document.getElementById('confirmBtn').disabled = true;
+            selectedPhoto = null;
+
+            allItems = [];
+            const seenImages = new Set();
+            const queries = buildAllQueries();
+
+            // Re-shuffle queries for different results
+            queries.sort(() => Math.random() - 0.5);
+
+            // Use offset to get different results this time
+            const randomOffset = Math.floor(Math.random() * 3) * 8;
+
+            for (const q of queries) {
+                if (allItems.length >= TARGET_RESULTS) break;
+
+                const items = await searchEbay(q, 8, randomOffset);
+                let count = 0;
+                for (const item of items) {
+                    if (count >= MAX_PER_SEARCH) break;
+                    if (seenImages.has(item.image)) continue;
+                    seenImages.add(item.image);
+                    allItems.push(item);
+                    count++;
+                }
+            }
+
+            allItems.sort(() => Math.random() - 0.5);
+            renderGrid();
         }
 
         function selectPhoto(item, url, itemId) {
@@ -680,9 +680,7 @@
             selectedPhoto = null;
         }
 
-        // ═══════════════════════════════════════
-        // MANUAL SEARCH
-        // ═══════════════════════════════════════
+        // Manual search
         let manualOffset = 0;
         let currentManualQuery = '';
 
@@ -721,31 +719,27 @@
             }
         }
 
-        // ═══════════════════════════════════════
-        // DEBUG
-        // ═══════════════════════════════════════
         function updateDebug() {
             const debug = document.getElementById('debugOutput');
             const queries = buildAllQueries();
-            
             let output = 'SELECTED: ' + selectedTags.join(', ') + '\n\n';
 
             let comboMatches = [];
             for (const [combo] of Object.entries(COMBO_SEARCHES)) {
                 const tags = combo.split('+');
-                if (tags.every(t => selectedTags.includes(t))) {
-                    comboMatches.push(combo);
-                }
+                if (tags.every(t => selectedTags.includes(t))) comboMatches.push(combo);
             }
             if (comboMatches.length > 0) {
-                output += '🔥 COMBOS UNLOCKED: ' + comboMatches.join(', ') + '\n\n';
+                output += '🔥 COMBOS: ' + comboMatches.join(', ') + '\n\n';
             }
 
-            output += 'TOTAL SEARCHES: ' + queries.length + '\n';
-            output += 'First 15:\n';
-            queries.slice(0, 15).forEach((q, i) => output += `  ${i+1}. "${q}"\n`);
-            if (queries.length > 15) output += `  ... and ${queries.length - 15} more`;
-            
+            output += 'TOTAL SEARCH TERMS: ' + queries.length + '\n';
+            output += 'MAX ' + MAX_PER_SEARCH + ' results per search\n';
+            output += 'TARGET: ~' + TARGET_RESULTS + ' mixed results\n\n';
+            output += 'First 20 queries:\n';
+            queries.slice(0, 20).forEach((q, i) => output += `  ${i+1}. "${q}"\n`);
+            if (queries.length > 20) output += `  ... and ${queries.length - 20} more`;
+
             debug.textContent = output;
         }
     </script>
