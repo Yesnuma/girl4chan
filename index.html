@@ -1035,6 +1035,63 @@
     box-sizing: border-box;
     background: #f8f8ff;
 }
+        @keyframes ppBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+#ppGrid .pp-item {
+    aspect-ratio: 1;
+    border: 2px solid #8b7355;
+    overflow: hidden;
+    cursor: pointer;
+    position: relative;
+    background: #e8dcc8;
+}
+
+#ppGrid .pp-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#ppGrid .pp-item.selected {
+    border-color: #0600ff;
+    border-width: 3px;
+}
+
+#ppGrid .pp-item.selected::after {
+    content: '✓';
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: #0600ff;
+    color: #fff;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.pp-tag {
+    padding: 6px 14px;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    border: 1.5px solid #8b7355;
+    background: #f5ecd7;
+    color: #333;
+    cursor: pointer;
+    display: inline-block;
+}
+
+.pp-tag.selected {
+    background: #0600ff;
+    color: #fff;
+    border-color: #0600ff;
+}
     </style>
 </head>
 <body>
@@ -3118,7 +3175,7 @@ window.saveCampaignId = async function() {
         statusDiv.style.color = '#ff0000';
     }
 };
-       // REPLACE your entire loadMyProfile function with this:
+    
 
 window.loadMyProfile = async function(addToHistory = true) {
             closeSidebar();
@@ -3161,7 +3218,12 @@ window.loadMyProfile = async function(addToHistory = true) {
                 if (photoSrc) {
                     photoEl.innerHTML = `<img src="${photoSrc}" style="width:100%;height:100%;object-fit:cover;">`;
                 } else {
-                    photoEl.innerHTML = `<span style="font-size:28px; color:#8b7355;">?</span>`;
+                    if (isPremium) {
+                        photoEl.innerHTML = `<span style="font-size:10px; color:#8b7355; text-align:center; font-family:Courier New,monospace;">tap to<br>choose</span>`;
+                        photoEl.onclick = () => openPhotoPicker();
+                    } else {
+                        photoEl.innerHTML = `<span style="font-size:28px; color:#8b7355;">?</span>`;
+                    }
                 }
                 profileHeader.appendChild(photoEl);
                 
@@ -3412,6 +3474,281 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 }
             } catch (error) {
                 console.error('Error loading likes:', error);
+            }
+        };
+
+        // ═══════════════════════════════════════
+        // PHOTO PICKER
+        // ═══════════════════════════════════════
+        
+        const PP_TAGS = ['sweet','chaotic','weird','elegant','sporty','loud','funny','spooky','macho','squishy','derpy','mischievous','adventurous','fantasy','girly','grunge','preppy','streetwear','cottagecore','goth','coquette','minimal','boho','punk','anime','artsy','y2k','90s','vintage','neon','colorful','traditional'];
+
+        const PP_BASE_SEARCHES = {
+            'sweet': ['littlest pet shop plush','sanrio plush','hello kitty figurine','my melody plush','care bears plush','mamegoma plush','sumikko gurashi plush','shopkins plush','pound puppies','holly hobbie doll','angel figurine','sad sam plush','precious moments figurine','strawberry shortcake doll'],
+            'chaotic': ['furby','trollz doll','uglydoll','trash pack','grossery gang','food fighters toy','boglin','stitch plush','tasmanian devil figure','ren stimpy figure'],
+            'weird': ['fuggler','gashapon figure','creepy cute doll','oddity figurine','alien figure','novi stars doll','enchantimals','betty spaghetty','rat fink figure','rushton doll','bizarre toy','strange figurine'],
+            'elegant': ['porcelain doll','willow tree figurine','hummel figurine','crystal figurine','glass animal figure','royal doll','corpse bride doll','delicate figurine','swan figurine','ballet figurine','faberge figure'],
+            'sporty': ['sports mascot plush','bobblehead','sports figurine','mascot doll','champion figure','olympic mascot','baseball figurine','basketball plush','trophy figure'],
+            'loud': ['neon toy','giant plush','oversized doll','bold figurine','rainbow brite','popples','trollz doll','equestria girls doll','lisa frank'],
+            'funny': ['bobblehead','silly figurine','goofy plush','pee-wee herman figure','comedy figure','weird bobblehead','garbage pail kids figure','madballs','wacky wobbler'],
+            'spooky': ['halloween figurine','skeleton doll','ghost plush','witch figure','bat plush','creepy doll','haunted doll','day of the dead figurine','sugar skull doll','coraline doll','nightmare before christmas figure','cthulhu plush','mothman plush','cryptid plush'],
+            'macho': ['wrestler figure','bodybuilder toy','muscles plush','boxing figure','hulk figure','he-man figure','wwe figure','lucha libre figure','sumo wrestler figure','she-ra doll','street fighter figure','the rock figure'],
+            'squishy': ['squishmallow','pusheen plush','sumikko gurashi','molang plush','mamegoma','kirby plush','round plush','blob plush','pillow pet','squishmallow mini','round stuffed animal'],
+            'derpy': ['puffkins','ugly cute plush','derpy animal plush','pound puppies','webkinz','ty beanie boo','dumbo plush','goofy plush','cross eyed plush'],
+            'mischievous': ['mogwai plush','gizmo plush','stitch plush','cheshire cat figure','jack skellington figure','gremlin figure','beetlejuice figure','loki figure'],
+            'adventurous': ['kirby plush adventure','explorer figurine','pirate figure','playmobil adventurous','lego minifigure adventure','indiana jones figure','zelda figure','link figure'],
+            'fantasy': ['fairy figurine','mermaid figurine','dragon figure','unicorn plush','neopets plush','ever after high doll','enchanted figurine','mythical creature figure','wizard figurine','elf doll','phoenix figure'],
+            'girly': ['barbie doll','bratz doll','polly pocket','princess doll','fairy doll','ballerina figurine','mermaid doll','butterfly figurine','winx club doll','diva starz','tinkerbell doll','rainbow high doll'],
+            'grunge': ['monster high doll','ugly doll','rag doll','voodoo doll','zombie figure','grungy plush','lalaloopsy','bratz rock angelz'],
+            'preppy': ['sylvanian families','calico critters','precious moments','madeline doll','american girl mini','groovy girls','classic teddy bear','ralph lauren bear'],
+            'streetwear': ['bearbrick','kaws figure','kidrobot dunny','funko pop','medicom figure','superplastic janky','supreme figure','tokidoki'],
+            'cottagecore': ['woodland figurine','bunny figurine','mushroom figurine','forest animal toy','garden fairy figurine','fawn figurine','hedgehog figurine','owl figurine','fox figurine','deer figurine','pikmin plush','schleich animal','holly hobbie doll'],
+            'goth': ['gothic doll','living dead dolls','vampire figurine','dark fairy figurine','black cat figurine','skull figurine','bat figurine','corpse bride doll','elvira figure','addams family figure','edward scissorhands figure','pullip doll'],
+            'coquette': ['angel figurine','cherub figurine','ballerina doll','bow doll','porcelain doll','swan figurine','ballet figurine','cupid figurine','rose figurine','ever after high doll','betty boop figurine'],
+            'minimal': ['wooden toy figure','simple figurine','scandinavian toy','muji figure','plain doll','kokeshi doll','sonny angel','kewpie doll'],
+            'boho': ['handmade doll','folk art figurine','ceramic animal figure','macrame doll','matryoshka doll','dreamcatcher doll'],
+            'punk': ['punk figure','mohawk doll','studded toy','safety pin doll','jem holograms doll','rebel doll','clash figure','ramones figure'],
+            'anime': ['nendoroid','sailor moon figure','studio ghibli figure','totoro plush','sanrio figure','chibi figure','hatsune miku figure','pokemon plush','kirby plush','doraemon plush','hamtaro plush','rilakkuma plush','kuromi plush','cinnamoroll plush','gudetama figure'],
+            'artsy': ['art toy designer','designer vinyl figure','sculpture figurine','pop art toy','museum figure','takashi murakami figure','gary baseman figure','low brow art toy','pullip doll'],
+            'y2k': ['bratz doll','polly pocket compact','littlest pet shop','powerpuff girls figure','totally spies doll','winx doll','idog','diva starz','betty spaghetty','trollz doll','bratz babyz'],
+            '90s': ['beanie baby','furby','troll doll','tamagotchi','power rangers figure','rugrats figure','polly pocket vintage','lisa frank figure','pound puppies vintage','neopets plush'],
+            'vintage': ['vintage doll','antique figurine','retro toy','vintage plush','vintage figurine','liddle kiddles','dawn doll vintage','hummel figurine','matryoshka doll','holly hobbie vintage','rushton vintage'],
+            'neon': ['neon toy','rainbow brite','popples','trollz neon','equestria girls','jem holograms','neon plush','blacklight figure','lisa frank','glow toy'],
+            'colorful': ['rainbow toy','colorful plush','rainbow figurine','tie dye plush','care bears','rainbow brite','lisa frank','popples','multicolor doll'],
+            'traditional': ['kokeshi doll','matryoshka doll','hummel figurine','willow tree figurine','precious moments','angel figurine','folk doll','cultural doll','handmade traditional doll']
+        };
+
+        const PP_COMBO_SEARCHES = {
+            'sweet+spooky': ['cute ghost plush','kawaii skeleton','adorable witch doll','pastel halloween','ty beanie boo halloween','coraline doll','lalaloopsy','gloomy bear','mogwai plush'],
+            'sweet+girly': ['hello kitty pink plush','sanrio my melody','fairy kei doll','pink princess plush','littlest pet shop plush pink','mamegoma pink'],
+            'sweet+cottagecore': ['cute bunny plush','kawaii mushroom figurine','sweet garden fairy','fawn plush cute','hedgehog plush','sylvanian families baby'],
+            'sweet+anime': ['cinnamoroll plush','my melody plush','pompompurin plush','rilakkuma plush','molang plush','hamtaro plush','chi sweet home cat'],
+            'sweet+squishy': ['squishmallow pink','pusheen plush','sumikko gurashi','mamegoma seal','kirby plush sleepy','molang round plush'],
+            'sweet+vintage': ['vintage care bears','retro strawberry shortcake','vintage my little pony','antique kewpie doll','vintage angel figurine'],
+            'spooky+elegant': ['haunted porcelain doll','creepy vintage doll','gothic angel figurine','corpse bride figure','ghostly figurine','dark swan figurine'],
+            'spooky+weird': ['haunted doll','creepy doll vintage','possessed doll','chucky doll','annabelle doll','cryptid plush','mothman plush'],
+            'spooky+coquette': ['haunted ballerina doll','creepy angel figurine','dark cherub figure','gothic ballet doll'],
+            'spooky+squishy': ['squishmallow halloween','ghost squishmallow','bat plush round','gloomy bear','skeleton squishy'],
+            'spooky+mischievous': ['mogwai plush','gizmo plush','gremlin figure','cheshire cat figure','jack skellington','beetlejuice figure'],
+            'spooky+vintage': ['vintage halloween toy','antique creepy doll','retro skeleton','vintage witch figurine','haunted antique doll'],
+            'weird+elegant': ['strange porcelain doll','odd vintage figurine','surreal doll','uncanny figurine'],
+            'weird+girly': ['betty spaghetty','novi stars doll','enchantimals','monster high','alien doll cute'],
+            'macho+funny': ['silly wrestler toy','funny bodybuilder figurine','goofy muscles plush','comedy wrestling figure','sumo wrestler cute'],
+            'macho+sweet': ['cute wrestler plush','kawaii bodybuilder','adorable muscles toy','sweet strong man figure'],
+            'macho+anime': ['dragon ball figure','one piece figure','jojo bizarre adventure figure','buff anime figurine','naruto figure'],
+            'goth+girly': ['monster high doll','gothic barbie','dark fairy doll','vampire princess','living dead dolls pretty','pullip doll gothic'],
+            'goth+elegant': ['gothic porcelain doll','dark crystal figurine','vampire elegant figure','corpse bride doll','black glass figurine'],
+            'goth+anime': ['kuromi plush','death note figure','gothic nendoroid','tokyo ghoul figure','dark anime figure'],
+            'punk+girly': ['monster high doll','rebel barbie','punk princess doll','jem holograms doll','bratz rock angelz'],
+            'cottagecore+weird': ['frog figurine','weird mushroom toy','strange woodland creature','odd forest figurine','pikmin plush'],
+            'cottagecore+fantasy': ['fairy garden figurine','enchanted forest toy','magical woodland creature','unicorn cottagecore','fairy mushroom house'],
+            'streetwear+artsy': ['kaws figure','bearbrick art','designer vinyl limited','takashi murakami figure','superplastic janky'],
+            'anime+mischievous': ['gengar plush','mewtwo figure','team rocket figure','jigglypuff angry','stitch plush disney'],
+            'y2k+girly': ['bratz doll pink','polly pocket compact','diva starz','totally spies doll','winx club doll','bratz babyz'],
+            'y2k+weird': ['furby','idog toy','betty spaghetty','novi stars','trollz doll','tamagotchi'],
+            '90s+sweet': ['beanie baby cute','pound puppies 90s','precious moments 90s','polly pocket 90s','littlest pet shop 90s'],
+            '90s+chaotic': ['furby boom','troll doll wild','rugrats figure','ren stimpy figure','beavis butthead figure'],
+            'minimal+elegant': ['kokeshi doll','sonny angel','wooden figurine simple','scandinavian doll','porcelain minimal'],
+            'minimal+anime': ['sonny angel','gudetama figure','sumikko gurashi','nendoroid simple','chibi figure minimal'],
+            'fantasy+girly': ['mermaid doll','fairy princess figurine','unicorn doll','ever after high','tinkerbell doll'],
+            'adventurous+anime': ['pokemon plush','one piece figure','naruto figure','kirby plush adventure','zelda figure','pikmin plush'],
+            'neon+girly': ['neon bratz','rainbow high doll','equestria girls','jem holograms','trollz neon','lisa frank'],
+            'colorful+sweet': ['care bears rainbow','rainbow plush','tie dye plush cute','colorful sanrio','lisa frank figure'],
+            'derpy+sweet': ['puffkins plush','ugly cute plush','derpy beanie baby','pound puppies derpy','webkinz','dumbo plush cute'],
+            'boho+traditional': ['matryoshka doll','folk art figurine','handmade cloth doll','cultural doll traditional','ceramic folk animal'],
+            'squishy+anime': ['kirby plush round','squishmallow sanrio','pusheen','sumikko gurashi','molang plush','rilakkuma round'],
+            'squishy+spooky': ['squishmallow halloween','ghost squishmallow','bat plush round','gloomy bear','skeleton squishy'],
+            'grunge+vintage': ['vintage rag doll','retro monster doll','grunge 90s doll','vintage ugly doll','old creepy doll'],
+            'artsy+minimal': ['sonny angel','designer toy simple','abstract figurine','modern art toy','muji designer figure']
+        };
+
+        const PP_LOADING_MESSAGES = ['digging through toys','matching your energy','finding your vibe','searching toy boxes','curating your options','hunting for gems','almost there','so many choices','picking the best ones'];
+
+        const PP_ASCII_ART = '\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2840\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\n\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2840\u2874\u281b\u28a7\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\n\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u28b0\u281b\u28a0\u2841\u2838\u28c6\u2841\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\n\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u287c\u2841\u28b0\u28cb\u2847\u2800\u287f\u28b3\u2841\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u28a0\u2824\u28c0\u28c0\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800\u2800';
+
+        const PP_MAX_PER_SEARCH = 3;
+        const PP_TARGET_RESULTS = 50;
+        let ppSelectedTags = [];
+        let ppSelectedPhoto = null;
+        let ppAllItems = [];
+        let ppLoadingInterval = null;
+
+        window.openPhotoPicker = function() {
+            document.getElementById('photoPickerModal').style.display = 'flex';
+            document.getElementById('ppStep1').style.display = 'block';
+            document.getElementById('ppStep2').style.display = 'none';
+            document.getElementById('ppLoading').style.display = 'none';
+            ppSelectedTags = [];
+            ppSelectedPhoto = null;
+            ppAllItems = [];
+            const grid = document.getElementById('ppTagGrid');
+            grid.innerHTML = '';
+            PP_TAGS.forEach(tag => {
+                const el = document.createElement('span');
+                el.className = 'pp-tag';
+                el.textContent = tag;
+                el.onclick = () => {
+                    if (el.classList.contains('selected')) {
+                        el.classList.remove('selected');
+                        ppSelectedTags = ppSelectedTags.filter(t => t !== tag);
+                    } else {
+                        if (ppSelectedTags.length >= 5) return;
+                        el.classList.add('selected');
+                        ppSelectedTags.push(tag);
+                    }
+                    document.getElementById('ppTagCount').textContent = ppSelectedTags.length;
+                    document.getElementById('ppGenerateBtn').disabled = ppSelectedTags.length < 3;
+                };
+                grid.appendChild(el);
+            });
+            document.getElementById('ppTagCount').textContent = '0';
+            document.getElementById('ppGenerateBtn').disabled = true;
+        };
+
+        window.closePhotoPicker = function() {
+            document.getElementById('photoPickerModal').style.display = 'none';
+            if (ppLoadingInterval) clearInterval(ppLoadingInterval);
+        };
+
+        function ppStartLoading() {
+            document.getElementById('ppStep1').style.display = 'none';
+            document.getElementById('ppStep2').style.display = 'none';
+            document.getElementById('ppLoading').style.display = 'flex';
+            document.getElementById('ppLoadingArt').textContent = PP_ASCII_ART;
+            let msgIdx = 0;
+            const textEl = document.getElementById('ppLoadingText');
+            textEl.textContent = PP_LOADING_MESSAGES[0] + '...';
+            ppLoadingInterval = setInterval(() => {
+                msgIdx = (msgIdx + 1) % PP_LOADING_MESSAGES.length;
+                textEl.textContent = PP_LOADING_MESSAGES[msgIdx] + '...';
+            }, 2500);
+        }
+
+        function ppStopLoading() {
+            if (ppLoadingInterval) clearInterval(ppLoadingInterval);
+            ppLoadingInterval = null;
+            document.getElementById('ppLoading').style.display = 'none';
+            document.getElementById('ppStep2').style.display = 'block';
+        }
+
+        function ppBuildQueries() {
+            let combo = [];
+            let base = [];
+            for (const [key, searches] of Object.entries(PP_COMBO_SEARCHES)) {
+                const tags = key.split('+');
+                if (tags.every(t => ppSelectedTags.includes(t))) combo.push(...searches);
+            }
+            ppSelectedTags.forEach(tag => {
+                const searches = PP_BASE_SEARCHES[tag] || [];
+                base.push(...searches);
+            });
+            base.sort(() => Math.random() - 0.5);
+            return [...new Set([...combo, ...base])];
+        }
+
+        async function ppSearchEbay(query, limit, offset) {
+            try {
+                const res = await fetch('/.netlify/functions/ebay-toy-search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, limit: limit || 8, offset: offset || 0 })
+                });
+                const data = await res.json();
+                return data.items || [];
+            } catch (e) { return []; }
+        }
+
+        window.ppGenerateSearches = async function() {
+            ppStartLoading();
+            ppSelectedPhoto = null;
+            document.getElementById('ppConfirmBtn').disabled = true;
+            ppAllItems = [];
+            const seen = new Set();
+            const queries = ppBuildQueries();
+            for (const q of queries) {
+                if (ppAllItems.length >= PP_TARGET_RESULTS) break;
+                const items = await ppSearchEbay(q);
+                let count = 0;
+                for (const item of items) {
+                    if (count >= PP_MAX_PER_SEARCH) break;
+                    if (seen.has(item.image)) continue;
+                    seen.add(item.image);
+                    ppAllItems.push(item);
+                    count++;
+                }
+            }
+            ppAllItems.sort(() => Math.random() - 0.5);
+            ppStopLoading();
+            ppRenderGrid();
+        };
+
+        function ppRenderGrid() {
+            const grid = document.getElementById('ppGrid');
+            grid.innerHTML = '';
+            document.getElementById('ppResultCount').textContent = ppAllItems.length + ' options';
+            ppAllItems.forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'pp-item';
+                el.innerHTML = `<img src="${item.image}" alt="${item.title}">`;
+                el.onclick = () => {
+                    grid.querySelectorAll('.pp-item').forEach(r => r.classList.remove('selected'));
+                    el.classList.add('selected');
+                    ppSelectedPhoto = { url: item.image, itemId: item.id };
+                    document.getElementById('ppConfirmBtn').disabled = false;
+                };
+                grid.appendChild(el);
+            });
+        }
+
+        window.ppRefresh = async function() {
+            ppStartLoading();
+            ppSelectedPhoto = null;
+            document.getElementById('ppConfirmBtn').disabled = true;
+            ppAllItems = [];
+            const seen = new Set();
+            const queries = ppBuildQueries();
+            const offset = Math.floor(Math.random() * 3) * 8;
+            for (const q of queries) {
+                if (ppAllItems.length >= PP_TARGET_RESULTS) break;
+                const items = await ppSearchEbay(q, 8, offset);
+                let count = 0;
+                for (const item of items) {
+                    if (count >= PP_MAX_PER_SEARCH) break;
+                    if (seen.has(item.image)) continue;
+                    seen.add(item.image);
+                    ppAllItems.push(item);
+                    count++;
+                }
+            }
+            ppAllItems.sort(() => Math.random() - 0.5);
+            ppStopLoading();
+            ppRenderGrid();
+        };
+
+        window.ppGoBack = function() {
+            document.getElementById('ppStep2').style.display = 'none';
+            document.getElementById('ppStep1').style.display = 'block';
+            ppSelectedPhoto = null;
+        };
+
+        window.ppConfirmPhoto = async function() {
+            if (!ppSelectedPhoto) return;
+            try {
+                await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+                    profilePhoto: ppSelectedPhoto.url,
+                    profilePhotoLocked: true,
+                    profilePhotoItemId: ppSelectedPhoto.itemId,
+                    profilePhotoVibes: ppSelectedTags
+                });
+                await setDoc(doc(db, 'claimedPhotos', ppSelectedPhoto.itemId), {
+                    userId: auth.currentUser.uid,
+                    imageUrl: ppSelectedPhoto.url,
+                    claimedAt: new Date().toISOString()
+                });
+                closePhotoPicker();
+                loadMyProfile(false);
+            } catch (error) {
+                alert('Error saving photo: ' + error.message);
             }
         };
 
@@ -4483,5 +4820,35 @@ window.getCurrentUploadTab = function() {
             </button>
         </div>
     </div>
+    <!-- Profile Photo Picker Modal -->
+<div class="modal" id="photoPickerModal" style="display:none;">
+    <div class="modal-content" style="max-width:375px; max-height:90vh; overflow-y:auto; padding:16px; background:#f0e0d6;">
+        <button onclick="closePhotoPicker()" style="float:right; background:none; border:none; font-size:20px; cursor:pointer; font-family:Courier New,monospace;">×</button>
+        <div id="ppStep1">
+            <h2 style="font-size:16px; font-family:Courier New,monospace; margin-bottom:4px;">pick your vibe</h2>
+            <p style="font-size:10px; color:#666; font-family:Courier New,monospace; margin-bottom:16px;">choose 3-5 tags. you only get to pick once — choose wisely!</p>
+            <div id="ppTagGrid" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;"></div>
+            <div style="text-align:center; font-size:11px; color:#666; font-family:Courier New,monospace; margin:8px 0;">
+                <strong id="ppTagCount" style="color:#0600ff;">0</strong> / 5 selected
+            </div>
+            <button id="ppGenerateBtn" disabled onclick="ppGenerateSearches()" style="display:block; width:100%; padding:12px; font-family:Courier New,monospace; font-size:12px; font-weight:bold; border:2px solid #000; background:#0600ff; color:#fff; cursor:pointer; box-shadow:3px 3px 0 #000;">show me my options →</button>
+        </div>
+        <div id="ppLoading" style="display:none; flex-direction:column; align-items:center; padding:30px 0;">
+            <pre id="ppLoadingArt" style="font-family:Courier New,monospace; font-size:5.5px; line-height:5.5px; color:#8b7355; animation:ppBounce 1.5s ease-in-out infinite; margin-bottom:16px; white-space:pre;"></pre>
+            <div id="ppLoadingText" style="font-size:11px; color:#666; font-family:Courier New,monospace;"></div>
+        </div>
+        <div id="ppStep2" style="display:none;">
+            <h2 style="font-size:16px; font-family:Courier New,monospace; margin-bottom:4px;">your vibe, curated</h2>
+            <p style="font-size:10px; color:#666; font-family:Courier New,monospace; margin-bottom:12px;">tap one to make it yours forever</p>
+            <button onclick="ppGoBack()" style="display:block; width:100%; padding:10px; font-family:Courier New,monospace; font-size:11px; border:2px solid #000; background:#f5ecd7; cursor:pointer; margin-bottom:12px;">← pick different vibes</button>
+            <div id="ppResultCount" style="text-align:center; font-size:10px; color:#666; margin-bottom:8px;"></div>
+            <div id="ppGrid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px;"></div>
+            <div style="display:flex; gap:8px; margin-top:12px;">
+                <button onclick="ppRefresh()" style="flex:1; padding:10px; font-family:Courier New,monospace; font-size:11px; font-weight:bold; border:2px solid #000; background:#f5ecd7; cursor:pointer;">↻ refresh</button>
+                <button id="ppConfirmBtn" disabled onclick="ppConfirmPhoto()" style="flex:1; padding:10px; font-family:Courier New,monospace; font-size:11px; font-weight:bold; border:2px solid #000; background:#0600ff; color:#fff; cursor:pointer; box-shadow:3px 3px 0 #000;">this is the one ♡</button>
+            </div>
+        </div>
+    </div>
+</div>
 </body>
 </html>
