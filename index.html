@@ -2635,7 +2635,7 @@ async function deleteCollection(collectionId, collectionName) {
             try {
                 const collectionDoc = await getDoc(doc(db, 'collections', collectionId));
                 const imageIds = collectionDoc.data().images || [];
-                imageIds.reverse();
+                
                 
                 for (const imageId of imageIds) {
                     const imageDoc = await getDoc(doc(db, 'images', imageId));
@@ -4258,18 +4258,24 @@ function removeUndoToast() {
             });
         }
 
-        async function addToSelectedCollection(collectionId, collectionName) {
-            try {
-                await updateDoc(doc(db, 'collections', collectionId), {
-                    images: arrayUnion(currentImageToAdd)
-                });
-                closeCollectionPicker();
-                alert(`Added to ${collectionName}!`);
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
+       async function addToSelectedCollection(collectionId, collectionName) {
+    try {
+        const collectionDoc = await getDoc(doc(db, 'collections', collectionId));
+        const currentImages = collectionDoc.data().images || [];
+        if (currentImages.includes(currentImageToAdd)) {
+            alert('Already in this collection!');
+            closeCollectionPicker();
+            return;
         }
-
+        await updateDoc(doc(db, 'collections', collectionId), {
+            images: [currentImageToAdd, ...currentImages]
+        });
+        closeCollectionPicker();
+        alert(`Added to ${collectionName}!`);
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
         window.closeCollectionPicker = function() {
             document.getElementById('collectionPickerModal').style.display = 'none';
             document.getElementById('collectionSearch').value = '';
