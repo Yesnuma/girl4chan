@@ -3746,10 +3746,16 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             document.getElementById('ppStep2').style.display = 'none';
             document.getElementById('ppStep1').style.display = 'block';
             ppSelectedPhoto = null;
+       };
+        window.ppConfirmPhoto = function() {
+            if (!ppSelectedPhoto) return;
+            document.getElementById('ppStep2').style.display = 'none';
+            document.getElementById('ppStep3').style.display = 'flex';
+            document.getElementById('ppPreviewImg').src = ppSelectedPhoto.url;
+            document.getElementById('ppPreviewName').textContent = auth.currentUser.displayName || 'you';
         };
 
-        window.ppConfirmPhoto = async function() {
-            if (!ppSelectedPhoto) return;
+        window.ppFinalLockIn = async function() {
             try {
                 await updateDoc(doc(db, 'users', auth.currentUser.uid), {
                     profilePhoto: ppSelectedPhoto.url,
@@ -3767,6 +3773,11 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             } catch (error) {
                 alert('Error saving photo: ' + error.message);
             }
+        };
+
+        window.ppBackToGrid = function() {
+            document.getElementById('ppStep3').style.display = 'none';
+            document.getElementById('ppStep2').style.display = 'block';
         };
 
         // Load everything feed
@@ -4855,6 +4866,16 @@ window.getCurrentUploadTab = function() {
                 <button onclick="ppRefresh()" style="flex:1; padding:10px; font-family:Courier New,monospace; font-size:11px; font-weight:bold; border:2px solid #000; background:#f5ecd7; cursor:pointer;">↻ refresh</button>
                 <button id="ppConfirmBtn" disabled onclick="ppConfirmPhoto()" style="flex:1; padding:10px; font-family:Courier New,monospace; font-size:11px; font-weight:bold; border:2px solid #000; background:#0600ff; color:#fff; cursor:pointer; box-shadow:3px 3px 0 #000;">this is the one ♡</button>
             </div>
+        </div>
+        <div id="ppStep3" style="display:none; flex-direction:column; align-items:center; padding:20px 0;">
+            <h2 style="font-size:16px; font-family:Courier New,monospace; margin-bottom:4px;">your profile photo</h2>
+            <p style="font-size:10px; color:#666; font-family:Courier New,monospace; margin-bottom:20px;">locked in forever ✦</p>
+            <div style="width:120px; height:120px; border-radius:50%; border:3px solid #8b7355; overflow:hidden; margin-bottom:12px;">
+                <img id="ppPreviewImg" src="" style="width:100%; height:100%; object-fit:cover;" alt="">
+            </div>
+            <div id="ppPreviewName" style="font-size:16px; font-weight:bold; font-family:Courier New,monospace; margin-bottom:20px;"></div>
+            <button onclick="ppFinalLockIn()" style="display:block; width:100%; padding:12px; font-family:Courier New,monospace; font-size:12px; font-weight:bold; border:2px solid #000; background:#0600ff; color:#fff; cursor:pointer; box-shadow:3px 3px 0 #000; margin-bottom:8px;">lock it in forever ♡</button>
+            <button onclick="ppBackToGrid()" style="display:block; width:100%; padding:10px; font-family:Courier New,monospace; font-size:11px; border:2px solid #000; background:#f5ecd7; cursor:pointer;">← wait, go back</button>
         </div>
     </div>
 </div>
