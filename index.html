@@ -3658,7 +3658,8 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             } catch (e) { return []; }
         }
 
-        window.ppGenerateSearches = async function() {
+       window.ppGenerateSearches = async function() {
+            document.getElementById('ppStep1').style.display = 'none';
             ppStartLoading();
             ppSelectedPhoto = null;
             document.getElementById('ppConfirmBtn').disabled = true;
