@@ -3317,11 +3317,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 
                 grid.parentNode.insertBefore(profileHeader, grid);
                 
-                // ── Sort Bar ──
-                const sortBar = document.createElement('div');
-                sortBar.id = 'profileSortBar';
-                sortBar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:10px 12px 4px; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch;';
-                
+            
                 // Collect all tags from user images
                 const allTags = {};
                 userImages.forEach(({ data }) => {
@@ -3332,33 +3328,10 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 const topTags = Object.entries(allTags).sort((a, b) => b[1] - a[1]).slice(0, 15).map(t => t[0]);
                 
                 // Sort pills
-                const sortOptions = ['newest', 'oldest'];
                 let currentSort = 'newest';
                 let activeProfileTags = [];
                 
-                sortOptions.forEach(opt => {
-                    const pill = document.createElement('span');
-                    pill.style.cssText = 'flex-shrink:0; padding:5px 12px; font-family:Courier New,monospace; font-size:9px; font-weight:bold; border:1.5px solid #8b7355; background:' + (opt === 'newest' ? '#0600ff; color:#fff; border-color:#0600ff;' : '#f5ecd7; color:#333;') + ' cursor:pointer; white-space:nowrap;';
-                    pill.textContent = opt;
-                    pill.onclick = () => {
-                        currentSort = opt;
-                        // Update pill styles
-                        sortBar.querySelectorAll('[data-sort]').forEach(p => {
-                            p.style.background = '#f5ecd7';
-                            p.style.color = '#333';
-                            p.style.borderColor = '#8b7355';
-                        });
-                        pill.style.background = '#0600ff';
-                        pill.style.color = '#fff';
-                        pill.style.borderColor = '#0600ff';
-                        renderProfileImages(userImages, currentSort, activeProfileTags, customOrder);
-                    };
-                    pill.dataset.sort = opt;
-                    sortBar.appendChild(pill);
-                });
-                
-                
-                grid.parentNode.insertBefore(sortBar, grid);
+            
                 
                 // ── Active Tag Pills Container ──
                 const tagPillsContainer = document.createElement('div');
