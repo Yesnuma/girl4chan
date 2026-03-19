@@ -4302,7 +4302,11 @@ function removeUndoToast() {
                 alert('Error: ' + error.message);
             }
         };
-        window.upgradeToPremium = async function() {
+       window.upgradeToPremium = function() {
+    document.getElementById('premiumModal').style.display = 'flex';
+};
+
+window.startPremiumCheckout = async function() {
     try {
         const res = await fetch('/.netlify/functions/create-checkout', {
             method: 'POST',
@@ -4810,6 +4814,26 @@ window.getCurrentUploadTab = function() {
             }
         }
     </script>
+    <!-- Premium Landing Modal -->
+<div class="pp-overlay" id="premiumModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+    <div class="pp-modal-content" style="max-width:375px; width:90%; max-height:90vh; overflow-y:auto; padding:24px; background:#f0e0d6; display:flex; flex-direction:column; align-items:center; text-align:center;">
+        <button onclick="document.getElementById('premiumModal').style.display='none'" style="align-self:flex-end; background:none; border:none; font-size:20px; cursor:pointer; font-family:Courier New,monospace;">×</button>
+        <h2 style="font-size:18px; font-family:Courier New,monospace; margin-bottom:4px;">join the inner circle</h2>
+        <p style="font-size:10px; color:#666; font-family:Courier New,monospace; margin-bottom:20px;">✦ founding member ✦</p>
+        <div style="text-align:left; width:100%; font-family:Courier New,monospace; font-size:11px; color:#333; margin-bottom:20px;">
+            <p style="margin-bottom:8px;">♡ choose your profile photo (toy/figurine avatar)</p>
+            <p style="margin-bottom:8px;">♡ create personal collections</p>
+            <p style="margin-bottom:8px;">♡ like & save your favorite finds</p>
+            <p style="margin-bottom:8px;">♡ custom profile colors (coming soon)</p>
+            <p style="margin-bottom:8px;">♡ outfit generator (coming soon)</p>
+            <p style="margin-bottom:8px;">♡ drag & rearrange your profile (coming soon)</p>
+            <p style="margin-bottom:8px;">♡ founding member badge</p>
+        </div>
+        <p style="font-size:10px; color:#666; font-family:Courier New,monospace; margin-bottom:20px; line-height:1.5;">girlchan is just getting started. subscribing now means you're part of building something special. your feedback shapes what comes next.</p>
+        <button id="premiumCheckoutBtn" onclick="startPremiumCheckout()" style="display:block; width:100%; padding:14px; font-family:Courier New,monospace; font-size:13px; font-weight:bold; border:2px solid #000; background:#0600ff; color:#fff; cursor:pointer; box-shadow:3px 3px 0 #000; margin-bottom:8px;">subscribe — $5/mo</button>
+        <p style="font-size:9px; color:#999; font-family:Courier New,monospace;">founding members get first month free</p>
+    </div>
+</div>
    <!-- Image Detail Modal -->
 <div class="pp-overlay" id="imageDetailModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
     <div class="pp-modal-content" style="max-width:375px; width:90%; max-height:90vh; overflow-y:auto; padding:16px; background:#f0e0d6; display:flex; flex-direction:column;">
