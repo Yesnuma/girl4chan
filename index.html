@@ -2630,6 +2630,8 @@ async function deleteCollection(collectionId, collectionName) {
             if (oldSortBar) oldSortBar.remove();
             const oldTagFilters = document.getElementById('profileTagFilters');
             if (oldTagFilters) oldTagFilters.remove();
+            const tagRow = document.getElementById('recentTagsRow');
+            if (tagRow) tagRow.style.display = 'none';
             
             
             try {
@@ -3199,6 +3201,8 @@ window.loadMyProfile = async function(addToHistory = true) {
             if (oldSortBar) oldSortBar.remove();
             const oldTagFilters = document.getElementById('profileTagFilters');
             if (oldTagFilters) oldTagFilters.remove();
+            const tagRow = document.getElementById('recentTagsRow');
+            if (tagRow) tagRow.style.display = 'none';
             
             try {
                 const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
@@ -3406,6 +3410,8 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             if (oldSortBar) oldSortBar.remove();
             const oldTagFilters = document.getElementById('profileTagFilters');
             if (oldTagFilters) oldTagFilters.remove();
+            const tagRow = document.getElementById('recentTagsRow');
+            if (tagRow) tagRow.style.display = 'none';
             
             currentContext = { type: 'likes', id: null };
             document.getElementById('pageTitle').innerHTML = '';
