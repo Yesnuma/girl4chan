@@ -3734,25 +3734,43 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             document.getElementById('ppPreviewName').textContent = auth.currentUser.displayName || 'you';
         };
 
-        window.ppFinalLockIn = async function() {
-            try {
-                await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-                    profilePhoto: ppSelectedPhoto.url,
-                    profilePhotoLocked: true,
-                    profilePhotoItemId: ppSelectedPhoto.itemId,
-                    profilePhotoVibes: ppSelectedTags
-                });
-                await setDoc(doc(db, 'claimedPhotos', ppSelectedPhoto.itemId), {
-                    userId: auth.currentUser.uid,
-                    imageUrl: ppSelectedPhoto.url,
-                    claimedAt: new Date().toISOString()
-                });
-                closePhotoPicker();
-                loadMyProfile(false);
-            } catch (error) {
-                alert('Error saving photo: ' + error.message);
-            }
-        };
+       window.ppFinalLockIn = async function() {
+    try {
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        const isPremium = userDoc.data()?.premium === true;
+        
+        if (!isPremium) {
+            document.getElementById('ppStep3').innerHTML = `
+                <div style="text-align:center; padding:20px 0; font-family:Courier New,monospace;">
+                    <div style="width:120px; height:120px; border-radius:50%; border:3px solid #8b7355; overflow:hidden; margin:0 auto 12px;">
+                        <img src="${ppSelectedPhoto.url}" style="width:100%; height:100%; object-fit:cover;" alt="">
+                    </div>
+                    <h2 style="font-size:14px; margin-bottom:8px;">this one's calling your name</h2>
+                    <p style="font-size:10px; color:#666; margin-bottom:16px; line-height:1.5;">subscribe to lock in your profile photo. this photo will belong to you forever and can't be chosen by anyone else.</p>
+                    <button onclick="closePhotoPicker(); upgradeToPremium();" style="display:block; width:100%; padding:12px; font-family:Courier New,monospace; font-size:12px; font-weight:bold; border:2px solid #000; background:#0600ff; color:#fff; cursor:pointer; box-shadow:3px 3px 0 #000; margin-bottom:8px;">subscribe to claim ♡</button>
+                    <button onclick="ppBackToGrid()" style="display:block; width:100%; padding:10px; font-family:Courier New,monospace; font-size:11px; border:2px solid #000; background:#f5ecd7; cursor:pointer;">← keep browsing</button>
+                </div>
+            `;
+            return;
+        }
+        
+        await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+            profilePhoto: ppSelectedPhoto.url,
+            profilePhotoLocked: true,
+            profilePhotoItemId: ppSelectedPhoto.itemId,
+            profilePhotoVibes: ppSelectedTags
+        });
+        await setDoc(doc(db, 'claimedPhotos', ppSelectedPhoto.itemId), {
+            userId: auth.currentUser.uid,
+            imageUrl: ppSelectedPhoto.url,
+            claimedAt: new Date().toISOString()
+        });
+        closePhotoPicker();
+        loadMyProfile(false);
+    } catch (error) {
+        alert('Error saving photo: ' + error.message);
+    }
+};
 
         window.ppBackToGrid = function() {
             document.getElementById('ppStep3').style.display = 'none';
