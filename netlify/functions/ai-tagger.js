@@ -60,7 +60,9 @@ const MASTER_TAG_LIST = [
     'raw-hem', 'frayed', 'patchwork', 'crochet', 'macrame',
     'tropical', 'hawaiian', 'paisley', 'damask', 'houndstooth',
     'pinstripe', 'gingham', 'argyle', 'herringbone',
-    'multi-color', 'two-tone', 'cream', 'burgundy', 'navy', 'olive', 'mustard', 'coral', 'teal', 'mauve'
+    'multi-color', 'two-tone', 'cream', 'burgundy', 'navy', 'olive', 'mustard', 'coral', 'teal', 'mauve',
+'text', 'princess-sleeve'
+
 ];
 
 exports.handler = async (event) => {
