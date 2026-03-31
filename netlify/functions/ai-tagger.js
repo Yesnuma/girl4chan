@@ -61,7 +61,9 @@ const MASTER_TAG_LIST = [
     'tropical', 'hawaiian', 'paisley', 'damask', 'houndstooth',
     'pinstripe', 'gingham', 'argyle', 'herringbone',
     'multi-color', 'two-tone', 'cream', 'burgundy', 'navy', 'olive', 'mustard', 'coral', 'teal', 'mauve',
-'text', 'princess-sleeve'
+'text', 'princess-sleeve',
+'top', 'jacket', 'dress', 'pants', 'skirt', 'shorts', 'jumpsuit', 'shoes', 'bag', 'jewelry', 'hat', 'accessories', 'swimwear', 'misc'
+
 
 ];
 
@@ -78,7 +80,8 @@ exports.handler = async (event) => {
 Important instructions:
 - Return between 5-15 tags that best describe the item
 - Only use tags from the provided list (no variations or new tags)
-- Focus on: item type, aesthetic/era, dominant colors, notable details, and overall vibe
+- Focus on: item type, aesthetic/era, dominant colors, notable details, and overall vibe - ALWAYS include exactly one broad category: top, jacket, dress, pants, skirt, shorts, jumpsuit, shoes, bag, jewelry, hat, accessories, swimwear, or misc
+
 - Return ONLY a JSON array of strings, nothing else
 
 Respond with just the JSON array, no other text.`;
