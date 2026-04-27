@@ -1666,7 +1666,13 @@ async function getAllExistingTags() {
 // Open image detail modal
 window.openImageDetail = async function(imageId, imageUrl, link, tags) {
     document.getElementById('detailImage').src = imageUrl;
-    
+    // reset the "more like this" section for the new product
+    document.getElementById('similarResults').innerHTML = '';
+    document.getElementById('yandexFallback').setAttribute('style', 'display:none;');
+    var simBtn = document.getElementById('loadSimilarBtn');
+    simBtn.setAttribute('style', 'width: 100%; padding: 12px; background: #f5ecd7; color: #0600ff; border: 2px solid #0600ff; font-family: Courier New, Courier, monospace; font-size: 12px; cursor: pointer; margin-bottom: 10px;');
+    simBtn.disabled = false;
+    simBtn.textContent = 'load visually similar listings →';
     // Display tags
     const tagsContainer = document.getElementById('detailTags');
     tagsContainer.innerHTML = '';
@@ -4798,7 +4804,7 @@ window.getCurrentUploadTab = function() {
     </script>
 
     <script>
-        async function loadSimilarListings() {
+       async function loadSimilarListings() {
     var btn = document.getElementById('loadSimilarBtn');
     var grid = document.getElementById('similarResults');
     var yandexLink = document.getElementById('yandexFallback');
@@ -4806,7 +4812,7 @@ window.getCurrentUploadTab = function() {
     if (!productImageUrl) return;
     btn.textContent = 'searching...';
     btn.disabled = true;
-    var yandexUrl = 'https://yandex.com/images/search?rpt=imageview&url=' + encodeURIComponent(productImageUrl);
+    var yandexUrl = 'https://lens.google.com/uploadbyurl?url=' + encodeURIComponent(productImageUrl);
     try {
         var res = await fetch('/.netlify/functions/searchByImage', {
             method: 'POST',
