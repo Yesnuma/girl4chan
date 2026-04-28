@@ -57,6 +57,23 @@
     grid-column: 1 / -1;
   }
   
+  #loadMoreBtn {
+    display: none;
+    width: 100%;
+    padding: 14px;
+    margin-top: 12px;
+    background: #0600ff;
+    color: #F9FF00;
+    border: none;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  #loadMoreBtn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+  
   .ebay-modal-overlay {
     display: none;
     position: fixed;
@@ -136,6 +153,8 @@
   <p class="loading-msg">loading...</p>
 </div>
 
+<button id="loadMoreBtn" onclick="loadMore()">load more →</button>
+
 <div class="ebay-modal-overlay" id="ebayItemModal" onclick="closeEbayModalIfOverlay(event)">
   <div class="ebay-modal-content">
     <img class="ebay-modal-img" id="ebayModalImg" alt="">
@@ -150,33 +169,59 @@
 
 <script>
 var allItems = [];
+var currentOffset = 0;
+var pageLimit = 50;
+var sourceImageUrl = '';
+var noMoreResults = false;
 
-async function loadExploreGrid() {
+async function loadExploreGrid(append) {
   var grid = document.getElementById('exploreGrid');
-  var params = new URLSearchParams(window.location.search);
-  var imageUrl = params.get('img');
   
-  if (!imageUrl) {
-    grid.innerHTML = '<p class="error-msg">no image specified — go back and try again</p>';
-    return;
+  if (!append) {
+    var params = new URLSearchParams(window.location.search);
+    sourceImageUrl = params.get('img');
+    if (!sourceImageUrl) {
+      grid.innerHTML = '<p class="error-msg">no image specified — go back and try again</p>';
+      return;
+    }
+    currentOffset = 0;
+    noMoreResults = false;
+    allItems = [];
+    grid.innerHTML = '<p class="loading-msg">loading...</p>';
   }
   
   try {
     var res = await fetch('/.netlify/functions/searchByImage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageUrl: imageUrl })
+      body: JSON.stringify({ imageUrl: sourceImageUrl, limit: pageLimit, offset: currentOffset })
     });
     var data = await res.json();
     var items = data.itemSummaries || [];
-    allItems = items;
     
-    if (items.length === 0) {
+    if (items.length === 0 && !append) {
       grid.innerHTML = '<p class="error-msg">no similar items found on eBay</p>';
+      hideLoadMore();
       return;
     }
     
-    var html = '';
+    if (items.length === 0 && append) {
+      noMoreResults = true;
+      hideLoadMore();
+      return;
+    }
+    
+    if (items.length < pageLimit) {
+      noMoreResults = true;
+    }
+    
+    var startIndex = allItems.length;
+    for (var j = 0; j < items.length; j++) {
+      allItems.push(items[j]);
+    }
+    currentOffset = currentOffset + pageLimit;
+    
+    var html = append ? grid.innerHTML : '';
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
       var img = '';
@@ -184,12 +229,38 @@ async function loadExploreGrid() {
       else if (item.thumbnailImages && item.thumbnailImages[0]) img = item.thumbnailImages[0].imageUrl;
       var title = (item.title || '').replace(/"/g, '&quot;');
       var hiResImg = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
-html = html + '<img class="explore-tile" src="' + hiResImg + '" alt="' + title + '" loading="lazy" onclick="openEbayModal(' + i + ')">';
+      var globalIndex = startIndex + i;
+      html = html + '<img class="explore-tile" src="' + hiResImg + '" alt="' + title + '" loading="lazy" onclick="openEbayModal(' + globalIndex + ')">';
     }
     grid.innerHTML = html;
+    
+    if (noMoreResults) {
+      hideLoadMore();
+    } else {
+      showLoadMore();
+    }
   } catch (err) {
     grid.innerHTML = '<p class="error-msg">something went wrong — try again</p>';
+    hideLoadMore();
   }
+}
+
+function showLoadMore() {
+  var btn = document.getElementById('loadMoreBtn');
+  btn.style.display = 'block';
+  btn.disabled = false;
+  btn.textContent = 'load more →';
+}
+
+function hideLoadMore() {
+  document.getElementById('loadMoreBtn').style.display = 'none';
+}
+
+async function loadMore() {
+  var btn = document.getElementById('loadMoreBtn');
+  btn.disabled = true;
+  btn.textContent = 'loading...';
+  await loadExploreGrid(true);
 }
 
 function openEbayModal(index) {
@@ -199,7 +270,7 @@ function openEbayModal(index) {
   var img = '';
   if (item.image && item.image.imageUrl) img = item.image.imageUrl;
   else if (item.thumbnailImages && item.thumbnailImages[0]) img = item.thumbnailImages[0].imageUrl;
- img = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
+  img = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
   
   var price = '';
   if (item.price && item.price.value) price = '$' + item.price.value;
@@ -228,7 +299,7 @@ function fileForLater() {
   alert('saved to file cabinet (coming soon)');
 }
 
-loadExploreGrid();
+loadExploreGrid(false);
 </script>
 
 </body>
