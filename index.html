@@ -1669,7 +1669,6 @@ window.openImageDetail = async function(imageId, imageUrl, link, tags) {
     // reset the "more like this" section for the new product
     document.getElementById('similarResults').innerHTML = '';
     document.getElementById('yandexFallback').setAttribute('style', 'display:none;');
-    document.getElementById('exploreMoreLink').setAttribute('style', 'display:none;');
     var simBtn = document.getElementById('loadSimilarBtn');
     simBtn.setAttribute('style', 'width: 100%; padding: 12px; background: #f5ecd7; color: #0600ff; border: 2px solid #0600ff; font-family: Courier New, Courier, monospace; font-size: 12px; cursor: pointer; margin-bottom: 10px;');
     simBtn.disabled = false;
@@ -4823,7 +4822,6 @@ window.getCurrentUploadTab = function() {
         var data = await res.json();
         yandexLink.setAttribute('href', yandexUrl);
         yandexLink.setAttribute('style', 'display:block; margin-top:12px; font-family:Courier New,monospace; font-size:10px; color:#0600ff; text-decoration:underline; text-align:center;');
-        document.getElementById('exploreMoreLink').setAttribute('style', 'display:block; margin-top:8px; font-family:Courier New,monospace; font-size:10px; color:#0600ff; text-decoration:underline; text-align:center;');
         var items = data.itemSummaries || [];
         if (items.length === 0) {
             grid.innerHTML = '<p style="font-family:Courier New,monospace; font-size:11px; color:#666; padding:8px;">no similar listings on eBay — try the web search below</p>';
@@ -4854,7 +4852,6 @@ window.getCurrentUploadTab = function() {
         btn.disabled = false;
         yandexLink.setAttribute('href', yandexUrl);
         yandexLink.setAttribute('style', 'display:block; margin-top:12px; font-family:Courier New,monospace; font-size:10px; color:#0600ff; text-decoration:underline; text-align:center;');
-        document.getElementById('exploreMoreLink').setAttribute('style', 'display:block; margin-top:8px; font-family:Courier New,monospace; font-size:10px; color:#0600ff; text-decoration:underline; text-align:center;');
     }
 }
         function toggleSidebar() {
@@ -4926,9 +4923,6 @@ window.getCurrentUploadTab = function() {
     <a id="yandexFallback" target="_blank" rel="noopener" style="display: none; margin-top: 12px; font-family: 'Courier New', monospace; font-size: 10px; color: #0600ff; text-decoration: underline; text-align: center;">
         didn't find it? search the wider web →
     </a>
-    <a id="exploreMoreLink" href="#" onclick="exploreMoreSimilar(event)" style="display: none; margin-top: 8px; font-family: 'Courier New', monospace; font-size: 10px; color: #0600ff; text-decoration: underline; text-align: center;">
-    search more similar →
-</a>
 </div>
         <button id="shopButton" style="width: 100%; padding: 15px; background: #0600ff; color: white; border: 2px solid #0600ff; font-family: 'Courier New', Courier, monospace; cursor: pointer; margin-bottom: 10px;">shop this item →</button>
         <button onclick="closeImageDetail()" style="width: 100%; padding: 12px; background: #ccc; color: #000; border: 2px solid #999;">close</button>
