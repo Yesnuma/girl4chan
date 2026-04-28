@@ -54,7 +54,7 @@ exports.handler = async (event) => {
         const token = await getEbayToken();
         
         const ebayRes = await fetch(
-            'https://api.ebay.com/buy/browse/v1/item_summary/search_by_image?limit=12',
+            'https://api.ebay.com/buy/browse/v1/item_summary/search_by_image?limit=11',
             {
                 method: 'POST',
                 headers: {
