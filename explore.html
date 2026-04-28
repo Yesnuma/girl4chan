@@ -183,7 +183,8 @@ async function loadExploreGrid() {
       if (item.image && item.image.imageUrl) img = item.image.imageUrl;
       else if (item.thumbnailImages && item.thumbnailImages[0]) img = item.thumbnailImages[0].imageUrl;
       var title = (item.title || '').replace(/"/g, '&quot;');
-      html = html + '<img class="explore-tile" src="' + img + '" alt="' + title + '" loading="lazy" onclick="openEbayModal(' + i + ')">';
+      var hiResImg = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
+html = html + '<img class="explore-tile" src="' + hiResImg + '" alt="' + title + '" loading="lazy" onclick="openEbayModal(' + i + ')">';
     }
     grid.innerHTML = html;
   } catch (err) {
@@ -198,6 +199,7 @@ function openEbayModal(index) {
   var img = '';
   if (item.image && item.image.imageUrl) img = item.image.imageUrl;
   else if (item.thumbnailImages && item.thumbnailImages[0]) img = item.thumbnailImages[0].imageUrl;
+ img = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
   
   var price = '';
   if (item.price && item.price.value) price = '$' + item.price.value;
