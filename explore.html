@@ -34,18 +34,27 @@
     font-size: 16px;
     color: #000;
     font-weight: bold;
+    margin-bottom: 16px;
   }
   #exploreGrid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 2px;
-    margin-top: 16px;
   }
-  .loading-msg {
+  .explore-tile {
+    width: 100%;
+    aspect-ratio: 4/5;
+    object-fit: cover;
+    display: block;
+    cursor: pointer;
+    background: #fff;
+  }
+  .loading-msg, .error-msg {
     text-align: center;
     font-size: 12px;
     color: #666;
     padding: 40px 20px;
+    grid-column: 1 / -1;
   }
 </style>
 </head>
@@ -58,8 +67,53 @@
 <h1 class="page-title">go deeper ↓</h1>
 
 <div id="exploreGrid">
-  <p class="loading-msg">page loaded — explore grid will go here</p>
+  <p class="loading-msg">loading...</p>
 </div>
+
+<script>
+async function loadExploreGrid() {
+  var grid = document.getElementById('exploreGrid');
+  
+  // get the image URL from the page URL
+  var params = new URLSearchParams(window.location.search);
+  var imageUrl = params.get('img');
+  
+  if (!imageUrl) {
+    grid.innerHTML = '<p class="error-msg">no image specified — go back and try again</p>';
+    return;
+  }
+  
+  try {
+    var res = await fetch('/.netlify/functions/searchByImage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageUrl: imageUrl })
+    });
+    var data = await res.json();
+    var items = data.itemSummaries || [];
+    
+    if (items.length === 0) {
+      grid.innerHTML = '<p class="error-msg">no similar items found on eBay</p>';
+      return;
+    }
+    
+    var html = '';
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var img = '';
+      if (item.image && item.image.imageUrl) img = item.image.imageUrl;
+      else if (item.thumbnailImages && item.thumbnailImages[0]) img = item.thumbnailImages[0].imageUrl;
+      var title = (item.title || '').replace(/"/g, '&quot;');
+      html = html + '<img class="explore-tile" src="' + img + '" alt="' + title + '" loading="lazy">';
+    }
+    grid.innerHTML = html;
+  } catch (err) {
+    grid.innerHTML = '<p class="error-msg">something went wrong — try again</p>';
+  }
+}
+
+loadExploreGrid();
+</script>
 
 </body>
 </html>
