@@ -40,7 +40,7 @@ exports.handler = async (event) => {
         return { statusCode: 400, body: JSON.stringify({ error: 'No imageUrl or query provided' }) };
     }
 
-    const categoryFilter = encodeURIComponent('categoryIds:!{171146|2984|182025|182034}');
+    const categoryFilter = encodeURIComponent('categoryIds:!{171146|2984|182025|182034|11462|11452|147192|260019}');
     const ebayHeaders = {
         'Content-Type': 'application/json',
         'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
