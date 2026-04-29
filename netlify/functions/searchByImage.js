@@ -80,4 +80,30 @@ exports.handler = async (event) => {
             const base64Image = Buffer.from(imageBuffer).toString('base64');
 
             const url = 'https://api.ebay.com/buy/browse/v1/item_summary/search_by_image?limit=' +
-                limit + '&offset=' + offset
+                limit + '&offset=' + offset + '&filter=' + categoryFilter;
+
+            ebayRes = await fetch(url, {
+                method: 'POST',
+                headers: ebayHeaders,
+                body: JSON.stringify({ image: base64Image })
+            });
+        }
+
+        const data = await ebayRes.json();
+
+        return {
+            statusCode: 200,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            body: JSON.stringify(data)
+        };
+    } catch (err) {
+        console.error('searchByImage error:', err);
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: err.message })
+        };
+    }
+};
