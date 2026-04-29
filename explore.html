@@ -78,6 +78,19 @@
     padding: 0 2px;
   }
   .word-bubble .x:hover { color: #0600ff; }
+  .save-words-btn {
+    background: #fff;
+    color: #0600ff;
+    border: 1px solid #0600ff;
+    padding: 0 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .save-words-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
   .go-btn {
     background: #0600ff;
     color: #F9FF00;
@@ -91,6 +104,105 @@
   .go-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+
+  /* CABINET */
+  .cabinet-wrap {
+    margin-bottom: 12px;
+    border: 1px solid #0600ff;
+    background: #fff;
+  }
+  .cabinet-toggle {
+    width: 100%;
+    padding: 8px 12px;
+    background: #fff;
+    color: #0600ff;
+    border: none;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    text-align: left;
+    font-weight: bold;
+  }
+  .cabinet-toggle:hover { background: #f0e0d6; }
+  .cabinet-panel {
+    display: none;
+    padding: 8px 12px 12px 12px;
+    border-top: 1px dashed #0600ff;
+  }
+  .cabinet-panel.open { display: block; }
+  .cabinet-empty {
+    font-size: 11px;
+    color: #999;
+    padding: 4px 0;
+  }
+  .cabinet-section-label {
+    font-size: 10px;
+    color: #0600ff;
+    text-transform: uppercase;
+    margin: 6px 0 4px 0;
+    letter-spacing: 0.5px;
+  }
+  .cabinet-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .cabinet-item {
+    position: relative;
+    width: 60px;
+    height: 75px;
+  }
+  .cabinet-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    cursor: pointer;
+    display: block;
+    background: #f5f5f5;
+  }
+  .cabinet-item .remove-btn {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #0600ff;
+    color: #F9FF00;
+    border: none;
+    font-size: 10px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    font-family: 'Courier New', monospace;
+  }
+  .cabinet-words {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .cabinet-word-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: #FF007A;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .cabinet-word-row:hover { opacity: 0.85; }
+  .cabinet-word-row .label { flex: 1; }
+  .cabinet-word-row .remove-btn {
+    background: transparent;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    padding: 0 4px;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
   }
 
   /* SUGGESTED CHIPS */
@@ -236,7 +348,23 @@
   <div class="search-bar" id="searchBar">
     <span class="search-bar-empty" id="searchBarEmpty">tap chips below to start a search</span>
   </div>
+  <button class="save-words-btn" id="saveWordsBtn" onclick="saveCurrentWords()" disabled title="save current words to cabinet">📁+</button>
   <button class="go-btn" id="goBtn" onclick="runWordSearch()" disabled>go →</button>
+</div>
+
+<div class="cabinet-wrap">
+  <button class="cabinet-toggle" id="cabinetToggle" onclick="toggleCabinet()">📁 cabinet (0)</button>
+  <div class="cabinet-panel" id="cabinetPanel">
+    <p class="cabinet-empty" id="cabinetEmpty">nothing filed yet — tap "file for later" on items, or 📁+ to save current words</p>
+    <div id="cabinetItemsSection" style="display:none;">
+      <div class="cabinet-section-label">items</div>
+      <div class="cabinet-items" id="cabinetItems"></div>
+    </div>
+    <div id="cabinetWordsSection" style="display:none;">
+      <div class="cabinet-section-label">word combos</div>
+      <div class="cabinet-words" id="cabinetWords"></div>
+    </div>
+  </div>
 </div>
 
 <div class="chip-row" id="chipRow"></div>
@@ -266,7 +394,13 @@ var pageLimit = 50;
 var sourceImageUrl = '';
 var noMoreResults = false;
 var activeWords = [];
-var currentMode = 'image'; // 'image' or 'word'
+var currentMode = 'image';
+var currentModalItem = null; // tracks item currently open in modal
+
+// CABINET STATE
+var cabinetItems = []; // each: {id, title, price, img, shopUrl, exploreUrl}
+var cabinetWords = []; // each: {id, words: [...]}
+var cabinetCounter = 0;
 
 function getSearchBody() {
   var body = { limit: pageLimit, offset: currentOffset };
@@ -357,35 +491,29 @@ async function loadExploreGrid(append) {
   }
 }
 
-// CHIP MINING — counts words + bigrams from titles, returns top N
 function mineTopWords(items) {
   var counts = {};
   for (var i = 0; i < items.length; i++) {
     var title = (items[i].title || '').toLowerCase();
-    // strip punctuation, keep letters/numbers/spaces
     title = title.replace(/[^a-z0-9\s]/g, ' ');
     var tokens = title.split(/\s+/).filter(function(t) { return t.length > 1; });
 
-    // single words
     for (var j = 0; j < tokens.length; j++) {
       var w = tokens[j];
       counts[w] = (counts[w] || 0) + 1;
     }
-    // bigrams
     for (var k = 0; k < tokens.length - 1; k++) {
       var bg = tokens[k] + ' ' + tokens[k + 1];
       counts[bg] = (counts[bg] || 0) + 1;
     }
   }
 
-  // dedupe: if a bigram appears, demote the single words it contains
   var entries = [];
   for (var key in counts) {
     if (counts[key] >= 2) entries.push([key, counts[key]]);
   }
   entries.sort(function(a, b) { return b[1] - a[1]; });
 
-  // skip words already in active search
   var activeSet = {};
   for (var m = 0; m < activeWords.length; m++) activeSet[activeWords[m].toLowerCase()] = true;
 
@@ -413,9 +541,11 @@ function renderChips(words) {
 function renderSearchBar() {
   var bar = document.getElementById('searchBar');
   var goBtn = document.getElementById('goBtn');
+  var saveBtn = document.getElementById('saveWordsBtn');
   if (activeWords.length === 0) {
     bar.innerHTML = '<span class="search-bar-empty">tap chips below to start a search</span>';
     goBtn.disabled = true;
+    saveBtn.disabled = true;
     return;
   }
   var html = '';
@@ -425,13 +555,13 @@ function renderSearchBar() {
   }
   bar.innerHTML = html;
   goBtn.disabled = false;
+  saveBtn.disabled = false;
 }
 
 function addWord(word) {
   if (activeWords.indexOf(word) === -1) {
     activeWords.push(word);
     renderSearchBar();
-    // grey out the chip in the suggestion row
     var chips = document.querySelectorAll('.chip');
     for (var i = 0; i < chips.length; i++) {
       if (chips[i].textContent === word) chips[i].classList.add('added');
@@ -444,13 +574,9 @@ function removeWord(word) {
   if (idx !== -1) {
     activeWords.splice(idx, 1);
     renderSearchBar();
-    if (activeWords.length === 0) {
-      // reverted to image mode automatically on next "go" — but if we were in word mode
-      // and now have 0 words, swap back to image mode and re-run
-      if (currentMode === 'word') {
-        currentMode = 'image';
-        loadExploreGrid(false);
-      }
+    if (activeWords.length === 0 && currentMode === 'word') {
+      currentMode = 'image';
+      loadExploreGrid(false);
     }
   }
 }
@@ -461,17 +587,149 @@ function runWordSearch() {
   loadExploreGrid(false);
 }
 
+// CABINET FUNCTIONS
+
+function fileForLater() {
+  if (!currentModalItem) return;
+  var item = currentModalItem;
+  var img = '';
+  if (item.image && item.image.imageUrl) img = item.image.imageUrl;
+  else if (item.thumbnailImages && item.thumbnailImages[0]) img = item.thumbnailImages[0].imageUrl;
+  img = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
+
+  cabinetCounter++;
+  cabinetItems.push({
+    id: 'i' + cabinetCounter,
+    title: item.title || '',
+    price: (item.price && item.price.value) ? '$' + item.price.value : '',
+    img: img,
+    shopUrl: item.itemAffiliateWebUrl || item.itemWebUrl || '#'
+  });
+  renderCabinet();
+  closeEbayModal();
+}
+
+function saveCurrentWords() {
+  if (activeWords.length === 0) return;
+  cabinetCounter++;
+  cabinetWords.push({
+    id: 'w' + cabinetCounter,
+    words: activeWords.slice()
+  });
+  renderCabinet();
+}
+
+function removeCabinetItem(id) {
+  cabinetItems = cabinetItems.filter(function(c) { return c.id !== id; });
+  renderCabinet();
+}
+
+function removeCabinetWords(id) {
+  cabinetWords = cabinetWords.filter(function(c) { return c.id !== id; });
+  renderCabinet();
+}
+
+function openCabinetItem(id) {
+  var entry = null;
+  for (var i = 0; i < cabinetItems.length; i++) {
+    if (cabinetItems[i].id === id) { entry = cabinetItems[i]; break; }
+  }
+  if (!entry) return;
+  // open the modal directly with cabinet item data
+  document.getElementById('ebayModalImg').src = entry.img;
+  document.getElementById('ebayModalTitle').textContent = entry.title;
+  document.getElementById('ebayModalPrice').textContent = entry.price;
+  document.getElementById('ebayModalShopBtn').href = entry.shopUrl;
+  document.getElementById('ebayModalExploreBtn').href = '/explore.html?img=' + encodeURIComponent(entry.img);
+  // synthesize a currentModalItem so re-filing won't break
+  currentModalItem = {
+    title: entry.title,
+    image: { imageUrl: entry.img },
+    price: entry.price ? { value: entry.price.replace('$', '') } : null,
+    itemAffiliateWebUrl: entry.shopUrl
+  };
+  document.getElementById('ebayItemModal').style.display = 'flex';
+}
+
+function loadCabinetWords(id) {
+  var entry = null;
+  for (var i = 0; i < cabinetWords.length; i++) {
+    if (cabinetWords[i].id === id) { entry = cabinetWords[i]; break; }
+  }
+  if (!entry) return;
+  // ADD to current activeWords (don't replace)
+  for (var j = 0; j < entry.words.length; j++) {
+    if (activeWords.indexOf(entry.words[j]) === -1) {
+      activeWords.push(entry.words[j]);
+    }
+  }
+  renderSearchBar();
+}
+
+function toggleCabinet() {
+  document.getElementById('cabinetPanel').classList.toggle('open');
+}
+
+function renderCabinet() {
+  var total = cabinetItems.length + cabinetWords.length;
+  document.getElementById('cabinetToggle').textContent = '📁 cabinet (' + total + ')';
+
+  var emptyEl = document.getElementById('cabinetEmpty');
+  var itemsSection = document.getElementById('cabinetItemsSection');
+  var wordsSection = document.getElementById('cabinetWordsSection');
+
+  if (total === 0) {
+    emptyEl.style.display = 'block';
+    itemsSection.style.display = 'none';
+    wordsSection.style.display = 'none';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  // items
+  if (cabinetItems.length > 0) {
+    itemsSection.style.display = 'block';
+    var ihtml = '';
+    for (var i = 0; i < cabinetItems.length; i++) {
+      var ci = cabinetItems[i];
+      ihtml += '<div class="cabinet-item">' +
+        '<img src="' + ci.img + '" onclick="openCabinetItem(\'' + ci.id + '\')" alt="">' +
+        '<button class="remove-btn" onclick="removeCabinetItem(\'' + ci.id + '\')">×</button>' +
+        '</div>';
+    }
+    document.getElementById('cabinetItems').innerHTML = ihtml;
+  } else {
+    itemsSection.style.display = 'none';
+  }
+
+  // words
+  if (cabinetWords.length > 0) {
+    wordsSection.style.display = 'block';
+    var whtml = '';
+    for (var k = 0; k < cabinetWords.length; k++) {
+      var cw = cabinetWords[k];
+      var label = cw.words.join(' + ');
+      whtml += '<div class="cabinet-word-row" onclick="loadCabinetWords(\'' + cw.id + '\')">' +
+        '<span class="label">🏷️ ' + label + '</span>' +
+        '<button class="remove-btn" onclick="event.stopPropagation(); removeCabinetWords(\'' + cw.id + '\')">×</button>' +
+        '</div>';
+    }
+    document.getElementById('cabinetWords').innerHTML = whtml;
+  } else {
+    wordsSection.style.display = 'none';
+  }
+}
+
+// LOAD MORE
 function showLoadMore() {
   var btn = document.getElementById('loadMoreBtn');
   btn.style.display = 'block';
   btn.disabled = false;
   btn.textContent = 'load more →';
 }
-
 function hideLoadMore() {
   document.getElementById('loadMoreBtn').style.display = 'none';
 }
-
 async function loadMore() {
   var btn = document.getElementById('loadMoreBtn');
   btn.disabled = true;
@@ -479,9 +737,11 @@ async function loadMore() {
   await loadExploreGrid(true);
 }
 
+// EBAY MODAL
 function openEbayModal(index) {
   var item = allItems[index];
   if (!item) return;
+  currentModalItem = item;
 
   var img = '';
   if (item.image && item.image.imageUrl) img = item.image.imageUrl;
@@ -504,18 +764,15 @@ function openEbayModal(index) {
 
 function closeEbayModal() {
   document.getElementById('ebayItemModal').style.display = 'none';
+  currentModalItem = null;
 }
 
 function closeEbayModalIfOverlay(event) {
   if (event.target.id === 'ebayItemModal') closeEbayModal();
 }
 
-function fileForLater() {
-  console.log('filed for later — cabinet UI coming later');
-  alert('saved to file cabinet (coming soon)');
-}
-
 renderSearchBar();
+renderCabinet();
 loadExploreGrid(false);
 </script>
 
