@@ -15,13 +15,13 @@
     padding: 16px;
   }
   .explore-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #0600ff;
-}
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #0600ff;
+  }
   .back-link {
     font-family: 'Courier New', monospace;
     font-size: 12px;
@@ -36,6 +36,87 @@
     font-weight: bold;
     margin-bottom: 16px;
   }
+
+  /* SEARCH BAR */
+  .search-bar-wrap {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+    align-items: stretch;
+  }
+  .search-bar {
+    flex: 1;
+    min-height: 38px;
+    background: #fff;
+    border: 1px solid #0600ff;
+    padding: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+  }
+  .search-bar-empty {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #999;
+    padding: 4px;
+  }
+  .word-bubble {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: #9ED2F5;
+    color: #000;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    cursor: default;
+  }
+  .word-bubble .x {
+    cursor: pointer;
+    font-weight: bold;
+    padding: 0 2px;
+  }
+  .word-bubble .x:hover { color: #0600ff; }
+  .go-btn {
+    background: #0600ff;
+    color: #F9FF00;
+    border: none;
+    padding: 0 14px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  .go-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* SUGGESTED CHIPS */
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+    min-height: 28px;
+  }
+  .chip {
+    padding: 5px 10px;
+    background: transparent;
+    border: 1px solid #0600ff;
+    color: #0600ff;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .chip:hover { background: #0600ff; color: #F9FF00; }
+  .chip.added {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
   #exploreGrid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -56,7 +137,7 @@
     padding: 40px 20px;
     grid-column: 1 / -1;
   }
-  
+
   #loadMoreBtn {
     display: none;
     width: 100%;
@@ -73,7 +154,8 @@
     opacity: 0.6;
     cursor: wait;
   }
-  
+
+  /* EBAY ITEM MODAL */
   .ebay-modal-overlay {
     display: none;
     position: fixed;
@@ -150,6 +232,15 @@
 
 <h1 class="page-title">go deeper ↓</h1>
 
+<div class="search-bar-wrap">
+  <div class="search-bar" id="searchBar">
+    <span class="search-bar-empty" id="searchBarEmpty">tap chips below to start a search</span>
+  </div>
+  <button class="go-btn" id="goBtn" onclick="runWordSearch()" disabled>go →</button>
+</div>
+
+<div class="chip-row" id="chipRow"></div>
+
 <div id="exploreGrid">
   <p class="loading-msg">loading...</p>
 </div>
@@ -174,54 +265,69 @@ var currentOffset = 0;
 var pageLimit = 50;
 var sourceImageUrl = '';
 var noMoreResults = false;
+var activeWords = [];
+var currentMode = 'image'; // 'image' or 'word'
+
+function getSearchBody() {
+  var body = { limit: pageLimit, offset: currentOffset };
+  if (currentMode === 'word') {
+    body.query = activeWords.join(' ');
+  } else {
+    body.imageUrl = sourceImageUrl;
+  }
+  return body;
+}
 
 async function loadExploreGrid(append) {
   var grid = document.getElementById('exploreGrid');
-  
+
   if (!append) {
-    var params = new URLSearchParams(window.location.search);
-    sourceImageUrl = params.get('img');
-    if (!sourceImageUrl) {
-      grid.innerHTML = '<p class="error-msg">no image specified — go back and try again</p>';
-      return;
+    if (currentMode === 'image') {
+      var params = new URLSearchParams(window.location.search);
+      sourceImageUrl = params.get('img');
+      if (!sourceImageUrl) {
+        grid.innerHTML = '<p class="error-msg">no image specified — go back and try again</p>';
+        return;
+      }
     }
     currentOffset = 0;
     noMoreResults = false;
     allItems = [];
     grid.innerHTML = '<p class="loading-msg">loading...</p>';
   }
-  
+
   try {
     var res = await fetch('/.netlify/functions/searchByImage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageUrl: sourceImageUrl, limit: pageLimit, offset: currentOffset })
+      body: JSON.stringify(getSearchBody())
     });
     var data = await res.json();
     var items = data.itemSummaries || [];
-    
+
     if (items.length === 0 && !append) {
-      grid.innerHTML = '<p class="error-msg">no similar items found on eBay</p>';
+      grid.innerHTML = '<p class="error-msg">no results — try removing a word or going back</p>';
       hideLoadMore();
+      renderChips([]);
       return;
     }
-    
+
     if (items.length === 0 && append) {
       noMoreResults = true;
       hideLoadMore();
       return;
     }
-    
+
     if (items.length < pageLimit) {
       noMoreResults = true;
     }
-    
+
     var startIndex = allItems.length;
     for (var j = 0; j < items.length; j++) {
       allItems.push(items[j]);
     }
     currentOffset = currentOffset + pageLimit;
-    
+
     var html = append ? grid.innerHTML : '';
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
@@ -234,7 +340,12 @@ async function loadExploreGrid(append) {
       html = html + '<img class="explore-tile" src="' + hiResImg + '" alt="' + title + '" loading="lazy" onclick="openEbayModal(' + globalIndex + ')">';
     }
     grid.innerHTML = html;
-    
+
+    if (!append) {
+      var topWords = mineTopWords(allItems);
+      renderChips(topWords);
+    }
+
     if (noMoreResults) {
       hideLoadMore();
     } else {
@@ -244,6 +355,110 @@ async function loadExploreGrid(append) {
     grid.innerHTML = '<p class="error-msg">something went wrong — try again</p>';
     hideLoadMore();
   }
+}
+
+// CHIP MINING — counts words + bigrams from titles, returns top N
+function mineTopWords(items) {
+  var counts = {};
+  for (var i = 0; i < items.length; i++) {
+    var title = (items[i].title || '').toLowerCase();
+    // strip punctuation, keep letters/numbers/spaces
+    title = title.replace(/[^a-z0-9\s]/g, ' ');
+    var tokens = title.split(/\s+/).filter(function(t) { return t.length > 1; });
+
+    // single words
+    for (var j = 0; j < tokens.length; j++) {
+      var w = tokens[j];
+      counts[w] = (counts[w] || 0) + 1;
+    }
+    // bigrams
+    for (var k = 0; k < tokens.length - 1; k++) {
+      var bg = tokens[k] + ' ' + tokens[k + 1];
+      counts[bg] = (counts[bg] || 0) + 1;
+    }
+  }
+
+  // dedupe: if a bigram appears, demote the single words it contains
+  var entries = [];
+  for (var key in counts) {
+    if (counts[key] >= 2) entries.push([key, counts[key]]);
+  }
+  entries.sort(function(a, b) { return b[1] - a[1]; });
+
+  // skip words already in active search
+  var activeSet = {};
+  for (var m = 0; m < activeWords.length; m++) activeSet[activeWords[m].toLowerCase()] = true;
+
+  var picked = [];
+  for (var n = 0; n < entries.length && picked.length < 10; n++) {
+    if (!activeSet[entries[n][0]]) picked.push(entries[n][0]);
+  }
+  return picked;
+}
+
+function renderChips(words) {
+  var row = document.getElementById('chipRow');
+  if (!words || words.length === 0) {
+    row.innerHTML = '';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < words.length; i++) {
+    var w = words[i].replace(/'/g, '&#39;');
+    html += '<button class="chip" onclick="addWord(\'' + w + '\')">' + words[i] + '</button>';
+  }
+  row.innerHTML = html;
+}
+
+function renderSearchBar() {
+  var bar = document.getElementById('searchBar');
+  var goBtn = document.getElementById('goBtn');
+  if (activeWords.length === 0) {
+    bar.innerHTML = '<span class="search-bar-empty">tap chips below to start a search</span>';
+    goBtn.disabled = true;
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < activeWords.length; i++) {
+    var w = activeWords[i].replace(/'/g, '&#39;');
+    html += '<span class="word-bubble">' + activeWords[i] + ' <span class="x" onclick="removeWord(\'' + w + '\')">×</span></span>';
+  }
+  bar.innerHTML = html;
+  goBtn.disabled = false;
+}
+
+function addWord(word) {
+  if (activeWords.indexOf(word) === -1) {
+    activeWords.push(word);
+    renderSearchBar();
+    // grey out the chip in the suggestion row
+    var chips = document.querySelectorAll('.chip');
+    for (var i = 0; i < chips.length; i++) {
+      if (chips[i].textContent === word) chips[i].classList.add('added');
+    }
+  }
+}
+
+function removeWord(word) {
+  var idx = activeWords.indexOf(word);
+  if (idx !== -1) {
+    activeWords.splice(idx, 1);
+    renderSearchBar();
+    if (activeWords.length === 0) {
+      // reverted to image mode automatically on next "go" — but if we were in word mode
+      // and now have 0 words, swap back to image mode and re-run
+      if (currentMode === 'word') {
+        currentMode = 'image';
+        loadExploreGrid(false);
+      }
+    }
+  }
+}
+
+function runWordSearch() {
+  if (activeWords.length === 0) return;
+  currentMode = 'word';
+  loadExploreGrid(false);
 }
 
 function showLoadMore() {
@@ -267,18 +482,18 @@ async function loadMore() {
 function openEbayModal(index) {
   var item = allItems[index];
   if (!item) return;
-  
+
   var img = '';
   if (item.image && item.image.imageUrl) img = item.image.imageUrl;
   else if (item.thumbnailImages && item.thumbnailImages[0]) img = item.thumbnailImages[0].imageUrl;
   img = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
-  
+
   var price = '';
   if (item.price && item.price.value) price = '$' + item.price.value;
-  
+
   var shopUrl = item.itemAffiliateWebUrl || item.itemWebUrl || '#';
   var exploreUrl = '/explore.html?img=' + encodeURIComponent(img);
-  
+
   document.getElementById('ebayModalImg').src = img;
   document.getElementById('ebayModalTitle').textContent = item.title || '';
   document.getElementById('ebayModalPrice').textContent = price;
@@ -300,6 +515,7 @@ function fileForLater() {
   alert('saved to file cabinet (coming soon)');
 }
 
+renderSearchBar();
 loadExploreGrid(false);
 </script>
 
