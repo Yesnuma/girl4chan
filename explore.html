@@ -324,15 +324,66 @@
     text-align: center;
     display: block;
   }
-  .ebay-modal-btn-secondary {
-    background: #fff;
-    color: #0600ff;
-  }
   .ebay-modal-btn-tertiary {
     background: #f5f5f5;
     color: #000;
     border: 2px solid #ccc;
   }
+
+  /* ICON ACTION ROW */
+  .ebay-icon-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .ebay-icon-btn {
+    border: 2px solid #0600ff;
+    background: #fff;
+    padding: 10px 4px 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    text-decoration: none;
+  }
+  .ebay-icon-btn:hover { background: #f0e0d6; }
+  .ebay-icon-btn.add-btn { background: #9ED2F5; }
+  .ebay-icon-btn.add-btn:hover { background: #7ec3ed; }
+  .ebay-icon-btn .icon-label {
+    font-size: 10px;
+    color: #0600ff;
+  }
+  .ebay-icon-btn svg {
+    stroke: #0600ff;
+  }
+  .ebay-icon-btn.is-loading svg { display: none; }
+  .ebay-icon-btn .spinner {
+    display: none;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #0600ff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .ebay-icon-btn.is-loading .spinner { display: block; }
+  .ebay-icon-btn .check {
+    display: none;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    text-align: center;
+    color: #0600ff;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  .ebay-icon-btn.is-success .spinner { display: none; }
+  .ebay-icon-btn.is-success svg { display: none; }
+  .ebay-icon-btn.is-success .check { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -380,9 +431,34 @@
     <img class="ebay-modal-img" id="ebayModalImg" alt="">
     <div class="ebay-modal-title" id="ebayModalTitle"></div>
     <div class="ebay-modal-price" id="ebayModalPrice"></div>
+
     <a class="ebay-modal-btn" id="ebayModalShopBtn" target="_blank" rel="noopener" href="#">shop on eBay →</a>
-    <a class="ebay-modal-btn ebay-modal-btn-secondary" id="ebayModalExploreBtn" href="#">explore this deeper →</a>
-    <button class="ebay-modal-btn ebay-modal-btn-secondary" onclick="fileForLater()">file for later</button>
+
+    <div class="ebay-icon-row">
+      <a class="ebay-icon-btn" id="ebayModalExploreBtn" href="#">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <span class="icon-label">explore</span>
+      </a>
+      <button class="ebay-icon-btn" onclick="fileForLater()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <span class="icon-label">file</span>
+      </button>
+      <button class="ebay-icon-btn add-btn" id="ebayModalAddBtn" onclick="addToGirlchan()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <div class="spinner"></div>
+        <div class="check">✓</div>
+        <span class="icon-label" id="addBtnLabel">add</span>
+      </button>
+    </div>
+
     <button class="ebay-modal-btn ebay-modal-btn-tertiary" onclick="closeEbayModal()">close</button>
   </div>
 </div>
@@ -397,7 +473,6 @@ var activeWords = [];
 var currentMode = 'image';
 var currentModalItem = null;
 
-// CABINET STATE — loaded from sessionStorage so it persists across navigation
 var cabinetItems = JSON.parse(sessionStorage.getItem('girlchan_cabinet_items') || '[]');
 var cabinetWords = JSON.parse(sessionStorage.getItem('girlchan_cabinet_words') || '[]');
 var cabinetCounter = parseInt(sessionStorage.getItem('girlchan_cabinet_counter') || '0', 10);
@@ -593,8 +668,6 @@ function runWordSearch() {
   loadExploreGrid(false);
 }
 
-// CABINET FUNCTIONS
-
 function fileForLater() {
   if (!currentModalItem) return;
   var item = currentModalItem;
@@ -656,6 +729,7 @@ function openCabinetItem(id) {
     price: entry.price ? { value: entry.price.replace('$', '') } : null,
     itemAffiliateWebUrl: entry.shopUrl
   };
+  resetAddBtn();
   document.getElementById('ebayItemModal').style.display = 'flex';
 }
 
@@ -725,6 +799,37 @@ function renderCabinet() {
   }
 }
 
+// ADD TO GIRLCHAN — stub for now
+function addToGirlchan() {
+  if (!currentModalItem) return;
+  var btn = document.getElementById('ebayModalAddBtn');
+  var label = document.getElementById('addBtnLabel');
+  if (btn.classList.contains('is-loading') || btn.classList.contains('is-success')) return;
+
+  // simulate the loading + success states for now
+  btn.classList.add('is-loading');
+  label.textContent = 'adding...';
+
+  setTimeout(function() {
+    btn.classList.remove('is-loading');
+    btn.classList.add('is-success');
+    label.textContent = 'added!';
+    setTimeout(function() {
+      closeEbayModal();
+      resetAddBtn();
+    }, 1500);
+  }, 800);
+}
+
+function resetAddBtn() {
+  var btn = document.getElementById('ebayModalAddBtn');
+  var label = document.getElementById('addBtnLabel');
+  if (!btn || !label) return;
+  btn.classList.remove('is-loading');
+  btn.classList.remove('is-success');
+  label.textContent = 'add';
+}
+
 function showLoadMore() {
   var btn = document.getElementById('loadMoreBtn');
   btn.style.display = 'block';
@@ -762,6 +867,7 @@ function openEbayModal(index) {
   document.getElementById('ebayModalPrice').textContent = price;
   document.getElementById('ebayModalShopBtn').href = shopUrl;
   document.getElementById('ebayModalExploreBtn').href = exploreUrl;
+  resetAddBtn();
   document.getElementById('ebayItemModal').style.display = 'flex';
 }
 
