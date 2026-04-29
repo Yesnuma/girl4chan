@@ -395,12 +395,18 @@ var sourceImageUrl = '';
 var noMoreResults = false;
 var activeWords = [];
 var currentMode = 'image';
-var currentModalItem = null; // tracks item currently open in modal
+var currentModalItem = null;
 
-// CABINET STATE
-var cabinetItems = []; // each: {id, title, price, img, shopUrl, exploreUrl}
-var cabinetWords = []; // each: {id, words: [...]}
-var cabinetCounter = 0;
+// CABINET STATE — loaded from sessionStorage so it persists across navigation
+var cabinetItems = JSON.parse(sessionStorage.getItem('girlchan_cabinet_items') || '[]');
+var cabinetWords = JSON.parse(sessionStorage.getItem('girlchan_cabinet_words') || '[]');
+var cabinetCounter = parseInt(sessionStorage.getItem('girlchan_cabinet_counter') || '0', 10);
+
+function saveCabinet() {
+  sessionStorage.setItem('girlchan_cabinet_items', JSON.stringify(cabinetItems));
+  sessionStorage.setItem('girlchan_cabinet_words', JSON.stringify(cabinetWords));
+  sessionStorage.setItem('girlchan_cabinet_counter', String(cabinetCounter));
+}
 
 function getSearchBody() {
   var body = { limit: pageLimit, offset: currentOffset };
@@ -605,6 +611,7 @@ function fileForLater() {
     img: img,
     shopUrl: item.itemAffiliateWebUrl || item.itemWebUrl || '#'
   });
+  saveCabinet();
   renderCabinet();
   closeEbayModal();
 }
@@ -616,16 +623,19 @@ function saveCurrentWords() {
     id: 'w' + cabinetCounter,
     words: activeWords.slice()
   });
+  saveCabinet();
   renderCabinet();
 }
 
 function removeCabinetItem(id) {
   cabinetItems = cabinetItems.filter(function(c) { return c.id !== id; });
+  saveCabinet();
   renderCabinet();
 }
 
 function removeCabinetWords(id) {
   cabinetWords = cabinetWords.filter(function(c) { return c.id !== id; });
+  saveCabinet();
   renderCabinet();
 }
 
@@ -635,13 +645,11 @@ function openCabinetItem(id) {
     if (cabinetItems[i].id === id) { entry = cabinetItems[i]; break; }
   }
   if (!entry) return;
-  // open the modal directly with cabinet item data
   document.getElementById('ebayModalImg').src = entry.img;
   document.getElementById('ebayModalTitle').textContent = entry.title;
   document.getElementById('ebayModalPrice').textContent = entry.price;
   document.getElementById('ebayModalShopBtn').href = entry.shopUrl;
   document.getElementById('ebayModalExploreBtn').href = '/explore.html?img=' + encodeURIComponent(entry.img);
-  // synthesize a currentModalItem so re-filing won't break
   currentModalItem = {
     title: entry.title,
     image: { imageUrl: entry.img },
@@ -657,7 +665,6 @@ function loadCabinetWords(id) {
     if (cabinetWords[i].id === id) { entry = cabinetWords[i]; break; }
   }
   if (!entry) return;
-  // ADD to current activeWords (don't replace)
   for (var j = 0; j < entry.words.length; j++) {
     if (activeWords.indexOf(entry.words[j]) === -1) {
       activeWords.push(entry.words[j]);
@@ -686,7 +693,6 @@ function renderCabinet() {
   }
   emptyEl.style.display = 'none';
 
-  // items
   if (cabinetItems.length > 0) {
     itemsSection.style.display = 'block';
     var ihtml = '';
@@ -702,7 +708,6 @@ function renderCabinet() {
     itemsSection.style.display = 'none';
   }
 
-  // words
   if (cabinetWords.length > 0) {
     wordsSection.style.display = 'block';
     var whtml = '';
@@ -720,7 +725,6 @@ function renderCabinet() {
   }
 }
 
-// LOAD MORE
 function showLoadMore() {
   var btn = document.getElementById('loadMoreBtn');
   btn.style.display = 'block';
@@ -737,7 +741,6 @@ async function loadMore() {
   await loadExploreGrid(true);
 }
 
-// EBAY MODAL
 function openEbayModal(index) {
   var item = allItems[index];
   if (!item) return;
