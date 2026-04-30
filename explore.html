@@ -37,7 +37,6 @@
     margin-bottom: 16px;
   }
 
-  /* SEARCH BAR */
   .search-bar-wrap {
     display: flex;
     gap: 6px;
@@ -106,7 +105,6 @@
     cursor: not-allowed;
   }
 
-  /* CABINET */
   .cabinet-wrap {
     margin-bottom: 12px;
     border: 1px solid #0600ff;
@@ -205,7 +203,6 @@
     font-family: 'Courier New', monospace;
   }
 
-  /* SUGGESTED CHIPS */
   .chip-row {
     display: flex;
     flex-wrap: wrap;
@@ -267,7 +264,6 @@
     cursor: wait;
   }
 
-  /* EBAY ITEM MODAL */
   .ebay-modal-overlay {
     display: none;
     position: fixed;
@@ -330,7 +326,6 @@
     border: 2px solid #ccc;
   }
 
-  /* ICON ACTION ROW */
   .ebay-icon-row {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -383,6 +378,12 @@
   .ebay-icon-btn.is-success .spinner { display: none; }
   .ebay-icon-btn.is-success svg { display: none; }
   .ebay-icon-btn.is-success .check { display: block; }
+  .ebay-icon-btn.is-error svg { display: none; }
+  .ebay-icon-btn.is-error .spinner { display: none; }
+  .ebay-icon-btn.is-error .check {
+    display: block;
+    color: #c00;
+  }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
@@ -406,7 +407,7 @@
 <div class="cabinet-wrap">
   <button class="cabinet-toggle" id="cabinetToggle" onclick="toggleCabinet()">📁 cabinet (0)</button>
   <div class="cabinet-panel" id="cabinetPanel">
-    <p class="cabinet-empty" id="cabinetEmpty">nothing filed yet — tap "file for later" on items, or 📁+ to save current words</p>
+    <p class="cabinet-empty" id="cabinetEmpty">nothing filed yet — tap "file" on items, or 📁+ to save current words</p>
     <div id="cabinetItemsSection" style="display:none;">
       <div class="cabinet-section-label">items</div>
       <div class="cabinet-items" id="cabinetItems"></div>
@@ -463,6 +464,42 @@
   </div>
 </div>
 
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  import { getFirestore, collection, addDoc, doc, getDoc, getDocs, query, where, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDExgxdLsySYHaQp4UdXaxhQ0zcSAS72g4",
+    authDomain: "girl-4chan.firebaseapp.com",
+    projectId: "girl-4chan",
+    storageBucket: "girl-4chan.firebasestorage.app",
+    messagingSenderId: "290973679176",
+    appId: "1:290973679176:web:2074819349d9f464ba227d"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // expose for non-module script below
+  window.__girlchan = {
+    auth, db,
+    collection, addDoc, doc, getDoc, getDocs, query, where, updateDoc,
+    ready: false,
+    user: null
+  };
+
+  onAuthStateChanged(auth, (user) => {
+    window.__girlchan.user = user;
+    window.__girlchan.ready = true;
+    if (!user) {
+      // logged out — bounce to home where the login modal lives
+      window.location.href = '/';
+    }
+  });
+</script>
+
 <script>
 var allItems = [];
 var currentOffset = 0;
@@ -485,17 +522,13 @@ function saveCabinet() {
 
 function getSearchBody() {
   var body = { limit: pageLimit, offset: currentOffset };
-  if (currentMode === 'word') {
-    body.query = activeWords.join(' ');
-  } else {
-    body.imageUrl = sourceImageUrl;
-  }
+  if (currentMode === 'word') body.query = activeWords.join(' ');
+  else body.imageUrl = sourceImageUrl;
   return body;
 }
 
 async function loadExploreGrid(append) {
   var grid = document.getElementById('exploreGrid');
-
   if (!append) {
     if (currentMode === 'image') {
       var params = new URLSearchParams(window.location.search);
@@ -510,7 +543,6 @@ async function loadExploreGrid(append) {
     allItems = [];
     grid.innerHTML = '<p class="loading-msg">loading...</p>';
   }
-
   try {
     var res = await fetch('/.netlify/functions/searchByImage', {
       method: 'POST',
@@ -519,30 +551,17 @@ async function loadExploreGrid(append) {
     });
     var data = await res.json();
     var items = data.itemSummaries || [];
-
     if (items.length === 0 && !append) {
       grid.innerHTML = '<p class="error-msg">no results — try removing a word or going back</p>';
       hideLoadMore();
       renderChips([]);
       return;
     }
-
-    if (items.length === 0 && append) {
-      noMoreResults = true;
-      hideLoadMore();
-      return;
-    }
-
-    if (items.length < pageLimit) {
-      noMoreResults = true;
-    }
-
+    if (items.length === 0 && append) { noMoreResults = true; hideLoadMore(); return; }
+    if (items.length < pageLimit) noMoreResults = true;
     var startIndex = allItems.length;
-    for (var j = 0; j < items.length; j++) {
-      allItems.push(items[j]);
-    }
+    for (var j = 0; j < items.length; j++) allItems.push(items[j]);
     currentOffset = currentOffset + pageLimit;
-
     var html = append ? grid.innerHTML : '';
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
@@ -555,17 +574,8 @@ async function loadExploreGrid(append) {
       html = html + '<img class="explore-tile" src="' + hiResImg + '" alt="' + title + '" loading="lazy" onclick="openEbayModal(' + globalIndex + ')">';
     }
     grid.innerHTML = html;
-
-    if (!append) {
-      var topWords = mineTopWords(allItems);
-      renderChips(topWords);
-    }
-
-    if (noMoreResults) {
-      hideLoadMore();
-    } else {
-      showLoadMore();
-    }
+    if (!append) renderChips(mineTopWords(allItems));
+    if (noMoreResults) hideLoadMore(); else showLoadMore();
   } catch (err) {
     grid.innerHTML = '<p class="error-msg">something went wrong — try again</p>';
     hideLoadMore();
@@ -578,26 +588,17 @@ function mineTopWords(items) {
     var title = (items[i].title || '').toLowerCase();
     title = title.replace(/[^a-z0-9\s]/g, ' ');
     var tokens = title.split(/\s+/).filter(function(t) { return t.length > 1; });
-
-    for (var j = 0; j < tokens.length; j++) {
-      var w = tokens[j];
-      counts[w] = (counts[w] || 0) + 1;
-    }
+    for (var j = 0; j < tokens.length; j++) counts[tokens[j]] = (counts[tokens[j]] || 0) + 1;
     for (var k = 0; k < tokens.length - 1; k++) {
       var bg = tokens[k] + ' ' + tokens[k + 1];
       counts[bg] = (counts[bg] || 0) + 1;
     }
   }
-
   var entries = [];
-  for (var key in counts) {
-    if (counts[key] >= 2) entries.push([key, counts[key]]);
-  }
+  for (var key in counts) if (counts[key] >= 2) entries.push([key, counts[key]]);
   entries.sort(function(a, b) { return b[1] - a[1]; });
-
   var activeSet = {};
   for (var m = 0; m < activeWords.length; m++) activeSet[activeWords[m].toLowerCase()] = true;
-
   var picked = [];
   for (var n = 0; n < entries.length && picked.length < 10; n++) {
     if (!activeSet[entries[n][0]]) picked.push(entries[n][0]);
@@ -607,10 +608,7 @@ function mineTopWords(items) {
 
 function renderChips(words) {
   var row = document.getElementById('chipRow');
-  if (!words || words.length === 0) {
-    row.innerHTML = '';
-    return;
-  }
+  if (!words || words.length === 0) { row.innerHTML = ''; return; }
   var html = '';
   for (var i = 0; i < words.length; i++) {
     var w = words[i].replace(/'/g, '&#39;');
@@ -675,14 +673,14 @@ function fileForLater() {
   if (item.image && item.image.imageUrl) img = item.image.imageUrl;
   else if (item.thumbnailImages && item.thumbnailImages[0]) img = item.thumbnailImages[0].imageUrl;
   img = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
-
   cabinetCounter++;
   cabinetItems.push({
     id: 'i' + cabinetCounter,
     title: item.title || '',
     price: (item.price && item.price.value) ? '$' + item.price.value : '',
     img: img,
-    shopUrl: item.itemAffiliateWebUrl || item.itemWebUrl || '#'
+    shopUrl: item.itemAffiliateWebUrl || item.itemWebUrl || '#',
+    itemId: item.itemId || ''
   });
   saveCabinet();
   renderCabinet();
@@ -692,10 +690,7 @@ function fileForLater() {
 function saveCurrentWords() {
   if (activeWords.length === 0) return;
   cabinetCounter++;
-  cabinetWords.push({
-    id: 'w' + cabinetCounter,
-    words: activeWords.slice()
-  });
+  cabinetWords.push({ id: 'w' + cabinetCounter, words: activeWords.slice() });
   saveCabinet();
   renderCabinet();
 }
@@ -714,9 +709,7 @@ function removeCabinetWords(id) {
 
 function openCabinetItem(id) {
   var entry = null;
-  for (var i = 0; i < cabinetItems.length; i++) {
-    if (cabinetItems[i].id === id) { entry = cabinetItems[i]; break; }
-  }
+  for (var i = 0; i < cabinetItems.length; i++) if (cabinetItems[i].id === id) { entry = cabinetItems[i]; break; }
   if (!entry) return;
   document.getElementById('ebayModalImg').src = entry.img;
   document.getElementById('ebayModalTitle').textContent = entry.title;
@@ -727,7 +720,8 @@ function openCabinetItem(id) {
     title: entry.title,
     image: { imageUrl: entry.img },
     price: entry.price ? { value: entry.price.replace('$', '') } : null,
-    itemAffiliateWebUrl: entry.shopUrl
+    itemAffiliateWebUrl: entry.shopUrl,
+    itemId: entry.itemId || ''
   };
   resetAddBtn();
   document.getElementById('ebayItemModal').style.display = 'flex';
@@ -735,14 +729,10 @@ function openCabinetItem(id) {
 
 function loadCabinetWords(id) {
   var entry = null;
-  for (var i = 0; i < cabinetWords.length; i++) {
-    if (cabinetWords[i].id === id) { entry = cabinetWords[i]; break; }
-  }
+  for (var i = 0; i < cabinetWords.length; i++) if (cabinetWords[i].id === id) { entry = cabinetWords[i]; break; }
   if (!entry) return;
   for (var j = 0; j < entry.words.length; j++) {
-    if (activeWords.indexOf(entry.words[j]) === -1) {
-      activeWords.push(entry.words[j]);
-    }
+    if (activeWords.indexOf(entry.words[j]) === -1) activeWords.push(entry.words[j]);
   }
   renderSearchBar();
 }
@@ -754,11 +744,9 @@ function toggleCabinet() {
 function renderCabinet() {
   var total = cabinetItems.length + cabinetWords.length;
   document.getElementById('cabinetToggle').textContent = '📁 cabinet (' + total + ')';
-
   var emptyEl = document.getElementById('cabinetEmpty');
   var itemsSection = document.getElementById('cabinetItemsSection');
   var wordsSection = document.getElementById('cabinetWordsSection');
-
   if (total === 0) {
     emptyEl.style.display = 'block';
     itemsSection.style.display = 'none';
@@ -766,7 +754,6 @@ function renderCabinet() {
     return;
   }
   emptyEl.style.display = 'none';
-
   if (cabinetItems.length > 0) {
     itemsSection.style.display = 'block';
     var ihtml = '';
@@ -781,7 +768,6 @@ function renderCabinet() {
   } else {
     itemsSection.style.display = 'none';
   }
-
   if (cabinetWords.length > 0) {
     wordsSection.style.display = 'block';
     var whtml = '';
@@ -799,18 +785,105 @@ function renderCabinet() {
   }
 }
 
-// ADD TO GIRLCHAN — stub for now
-function addToGirlchan() {
+// ADD TO GIRLCHAN — real implementation
+async function addToGirlchan() {
   if (!currentModalItem) return;
   var btn = document.getElementById('ebayModalAddBtn');
   var label = document.getElementById('addBtnLabel');
   if (btn.classList.contains('is-loading') || btn.classList.contains('is-success')) return;
 
-  // simulate the loading + success states for now
+  // wait for firebase to be ready (rare race condition)
+  var gc = window.__girlchan;
+  if (!gc || !gc.ready) {
+    btn.classList.add('is-error');
+    label.textContent = 'try again';
+    setTimeout(resetAddBtn, 1500);
+    return;
+  }
+  if (!gc.user) {
+    window.location.href = '/';
+    return;
+  }
+
   btn.classList.add('is-loading');
   label.textContent = 'adding...';
 
-  setTimeout(function() {
+  try {
+    var item = currentModalItem;
+
+    // get image url at high res
+    var img = '';
+    if (item.image && item.image.imageUrl) img = item.image.imageUrl;
+    else if (item.thumbnailImages && item.thumbnailImages[0]) img = item.thumbnailImages[0].imageUrl;
+    img = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
+
+    var ebayItemId = item.itemId || '';
+    var shopUrl = item.itemAffiliateWebUrl || item.itemWebUrl || '';
+
+    // duplicate check — has this user already added this exact eBay item?
+    if (ebayItemId) {
+      var existing = await gc.getDocs(
+        gc.query(
+          gc.collection(gc.db, 'images'),
+          gc.where('userId', '==', gc.user.uid),
+          gc.where('ebayItemId', '==', ebayItemId)
+        )
+      );
+      if (!existing.empty) {
+        btn.classList.remove('is-loading');
+        btn.classList.add('is-success');
+        label.textContent = 'already added';
+        setTimeout(function() { closeEbayModal(); resetAddBtn(); }, 1500);
+        return;
+      }
+    }
+
+    // apply curator's affiliate code if they have one
+    var userDoc = await gc.getDoc(gc.doc(gc.db, 'users', gc.user.uid));
+    var campaignId = (userDoc.exists() && userDoc.data().ebayAffiliateCode) ? userDoc.data().ebayAffiliateCode : null;
+    var finalLink = shopUrl;
+    if (campaignId && finalLink && (finalLink.indexOf('ebay.com') !== -1 || finalLink.indexOf('ebay.us') !== -1)) {
+      try {
+        var url = new URL(finalLink);
+        url.searchParams.set('campid', campaignId);
+        finalLink = url.toString();
+      } catch (e) {}
+    }
+
+    // write the doc — matches link-tab schema, with extra ebayItemId field
+    var docRef = await gc.addDoc(gc.collection(gc.db, 'images'), {
+      imageUrl: img,
+      link: finalLink,
+      userId: gc.user.uid,
+      createdAt: new Date(),
+      tags: [],
+      aiTags: [],
+      source: 'link',
+      ebayItemId: ebayItemId
+    });
+
+    // background AI tagging — matches link-tab pattern
+    setTimeout(async function() {
+      try {
+        var res = await fetch('/.netlify/functions/ai-tagger', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: img })
+        });
+        var tagData = await res.json();
+        var bgTags = Array.isArray(tagData.tags) ? tagData.tags : [];
+        if (bgTags.length > 0) {
+          await gc.updateDoc(gc.doc(gc.db, 'images', docRef.id), {
+            tags: bgTags,
+            aiTags: bgTags
+          });
+        }
+      } catch (e) {
+        console.log('background tagging failed silently:', e);
+      }
+    }, 2000);
+
+    // success state
     btn.classList.remove('is-loading');
     btn.classList.add('is-success');
     label.textContent = 'added!';
@@ -818,7 +891,13 @@ function addToGirlchan() {
       closeEbayModal();
       resetAddBtn();
     }, 1500);
-  }, 800);
+  } catch (err) {
+    console.error('add to girlchan error:', err);
+    btn.classList.remove('is-loading');
+    btn.classList.add('is-error');
+    label.textContent = 'try again';
+    setTimeout(resetAddBtn, 2000);
+  }
 }
 
 function resetAddBtn() {
@@ -827,6 +906,7 @@ function resetAddBtn() {
   if (!btn || !label) return;
   btn.classList.remove('is-loading');
   btn.classList.remove('is-success');
+  btn.classList.remove('is-error');
   label.textContent = 'add';
 }
 
@@ -850,18 +930,14 @@ function openEbayModal(index) {
   var item = allItems[index];
   if (!item) return;
   currentModalItem = item;
-
   var img = '';
   if (item.image && item.image.imageUrl) img = item.image.imageUrl;
   else if (item.thumbnailImages && item.thumbnailImages[0]) img = item.thumbnailImages[0].imageUrl;
   img = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
-
   var price = '';
   if (item.price && item.price.value) price = '$' + item.price.value;
-
   var shopUrl = item.itemAffiliateWebUrl || item.itemWebUrl || '#';
   var exploreUrl = '/explore.html?img=' + encodeURIComponent(img);
-
   document.getElementById('ebayModalImg').src = img;
   document.getElementById('ebayModalTitle').textContent = item.title || '';
   document.getElementById('ebayModalPrice').textContent = price;
@@ -875,10 +951,26 @@ function closeEbayModal() {
   document.getElementById('ebayItemModal').style.display = 'none';
   currentModalItem = null;
 }
-
 function closeEbayModalIfOverlay(event) {
   if (event.target.id === 'ebayItemModal') closeEbayModal();
 }
+
+// expose globals
+window.addWord = addWord;
+window.removeWord = removeWord;
+window.runWordSearch = runWordSearch;
+window.saveCurrentWords = saveCurrentWords;
+window.toggleCabinet = toggleCabinet;
+window.openCabinetItem = openCabinetItem;
+window.loadCabinetWords = loadCabinetWords;
+window.removeCabinetItem = removeCabinetItem;
+window.removeCabinetWords = removeCabinetWords;
+window.fileForLater = fileForLater;
+window.addToGirlchan = addToGirlchan;
+window.openEbayModal = openEbayModal;
+window.closeEbayModal = closeEbayModal;
+window.closeEbayModalIfOverlay = closeEbayModalIfOverlay;
+window.loadMore = loadMore;
 
 renderSearchBar();
 renderCabinet();
