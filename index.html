@@ -1102,6 +1102,7 @@
         <div style="display: flex; align-items: center; gap: 15px;">
             <a href="#" onclick="loadAccountSettings(); return false;" id="accountLink" style="display: none; text-decoration: none; font-size: 18px; color: #000;">@</a>
             <button class="logout-btn" id="logoutBtn" onclick="handleLogout()" style="display: none;">logout</button>
+            <button class="logout-btn" id="loginBtn" onclick="openLoginModal()" style="display: none;">log in</button>
         </div>
     </div>
 
@@ -1558,27 +1559,35 @@ function isAdmin() {
             return TAG_CATEGORIES.Items.includes(tag);
         }
 
-     // Check auth state
+    // Check auth state — public browsing allowed, actions gated separately
         onAuthStateChanged(auth, async (user) => {
+            // Always hide login modal on load; it only opens when an action requires it
+            document.getElementById('loginModal').style.display = 'none';
+
             if (user) {
                 currentUser = user;
-                
+
                 // Check premium status
                 const userDoc = await getDoc(doc(db, 'users', user.uid));
                 window.isPremium = userDoc.exists() && userDoc.data().premium === true;
-                
-                document.getElementById('loginModal').style.display = 'none';
+
                 document.getElementById('logoutBtn').style.display = 'block';
                 document.getElementById('accountLink').style.display = 'inline';
-                await loadCollections();
+                document.getElementById('loginBtn').style.display = 'none';
+
                 await checkChatUnlock();
-                await restoreLastPage();
             } else {
-                document.getElementById('loginModal').style.display = 'flex';
+                currentUser = null;
+                window.isPremium = false;
+
                 document.getElementById('logoutBtn').style.display = 'none';
                 document.getElementById('accountLink').style.display = 'none';
-                window.isPremium = false;
+                document.getElementById('loginBtn').style.display = 'block';
             }
+
+            // Always load public content regardless of auth state
+            await loadCollections();
+            await restoreLastPage();
         });
         
         // Check if chat is unlocked for this user
@@ -1848,6 +1857,7 @@ window.openImageDetail = async function(imageId, imageUrl, link, tags) {
             }
             
             heartBtn.onclick = async () => {
+                if (!requireAuth()) return;
                 if (!window.isPremium) {
                     if (confirm('Likes are a premium feature! Upgrade for $5/mo?')) {
                         upgradeToPremium();
@@ -2328,6 +2338,7 @@ function showAllTagsModal(categorizedTags) {
         
         // Open chat unlock modal
         window.openChatUnlock = function() {
+            if (!requireAuth()) return;
             document.getElementById('chatUnlockModal').style.display = 'flex';
         };
 
@@ -2403,8 +2414,9 @@ function showAllTagsModal(categorizedTags) {
             }
         };
 
-        // Toggle chatbox open/close
+       // Toggle chatbox open/close
         window.toggleChatbox = function() {
+            if (!requireAuth()) return;
             document.getElementById('chatbox').classList.toggle('open');
         };
 
@@ -2563,8 +2575,9 @@ function showAllTagsModal(categorizedTags) {
             }
         }
 
-        // Create new collection
+       // Create new collection
         window.createNewCollection = async function() {
+            if (!requireAuth()) return;
             const name = prompt('Collection name:');
             if (!name) return;
             
@@ -2665,6 +2678,20 @@ async function deleteCollection(collectionId, collectionName) {
                 console.error('Error loading collection:', error);
             }
         }
+
+       // Auth gate — called by action handlers; opens login modal if logged out
+        window.requireAuth = function() {
+            if (!auth.currentUser) {
+                document.getElementById('loginModal').style.display = 'flex';
+                return false;
+            }
+            return true;
+        };
+
+        // Open login modal directly (used by header login button)
+        window.openLoginModal = function() {
+            document.getElementById('loginModal').style.display = 'flex';
+        };
 
         // Logout function
         window.handleLogout = async function() {
@@ -2998,8 +3025,9 @@ async function deleteCollection(collectionId, collectionName) {
             }
         };
 
-        // Load account settings page
+      // Load account settings page
         window.loadAccountSettings = async function() {
+            if (!requireAuth()) return;
             closeSidebar();
             
             // Reset active tag filters and remove filter UI
@@ -3186,6 +3214,7 @@ window.saveCampaignId = async function() {
     
 
 window.loadMyProfile = async function(addToHistory = true) {
+            if (!requireAuth()) return;
             closeSidebar();
             if (addToHistory && currentContext.type !== 'profile') {
                 navigationHistory.push({ ...currentContext });
@@ -3866,12 +3895,18 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             }
         }
 
-        // Restore last viewed page
+      // Restore last viewed page
         async function restoreLastPage() {
             try {
                 const savedPage = localStorage.getItem('currentPage');
                 if (savedPage) {
                     const page = JSON.parse(savedPage);
+
+                    // Logged-out users can't restore personal pages — fall back to everything feed
+                    if (!auth.currentUser && (page.type === 'profile' || page.type === 'likes' || page.type === 'accountSettings')) {
+                        await loadEverythingFeed();
+                        return;
+                    }
 
                     if (page.type === 'profile') {
                         await loadMyProfile();
@@ -3896,7 +3931,6 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 await loadEverythingFeed();
             }
         }
-
         // Gesture detection for images - UPDATED WITH SMOOTH DRAG
         function addGestureHandlers(item, allowDrag = false) {
             let firstTap = null;
@@ -4136,6 +4170,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
 let pendingDelete = null;
 
 async function handleDelete(item) {
+    if (!requireAuth()) return;
     const imageId = item.dataset.imageId;
     const userId = item.dataset.userId;
     
@@ -4223,6 +4258,7 @@ function removeUndoToast() {
         let allCollections = [];
 
         async function handleAddToCollection(item) {
+            if (!requireAuth()) return;
             currentImageToAdd = item.dataset.imageId;
             
             try {
@@ -4291,6 +4327,7 @@ function removeUndoToast() {
 
         // Upload modal functions
         window.openUploadModal = function() {
+            if (!requireAuth()) return;
             document.getElementById('uploadModal').style.display = 'flex';
         };
 
@@ -4323,6 +4360,7 @@ function removeUndoToast() {
             }
         };
        window.upgradeToPremium = function() {
+    if (!requireAuth()) return;
     document.getElementById('premiumModal').style.display = 'flex';
 };
 
