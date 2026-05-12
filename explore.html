@@ -203,6 +203,47 @@
     font-family: 'Courier New', monospace;
   }
 
+  /* ACTIVE FILTER PILLS (separate from search bar — these filter image search) */
+  .filter-row-wrap {
+    margin-bottom: 8px;
+    min-height: 0;
+  }
+  .filter-row-wrap.has-filters {
+    padding: 6px 8px;
+    background: #fff;
+    border: 1px dashed #0600ff;
+    margin-bottom: 10px;
+  }
+  .filter-row-label {
+    display: block;
+    font-size: 9px;
+    color: #0600ff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .filter-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: #0600ff;
+    color: #F9FF00;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+  }
+  .filter-pill .x {
+    cursor: pointer;
+    font-weight: bold;
+    padding: 0 2px;
+  }
+
+  /* SUGGESTED CHIPS — now refine current image search */
   .chip-row {
     display: flex;
     flex-wrap: wrap;
@@ -220,10 +261,9 @@
     cursor: pointer;
   }
   .chip:hover { background: #0600ff; color: #F9FF00; }
-  .chip.added {
-    opacity: 0.3;
-    cursor: not-allowed;
-    pointer-events: none;
+  .chip.active {
+    background: #0600ff;
+    color: #F9FF00;
   }
 
   #exploreGrid {
@@ -294,11 +334,27 @@
     margin-bottom: 16px;
     background: #f5f5f5;
   }
-  .ebay-modal-title {
-    font-size: 13px;
-    line-height: 1.4;
+  /* TAPPABLE TITLE WORDS */
+  .ebay-modal-title-words {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
     margin-bottom: 8px;
+  }
+  .title-word {
+    display: inline-block;
+    padding: 2px 6px;
+    background: #f5f5f5;
     color: #000;
+    border: 1px solid #d4c5b0;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .title-word:hover {
+    background: #9ED2F5;
+    border-color: #0600ff;
   }
   .ebay-modal-price {
     font-size: 16px;
@@ -351,9 +407,7 @@
     font-size: 10px;
     color: #0600ff;
   }
-  .ebay-icon-btn svg {
-    stroke: #0600ff;
-  }
+  .ebay-icon-btn svg { stroke: #0600ff; }
   .ebay-icon-btn.is-loading svg { display: none; }
   .ebay-icon-btn .spinner {
     display: none;
@@ -398,7 +452,7 @@
 
 <div class="search-bar-wrap">
   <div class="search-bar" id="searchBar">
-    <span class="search-bar-empty" id="searchBarEmpty">tap chips below to start a search</span>
+    <span class="search-bar-empty" id="searchBarEmpty">tap title words below to start a new search</span>
   </div>
   <button class="save-words-btn" id="saveWordsBtn" onclick="saveCurrentWords()" disabled title="save current words to cabinet">📁+</button>
   <button class="go-btn" id="goBtn" onclick="runWordSearch()" disabled>go →</button>
@@ -419,6 +473,11 @@
   </div>
 </div>
 
+<div class="filter-row-wrap" id="filterRowWrap">
+  <span class="filter-row-label">refining by:</span>
+  <div class="filter-pills" id="filterPills"></div>
+</div>
+
 <div class="chip-row" id="chipRow"></div>
 
 <div id="exploreGrid">
@@ -430,7 +489,7 @@
 <div class="ebay-modal-overlay" id="ebayItemModal" onclick="closeEbayModalIfOverlay(event)">
   <div class="ebay-modal-content">
     <img class="ebay-modal-img" id="ebayModalImg" alt="">
-    <div class="ebay-modal-title" id="ebayModalTitle"></div>
+    <div class="ebay-modal-title-words" id="ebayModalTitleWords"></div>
     <div class="ebay-modal-price" id="ebayModalPrice"></div>
 
     <a class="ebay-modal-btn" id="ebayModalShopBtn" target="_blank" rel="noopener" href="#">shop on eBay →</a>
@@ -482,7 +541,6 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  // expose for non-module script below
   window.__girlchan = {
     auth, db,
     collection, addDoc, doc, getDoc, getDocs, query, where, updateDoc,
@@ -493,20 +551,20 @@
   onAuthStateChanged(auth, (user) => {
     window.__girlchan.user = user;
     window.__girlchan.ready = true;
-    if (!user) {
-      // logged out — bounce to home where the login modal lives
-      window.location.href = '/';
-    }
+    if (!user) window.location.href = '/';
   });
 </script>
 
 <script>
-var allItems = [];
+var allItems = [];           // items currently displayed (post-filter)
+var rawFetchedItems = [];    // full pool of fetched items (pre-filter)
 var currentOffset = 0;
 var pageLimit = 50;
+var overFetchMultiplier = 2; // base over-fetch (100 items per page)
 var sourceImageUrl = '';
 var noMoreResults = false;
-var activeWords = [];
+var searchBarWords = [];     // words being collected for NEW keyword search
+var activeFilters = [];      // chip words filtering current image search
 var currentMode = 'image';
 var currentModalItem = null;
 
@@ -520,15 +578,55 @@ function saveCabinet() {
   sessionStorage.setItem('girlchan_cabinet_counter', String(cabinetCounter));
 }
 
-function getSearchBody() {
-  var body = { limit: pageLimit, offset: currentOffset };
-  if (currentMode === 'word') body.query = activeWords.join(' ');
+function getSearchBody(offset, limit) {
+  var body = { limit: limit || pageLimit, offset: offset || 0 };
+  if (currentMode === 'word') body.query = searchBarWords.join(' ');
   else body.imageUrl = sourceImageUrl;
   return body;
 }
 
+// Filter items by active chip filters (case-insensitive title contains ALL words)
+function applyChipFilters(items) {
+  if (activeFilters.length === 0) return items;
+  var lowerFilters = activeFilters.map(function(f) { return f.toLowerCase(); });
+  return items.filter(function(item) {
+    var title = (item.title || '').toLowerCase();
+    return lowerFilters.every(function(f) { return title.indexOf(f) !== -1; });
+  });
+}
+
+// Over-fetch from eBay: parallel requests for N pages
+async function fetchPool(numPages) {
+  var promises = [];
+  for (var i = 0; i < numPages; i++) {
+    var offset = i * pageLimit;
+    promises.push(
+      fetch('/.netlify/functions/searchByImage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(getSearchBody(offset, pageLimit))
+      }).then(function(r) { return r.json(); })
+    );
+  }
+  var results = await Promise.all(promises);
+  var allItems = [];
+  for (var j = 0; j < results.length; j++) {
+    var items = results[j].itemSummaries || [];
+    for (var k = 0; k < items.length; k++) allItems.push(items[k]);
+  }
+  // dedupe by itemId
+  var seen = {};
+  var deduped = [];
+  for (var m = 0; m < allItems.length; m++) {
+    var id = allItems[m].itemId || allItems[m].title;
+    if (!seen[id]) { seen[id] = true; deduped.push(allItems[m]); }
+  }
+  return deduped;
+}
+
 async function loadExploreGrid(append) {
   var grid = document.getElementById('exploreGrid');
+
   if (!append) {
     if (currentMode === 'image') {
       var params = new URLSearchParams(window.location.search);
@@ -541,45 +639,112 @@ async function loadExploreGrid(append) {
     currentOffset = 0;
     noMoreResults = false;
     allItems = [];
+    rawFetchedItems = [];
     grid.innerHTML = '<p class="loading-msg">loading...</p>';
   }
+
   try {
-    var res = await fetch('/.netlify/functions/searchByImage', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(getSearchBody())
-    });
-    var data = await res.json();
-    var items = data.itemSummaries || [];
-    if (items.length === 0 && !append) {
-      grid.innerHTML = '<p class="error-msg">no results — try removing a word or going back</p>';
+    // Scale over-fetch with active filter count — more filters = need bigger pool
+    var numPages = activeFilters.length === 0 ? 1 : (1 + activeFilters.length);
+    if (numPages > 4) numPages = 4; // cap at 4 pages = 200 items
+    var pool = await fetchPool(numPages);
+
+    if (append) {
+      // For load more, fetch next pages past what we've already pulled
+      var startOffset = rawFetchedItems.length;
+      var morePromises = [];
+      for (var p = 0; p < numPages; p++) {
+        morePromises.push(
+          fetch('/.netlify/functions/searchByImage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(getSearchBody(startOffset + p * pageLimit, pageLimit))
+          }).then(function(r) { return r.json(); })
+        );
+      }
+      var moreResults = await Promise.all(morePromises);
+      pool = [];
+      for (var q = 0; q < moreResults.length; q++) {
+        var moreItems = moreResults[q].itemSummaries || [];
+        for (var s = 0; s < moreItems.length; s++) pool.push(moreItems[s]);
+      }
+    }
+
+    // dedupe against what we already have
+    var seenIds = {};
+    for (var z = 0; z < rawFetchedItems.length; z++) {
+      seenIds[rawFetchedItems[z].itemId || rawFetchedItems[z].title] = true;
+    }
+    var newRaw = [];
+    for (var n = 0; n < pool.length; n++) {
+      var id2 = pool[n].itemId || pool[n].title;
+      if (!seenIds[id2]) { seenIds[id2] = true; newRaw.push(pool[n]); }
+    }
+
+    if (newRaw.length === 0) {
+      if (!append) {
+        grid.innerHTML = '<p class="error-msg">no results — try removing a filter or going back</p>';
+        renderChips([]);
+      }
+      noMoreResults = true;
       hideLoadMore();
-      renderChips([]);
       return;
     }
-    if (items.length === 0 && append) { noMoreResults = true; hideLoadMore(); return; }
-    if (items.length < pageLimit) noMoreResults = true;
-    var startIndex = allItems.length;
-    for (var j = 0; j < items.length; j++) allItems.push(items[j]);
-    currentOffset = currentOffset + pageLimit;
-    var html = append ? grid.innerHTML : '';
-    for (var i = 0; i < items.length; i++) {
-      var item = items[i];
-      var img = '';
-      if (item.image && item.image.imageUrl) img = item.image.imageUrl;
-      else if (item.thumbnailImages && item.thumbnailImages[0]) img = item.thumbnailImages[0].imageUrl;
-      var title = (item.title || '').replace(/"/g, '&quot;');
-      var hiResImg = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
-      var globalIndex = startIndex + i;
-      html = html + '<img class="explore-tile" src="' + hiResImg + '" alt="' + title + '" loading="lazy" onclick="openEbayModal(' + globalIndex + ')">';
+
+    rawFetchedItems = rawFetchedItems.concat(newRaw);
+
+    // apply filters and figure out which items are NEW to display
+    var filteredPool = applyChipFilters(rawFetchedItems);
+    var prevDisplayedCount = append ? allItems.length : 0;
+    allItems = filteredPool;
+    var newDisplayed = allItems.slice(prevDisplayedCount);
+
+    if (newDisplayed.length === 0 && append) {
+      noMoreResults = true;
+      hideLoadMore();
+      return;
     }
-    grid.innerHTML = html;
-    if (!append) renderChips(mineTopWords(allItems));
-    if (noMoreResults) hideLoadMore(); else showLoadMore();
+
+    if (!append) {
+      // render whole grid fresh
+      var html = '';
+      for (var i = 0; i < allItems.length; i++) {
+        html += renderTile(allItems[i], i);
+      }
+      grid.innerHTML = html || '<p class="error-msg">no matches — try removing a filter</p>';
+    } else {
+      // append only new
+      var addHtml = '';
+      for (var i2 = 0; i2 < newDisplayed.length; i2++) {
+        addHtml += renderTile(newDisplayed[i2], prevDisplayedCount + i2);
+      }
+      grid.innerHTML += addHtml;
+    }
+
+    // re-mine chips from current displayed items
+    renderChips(mineTopWords(allItems));
+
+    if (newRaw.length < pageLimit * numPages) {
+      // eBay running out, but we got something
+      if (allItems.length >= pageLimit) showLoadMore();
+      else hideLoadMore();
+    } else {
+      showLoadMore();
+    }
   } catch (err) {
+    console.error(err);
     grid.innerHTML = '<p class="error-msg">something went wrong — try again</p>';
     hideLoadMore();
   }
+}
+
+function renderTile(item, globalIndex) {
+  var img = '';
+  if (item.image && item.image.imageUrl) img = item.image.imageUrl;
+  else if (item.thumbnailImages && item.thumbnailImages[0]) img = item.thumbnailImages[0].imageUrl;
+  var title = (item.title || '').replace(/"/g, '&quot;');
+  var hiResImg = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
+  return '<img class="explore-tile" src="' + hiResImg + '" alt="' + title + '" loading="lazy" onclick="openEbayModal(' + globalIndex + ')">';
 }
 
 function mineTopWords(items) {
@@ -598,7 +763,7 @@ function mineTopWords(items) {
   for (var key in counts) if (counts[key] >= 2) entries.push([key, counts[key]]);
   entries.sort(function(a, b) { return b[1] - a[1]; });
   var activeSet = {};
-  for (var m = 0; m < activeWords.length; m++) activeSet[activeWords[m].toLowerCase()] = true;
+  for (var m = 0; m < activeFilters.length; m++) activeSet[activeFilters[m].toLowerCase()] = true;
   var picked = [];
   for (var n = 0; n < entries.length && picked.length < 10; n++) {
     if (!activeSet[entries[n][0]]) picked.push(entries[n][0]);
@@ -612,56 +777,82 @@ function renderChips(words) {
   var html = '';
   for (var i = 0; i < words.length; i++) {
     var w = words[i].replace(/'/g, '&#39;');
-    html += '<button class="chip" onclick="addWord(\'' + w + '\')">' + words[i] + '</button>';
+    html += '<button class="chip" onclick="toggleChipFilter(\'' + w + '\')">' + words[i] + '</button>';
   }
   row.innerHTML = html;
 }
 
+function renderFilterPills() {
+  var wrap = document.getElementById('filterRowWrap');
+  var pills = document.getElementById('filterPills');
+  if (activeFilters.length === 0) {
+    wrap.classList.remove('has-filters');
+    pills.innerHTML = '';
+    return;
+  }
+  wrap.classList.add('has-filters');
+  var html = '';
+  for (var i = 0; i < activeFilters.length; i++) {
+    var w = activeFilters[i].replace(/'/g, '&#39;');
+    html += '<span class="filter-pill">' + activeFilters[i] + ' <span class="x" onclick="removeChipFilter(\'' + w + '\')">×</span></span>';
+  }
+  pills.innerHTML = html;
+}
+
+// Tap a chip suggestion -> add to active filters and re-fetch
+function toggleChipFilter(word) {
+  if (activeFilters.indexOf(word) !== -1) return; // already filtering
+  activeFilters.push(word);
+  renderFilterPills();
+  loadExploreGrid(false); // re-fetch with new filter
+}
+
+function removeChipFilter(word) {
+  activeFilters = activeFilters.filter(function(f) { return f !== word; });
+  renderFilterPills();
+  loadExploreGrid(false);
+}
+
+// SEARCH BAR (for new keyword searches via title-word tapping)
 function renderSearchBar() {
   var bar = document.getElementById('searchBar');
   var goBtn = document.getElementById('goBtn');
   var saveBtn = document.getElementById('saveWordsBtn');
-  if (activeWords.length === 0) {
-    bar.innerHTML = '<span class="search-bar-empty">tap chips below to start a search</span>';
+  if (searchBarWords.length === 0) {
+    bar.innerHTML = '<span class="search-bar-empty">tap title words in items to build a new search</span>';
     goBtn.disabled = true;
     saveBtn.disabled = true;
     return;
   }
   var html = '';
-  for (var i = 0; i < activeWords.length; i++) {
-    var w = activeWords[i].replace(/'/g, '&#39;');
-    html += '<span class="word-bubble">' + activeWords[i] + ' <span class="x" onclick="removeWord(\'' + w + '\')">×</span></span>';
+  for (var i = 0; i < searchBarWords.length; i++) {
+    var w = searchBarWords[i].replace(/'/g, '&#39;');
+    html += '<span class="word-bubble">' + searchBarWords[i] + ' <span class="x" onclick="removeSearchBarWord(\'' + w + '\')">×</span></span>';
   }
   bar.innerHTML = html;
   goBtn.disabled = false;
   saveBtn.disabled = false;
 }
 
-function addWord(word) {
-  if (activeWords.indexOf(word) === -1) {
-    activeWords.push(word);
+function addSearchBarWord(word) {
+  var clean = word.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!clean) return;
+  if (searchBarWords.indexOf(clean) === -1) {
+    searchBarWords.push(clean);
     renderSearchBar();
-    var chips = document.querySelectorAll('.chip');
-    for (var i = 0; i < chips.length; i++) {
-      if (chips[i].textContent === word) chips[i].classList.add('added');
-    }
   }
 }
 
-function removeWord(word) {
-  var idx = activeWords.indexOf(word);
-  if (idx !== -1) {
-    activeWords.splice(idx, 1);
-    renderSearchBar();
-    if (activeWords.length === 0 && currentMode === 'word') {
-      currentMode = 'image';
-      loadExploreGrid(false);
-    }
-  }
+function removeSearchBarWord(word) {
+  searchBarWords = searchBarWords.filter(function(w) { return w !== word; });
+  renderSearchBar();
 }
 
 function runWordSearch() {
-  if (activeWords.length === 0) return;
+  if (searchBarWords.length === 0) return;
+  // Clear chip filters when starting a new keyword search
+  activeFilters = [];
+  renderFilterPills();
   currentMode = 'word';
   loadExploreGrid(false);
 }
@@ -688,9 +879,9 @@ function fileForLater() {
 }
 
 function saveCurrentWords() {
-  if (activeWords.length === 0) return;
+  if (searchBarWords.length === 0) return;
   cabinetCounter++;
-  cabinetWords.push({ id: 'w' + cabinetCounter, words: activeWords.slice() });
+  cabinetWords.push({ id: 'w' + cabinetCounter, words: searchBarWords.slice() });
   saveCabinet();
   renderCabinet();
 }
@@ -712,7 +903,7 @@ function openCabinetItem(id) {
   for (var i = 0; i < cabinetItems.length; i++) if (cabinetItems[i].id === id) { entry = cabinetItems[i]; break; }
   if (!entry) return;
   document.getElementById('ebayModalImg').src = entry.img;
-  document.getElementById('ebayModalTitle').textContent = entry.title;
+  renderModalTitleWords(entry.title);
   document.getElementById('ebayModalPrice').textContent = entry.price;
   document.getElementById('ebayModalShopBtn').href = entry.shopUrl;
   document.getElementById('ebayModalExploreBtn').href = '/explore.html?img=' + encodeURIComponent(entry.img);
@@ -732,7 +923,7 @@ function loadCabinetWords(id) {
   for (var i = 0; i < cabinetWords.length; i++) if (cabinetWords[i].id === id) { entry = cabinetWords[i]; break; }
   if (!entry) return;
   for (var j = 0; j < entry.words.length; j++) {
-    if (activeWords.indexOf(entry.words[j]) === -1) activeWords.push(entry.words[j]);
+    if (searchBarWords.indexOf(entry.words[j]) === -1) searchBarWords.push(entry.words[j]);
   }
   renderSearchBar();
 }
@@ -785,14 +976,11 @@ function renderCabinet() {
   }
 }
 
-// ADD TO GIRLCHAN — real implementation
 async function addToGirlchan() {
   if (!currentModalItem) return;
   var btn = document.getElementById('ebayModalAddBtn');
   var label = document.getElementById('addBtnLabel');
   if (btn.classList.contains('is-loading') || btn.classList.contains('is-success')) return;
-
-  // wait for firebase to be ready (rare race condition)
   var gc = window.__girlchan;
   if (!gc || !gc.ready) {
     btn.classList.add('is-error');
@@ -800,34 +988,22 @@ async function addToGirlchan() {
     setTimeout(resetAddBtn, 1500);
     return;
   }
-  if (!gc.user) {
-    window.location.href = '/';
-    return;
-  }
-
+  if (!gc.user) { window.location.href = '/'; return; }
   btn.classList.add('is-loading');
   label.textContent = 'adding...';
-
   try {
     var item = currentModalItem;
-
-    // get image url at high res
     var img = '';
     if (item.image && item.image.imageUrl) img = item.image.imageUrl;
     else if (item.thumbnailImages && item.thumbnailImages[0]) img = item.thumbnailImages[0].imageUrl;
     img = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
-
     var ebayItemId = item.itemId || '';
     var shopUrl = item.itemAffiliateWebUrl || item.itemWebUrl || '';
-
-    // duplicate check — has this user already added this exact eBay item?
     if (ebayItemId) {
       var existing = await gc.getDocs(
-        gc.query(
-          gc.collection(gc.db, 'images'),
+        gc.query(gc.collection(gc.db, 'images'),
           gc.where('userId', '==', gc.user.uid),
-          gc.where('ebayItemId', '==', ebayItemId)
-        )
+          gc.where('ebayItemId', '==', ebayItemId))
       );
       if (!existing.empty) {
         btn.classList.remove('is-loading');
@@ -837,60 +1013,33 @@ async function addToGirlchan() {
         return;
       }
     }
-
-    // apply curator's affiliate code if they have one
     var userDoc = await gc.getDoc(gc.doc(gc.db, 'users', gc.user.uid));
     var campaignId = (userDoc.exists() && userDoc.data().ebayAffiliateCode) ? userDoc.data().ebayAffiliateCode : null;
     var finalLink = shopUrl;
     if (campaignId && finalLink && (finalLink.indexOf('ebay.com') !== -1 || finalLink.indexOf('ebay.us') !== -1)) {
-      try {
-        var url = new URL(finalLink);
-        url.searchParams.set('campid', campaignId);
-        finalLink = url.toString();
-      } catch (e) {}
+      try { var url = new URL(finalLink); url.searchParams.set('campid', campaignId); finalLink = url.toString(); } catch (e) {}
     }
-
-    // write the doc — matches link-tab schema, with extra ebayItemId field
     var docRef = await gc.addDoc(gc.collection(gc.db, 'images'), {
-      imageUrl: img,
-      link: finalLink,
-      userId: gc.user.uid,
-      createdAt: new Date(),
-      tags: [],
-      aiTags: [],
-      source: 'link',
-      ebayItemId: ebayItemId
+      imageUrl: img, link: finalLink, userId: gc.user.uid, createdAt: new Date(),
+      tags: [], aiTags: [], source: 'link', ebayItemId: ebayItemId
     });
-
-    // background AI tagging — matches link-tab pattern
     setTimeout(async function() {
       try {
         var res = await fetch('/.netlify/functions/ai-tagger', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: img })
         });
         var tagData = await res.json();
         var bgTags = Array.isArray(tagData.tags) ? tagData.tags : [];
         if (bgTags.length > 0) {
-          await gc.updateDoc(gc.doc(gc.db, 'images', docRef.id), {
-            tags: bgTags,
-            aiTags: bgTags
-          });
+          await gc.updateDoc(gc.doc(gc.db, 'images', docRef.id), { tags: bgTags, aiTags: bgTags });
         }
-      } catch (e) {
-        console.log('background tagging failed silently:', e);
-      }
+      } catch (e) { console.log('background tagging failed silently:', e); }
     }, 2000);
-
-    // success state
     btn.classList.remove('is-loading');
     btn.classList.add('is-success');
     label.textContent = 'added!';
-    setTimeout(function() {
-      closeEbayModal();
-      resetAddBtn();
-    }, 1500);
+    setTimeout(function() { closeEbayModal(); resetAddBtn(); }, 1500);
   } catch (err) {
     console.error('add to girlchan error:', err);
     btn.classList.remove('is-loading');
@@ -926,6 +1075,26 @@ async function loadMore() {
   await loadExploreGrid(true);
 }
 
+// Render the title as individual tappable word pills
+function renderModalTitleWords(titleText) {
+  var container = document.getElementById('ebayModalTitleWords');
+  container.innerHTML = '';
+  if (!titleText) return;
+  // split on whitespace; keep punctuation in the displayed text but strip when tapping
+  var words = titleText.split(/\s+/);
+  for (var i = 0; i < words.length; i++) {
+    var word = words[i];
+    if (!word) continue;
+    var pill = document.createElement('span');
+    pill.className = 'title-word';
+    pill.textContent = word;
+    (function(w) {
+      pill.onclick = function() { addSearchBarWord(w); };
+    })(word);
+    container.appendChild(pill);
+  }
+}
+
 function openEbayModal(index) {
   var item = allItems[index];
   if (!item) return;
@@ -939,7 +1108,7 @@ function openEbayModal(index) {
   var shopUrl = item.itemAffiliateWebUrl || item.itemWebUrl || '#';
   var exploreUrl = '/explore.html?img=' + encodeURIComponent(img);
   document.getElementById('ebayModalImg').src = img;
-  document.getElementById('ebayModalTitle').textContent = item.title || '';
+  renderModalTitleWords(item.title || '');
   document.getElementById('ebayModalPrice').textContent = price;
   document.getElementById('ebayModalShopBtn').href = shopUrl;
   document.getElementById('ebayModalExploreBtn').href = exploreUrl;
@@ -956,8 +1125,10 @@ function closeEbayModalIfOverlay(event) {
 }
 
 // expose globals
-window.addWord = addWord;
-window.removeWord = removeWord;
+window.toggleChipFilter = toggleChipFilter;
+window.removeChipFilter = removeChipFilter;
+window.addSearchBarWord = addSearchBarWord;
+window.removeSearchBarWord = removeSearchBarWord;
 window.runWordSearch = runWordSearch;
 window.saveCurrentWords = saveCurrentWords;
 window.toggleCabinet = toggleCabinet;
@@ -973,6 +1144,7 @@ window.closeEbayModalIfOverlay = closeEbayModalIfOverlay;
 window.loadMore = loadMore;
 
 renderSearchBar();
+renderFilterPills();
 renderCabinet();
 loadExploreGrid(false);
 </script>
