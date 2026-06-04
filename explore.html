@@ -551,7 +551,7 @@
   onAuthStateChanged(auth, (user) => {
     window.__girlchan.user = user;
     window.__girlchan.ready = true;
-    if (!user) window.location.href = '/';
+    // Public browsing allowed; gated actions check user themselves
   });
 </script>
 
