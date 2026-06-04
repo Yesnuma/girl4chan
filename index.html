@@ -4111,8 +4111,14 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     // Reset any visual feedback
                     item.style.transform = '';
                     
+                    // Check if finger moved significantly — if so, this was a scroll, not a tap
+                    const touch = e.changedTouches ? e.changedTouches[0] : e;
+                    const moveX = Math.abs(touch.clientX - touchStartX);
+                    const moveY = Math.abs(touch.clientY - touchStartY);
+                    const movedTooFar = moveX > 10 || moveY > 10;
+                    
                     // Handle single tap on center for link
-                    if (touchStartPos && touchDuration < 300 && !firstTap) {
+                    if (touchStartPos && touchDuration < 300 && !firstTap && !movedTooFar) {
                         const rect = item.getBoundingClientRect();
                         const centerMargin = 0.3;
                         const isCenter = (
@@ -4123,16 +4129,16 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                         );
                         
                         if (isCenter) {
-                    e.preventDefault();
-                    // Open detail modal instead of going directly to link
-                    const tags = item.dataset.tags ? JSON.parse(item.dataset.tags) : [];
-                    openImageDetail(
-                        item.dataset.imageId,
-                        item.dataset.imageUrl,
-                        item.dataset.link,
-                        tags
-                    );
-                }
+                            e.preventDefault();
+                            // Open detail modal instead of going directly to link
+                            const tags = item.dataset.tags ? JSON.parse(item.dataset.tags) : [];
+                            openImageDetail(
+                                item.dataset.imageId,
+                                item.dataset.imageUrl,
+                                item.dataset.link,
+                                tags
+                            );
+                        }
                     }
                 }
                 
