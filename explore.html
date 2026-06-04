@@ -439,6 +439,124 @@
     color: #c00;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Login modal — opens when logged-out user tries to add */
+  .login-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 10000;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+  .login-modal-overlay.open {
+    display: flex;
+  }
+  .login-modal-content {
+    background: white;
+    border: 3px solid #0600ff;
+    padding: 32px 28px;
+    box-shadow: 8px 8px 0px #0600ff;
+    width: 100%;
+    max-width: 400px;
+    position: relative;
+    font-family: 'Courier New', monospace;
+  }
+  .login-modal-close {
+    position: absolute;
+    top: 6px;
+    right: 12px;
+    background: none;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    color: #0600ff;
+    font-family: 'Courier New', monospace;
+    line-height: 1;
+  }
+  .login-modal-content h2 {
+    text-align: center;
+    color: #0600ff;
+    font-size: 26px;
+    margin-bottom: 6px;
+    text-transform: lowercase;
+    letter-spacing: 2px;
+    font-family: 'Courier New', monospace;
+  }
+  .login-modal-tagline {
+    text-align: center;
+    color: #666;
+    font-size: 11px;
+    margin-bottom: 16px;
+    font-family: 'Courier New', monospace;
+  }
+  .login-decorative {
+    height: 3px;
+    background: linear-gradient(90deg, #0600ff, #9ED2F5, #0600ff);
+    margin: 16px 0;
+  }
+  .login-prompt-msg {
+    text-align: center;
+    font-size: 11px;
+    color: #888;
+    margin-bottom: 14px;
+    font-family: 'Courier New', monospace;
+    line-height: 1.5;
+  }
+  .login-modal-content input {
+    width: 100%;
+    padding: 11px;
+    margin-bottom: 10px;
+    border: 2px solid #0600ff;
+    background: #fff;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+  }
+  .login-modal-content input:focus {
+    outline: none;
+    background: #9ED2F5;
+  }
+  .login-modal-content button[type="submit"] {
+    width: 100%;
+    padding: 14px;
+    border: 2px solid #0600ff;
+    background: #0600ff;
+    color: white;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    text-transform: lowercase;
+    font-weight: bold;
+    margin-bottom: 8px;
+  }
+  .login-modal-content button[type="submit"]:hover {
+    background: white;
+    color: #0600ff;
+  }
+  .login-modal-content p {
+    font-size: 11px;
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    margin-top: 6px;
+  }
+  .login-modal-content a {
+    color: #0600ff;
+    text-decoration: none;
+  }
+  .login-modal-content a:hover {
+    text-decoration: underline;
+  }
+  .forgot-link {
+    text-align: right;
+    font-size: 10px;
+    color: #8b7355;
+    margin: -4px 0 8px;
+  }
 </style>
 </head>
 <body>
@@ -525,8 +643,8 @@
 
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-  import { getFirestore, collection, addDoc, doc, getDoc, getDocs, query, where, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+  import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  import { getFirestore, collection, addDoc, doc, setDoc, getDoc, getDocs, query, where, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyDExgxdLsySYHaQp4UdXaxhQ0zcSAS72g4",
@@ -543,16 +661,105 @@
 
   window.__girlchan = {
     auth, db,
-    collection, addDoc, doc, getDoc, getDocs, query, where, updateDoc,
+    collection, addDoc, doc, setDoc, getDoc, getDocs, query, where, updateDoc,
     ready: false,
-    user: null
+    user: null,
+    pendingAction: null
   };
 
+  var isSignupMode = false;
+
   onAuthStateChanged(auth, (user) => {
+    var wasLoggedOut = !window.__girlchan.user;
     window.__girlchan.user = user;
     window.__girlchan.ready = true;
-    // Public browsing allowed; gated actions check user themselves
+
+    // User just logged in AND had a pending action — close modal, retry action
+    if (user && wasLoggedOut && window.__girlchan.pendingAction) {
+      document.getElementById('loginModal').classList.remove('open');
+      var action = window.__girlchan.pendingAction;
+      window.__girlchan.pendingAction = null;
+      setTimeout(function() {
+        if (action === 'add' && typeof window.addToGirlchan === 'function') {
+          window.addToGirlchan();
+        }
+      }, 200);
+    }
   });
+
+  // Auth form handler
+  document.getElementById('authForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('emailInput').value;
+    const password = document.getElementById('passwordInput').value;
+    const username = document.getElementById('usernameInput').value;
+
+    try {
+      if (isSignupMode) {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          username: username,
+          email: email,
+          createdAt: new Date()
+        });
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (error) {
+      alert(error.message);
+    }
+  });
+
+  window.toggleAuthMode = function() {
+    isSignupMode = !isSignupMode;
+    const submit = document.getElementById('authSubmit');
+    const switchText = document.getElementById('authSwitch');
+    const usernameInput = document.getElementById('usernameInput');
+    if (isSignupMode) {
+      submit.textContent = 'create account';
+      switchText.innerHTML = 'have an account? <a href="#" onclick="toggleAuthMode(); return false;">login</a>';
+      usernameInput.style.display = 'block';
+      usernameInput.required = true;
+    } else {
+      submit.textContent = 'login';
+      switchText.innerHTML = 'need an account? <a href="#" onclick="toggleAuthMode(); return false;">sign up</a>';
+      usernameInput.style.display = 'none';
+      usernameInput.required = false;
+    }
+  };
+
+  window.resetPassword = async function() {
+    const email = document.getElementById('emailInput').value.trim();
+    if (!email) {
+      alert('Enter your email first, then tap forgot password');
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      alert('Password reset link sent! Check your email.');
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  };
+
+  window.openLoginModal = function(promptMsg) {
+    if (promptMsg) {
+      document.getElementById('loginPromptMsg').textContent = promptMsg;
+    }
+    document.getElementById('loginModal').classList.add('open');
+  };
+
+  window.closeLoginModal = function() {
+    document.getElementById('loginModal').classList.remove('open');
+    // Clear pending action when user closes — they chose not to log in
+    window.__girlchan.pendingAction = null;
+  };
+
+  window.closeLoginModalIfOverlay = function(event) {
+    if (event.target.id === 'loginModal') {
+      window.closeLoginModal();
+    }
+  };
 </script>
 
 <script>
@@ -988,7 +1195,16 @@ async function addToGirlchan() {
     setTimeout(resetAddBtn, 1500);
     return;
   }
-  if (!gc.user) { window.location.href = '/'; return; }
+  if (!gc.user) {
+    // Logged out — store intent and open login modal
+    gc.pendingAction = 'add';
+    if (typeof window.openLoginModal === 'function') {
+      window.openLoginModal('log in or sign up to save this find to girlchan');
+    }
+    btn.classList.remove('is-loading');
+    label.textContent = 'add';
+    return;
+  }
   btn.classList.add('is-loading');
   label.textContent = 'adding...';
   try {
@@ -1148,6 +1364,24 @@ renderFilterPills();
 renderCabinet();
 loadExploreGrid(false);
 </script>
+
+<div class="login-modal-overlay" id="loginModal" onclick="closeLoginModalIfOverlay(event)">
+  <div class="login-modal-content">
+    <button class="login-modal-close" onclick="closeLoginModal()">×</button>
+    <h2>girlchan</h2>
+    <div class="login-modal-tagline">// your secret thrift sanctuary //</div>
+    <div class="login-decorative"></div>
+    <div class="login-prompt-msg" id="loginPromptMsg">log in or sign up to save this find to girlchan</div>
+    <form id="authForm">
+      <input type="email" id="emailInput" placeholder="email" required>
+      <input type="password" id="passwordInput" placeholder="password" required>
+      <p class="forgot-link"><a href="#" onclick="resetPassword(); return false;">forgot password?</a></p>
+      <input type="text" id="usernameInput" placeholder="username" style="display: none;">
+      <button type="submit" id="authSubmit">login</button>
+      <p id="authSwitch">need an account? <a href="#" onclick="toggleAuthMode(); return false;">sign up</a></p>
+    </form>
+  </div>
+</div>
 
 </body>
 </html>
