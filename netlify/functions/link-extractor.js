@@ -66,6 +66,12 @@ exports.handler = async (event) => {
         return { statusCode: 400, body: JSON.stringify({ error: 'No URL provided' }) };
     }
 
+    // If the user pasted a message that contains a URL alongside other text, extract the URL
+    const urlMatch = url.match(/https?:\/\/[^\s]+/);
+    if (urlMatch) {
+        url = urlMatch[0];
+    }
+
     // Resolve short URLs first
     let finalUrl = url;
     const isShortEbayUrl = url.includes('ebay.us') || url.includes('ebay.to') || url.includes('ebay.io') || url.includes('rover.ebay.com');
@@ -85,6 +91,33 @@ exports.handler = async (event) => {
     } catch (e) {
         console.error('URL resolution failed:', e.message);
         finalUrl = url;
+    }
+
+    // Branch deep links (Depop share links, etc.) — parse HTML for real destination
+    const isBranchLink = url.includes('app.link') || finalUrl.includes('app.link');
+    if (isBranchLink) {
+        try {
+            const res = await fetch(url, {
+                method: 'GET',
+                redirect: 'follow',
+                headers: { 
+                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15'
+                },
+                signal: AbortSignal.timeout(8000)
+            });
+            const html = await res.text();
+            const alWebUrl = html.match(/<meta[^>]+property=["']al:web:url["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
+                             html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']al:web:url["']/i)?.[1];
+            const ogUrl = html.match(/<meta[^>]+property=["']og:url["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
+                          html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:url["']/i)?.[1];
+            const destination = alWebUrl || ogUrl;
+            if (destination && !destination.includes('app.link')) {
+                finalUrl = destination;
+                console.log('Branch link resolved to:', finalUrl);
+            }
+        } catch (e) {
+            console.error('Branch resolution failed:', e.message);
+        }
     }
 
     // Use eBay API if it's an eBay URL
@@ -139,7 +172,7 @@ exports.handler = async (event) => {
                         html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1];
         const ogPrice = html.match(/<meta[^>]+property=["']product:price:amount["'][^>]+content=["']([^"']+)["']/i)?.[1];
         const ogDescription = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
-                              html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)?.[1];
+                              html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i)?.[1];
 
         return {
             statusCode: 200,
