@@ -19,7 +19,6 @@ async function getEbayToken() {
 }
 
 async function fetchEbayItem(url) {
-    // Extract item ID from various eBay URL formats
     const itemIdMatch = url.match(/\/itm\/(?:[^/]+\/)?(\d+)/) || 
                         url.match(/item=(\d+)/) ||
                         url.match(/\/(\d{10,13})(?:\?|$)/);
@@ -66,7 +65,7 @@ exports.handler = async (event) => {
         return { statusCode: 400, body: JSON.stringify({ error: 'No URL provided' }) };
     }
 
-    // If the user pasted a message that contains a URL alongside other text, extract the URL
+    // If the user pasted a message containing other text alongside a URL, extract just the URL
     const urlMatch = url.match(/https?:\/\/[^\s]+/);
     if (urlMatch) {
         url = urlMatch[0];
@@ -78,7 +77,6 @@ exports.handler = async (event) => {
     
     try {
         const res = await fetch(url, {
-            // eBay short links don't resolve with HEAD — must use GET
             method: isShortEbayUrl ? 'GET' : 'HEAD',
             redirect: 'follow',
             headers: { 
@@ -106,11 +104,23 @@ exports.handler = async (event) => {
                 signal: AbortSignal.timeout(8000)
             });
             const html = await res.text();
+
+            // First try standard meta tags
             const alWebUrl = html.match(/<meta[^>]+property=["']al:web:url["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
                              html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']al:web:url["']/i)?.[1];
             const ogUrl = html.match(/<meta[^>]+property=["']og:url["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
                           html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:url["']/i)?.[1];
-            const destination = alWebUrl || ogUrl;
+
+            let destination = alWebUrl || ogUrl;
+
+            // Depop-specific: extract product slug buried in the Branch deep link
+            if ((!destination || destination.includes('app.link')) && (url.includes('depop.app.link') || finalUrl.includes('depop.app.link'))) {
+                const depopProductMatch = html.match(/depop\.app\.link\/(?:null)?products?\/([^?"\s'&]+)/i);
+                if (depopProductMatch && depopProductMatch[1]) {
+                    destination = `https://www.depop.com/products/${depopProductMatch[1]}/`;
+                }
+            }
+
             if (destination && !destination.includes('app.link')) {
                 finalUrl = destination;
                 console.log('Branch link resolved to:', finalUrl);
