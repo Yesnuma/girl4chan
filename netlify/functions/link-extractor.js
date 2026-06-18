@@ -68,7 +68,7 @@ exports.handler = async (event) => {
 
     // Resolve short URLs first
     let finalUrl = url;
-    const isShortEbayUrl = url.includes('ebay.us') || url.includes('ebay.to') || url.includes('rover.ebay.com');
+    const isShortEbayUrl = url.includes('ebay.us') || url.includes('ebay.to') || url.includes('ebay.io') || url.includes('rover.ebay.com');
     
     try {
         const res = await fetch(url, {
@@ -88,7 +88,7 @@ exports.handler = async (event) => {
     }
 
     // Use eBay API if it's an eBay URL
-    const isEbay = finalUrl.includes('ebay.com') || finalUrl.includes('ebay.us') || url.includes('ebay.com') || url.includes('ebay.us');
+    const isEbay = finalUrl.includes('ebay.com') || finalUrl.includes('ebay.us') || finalUrl.includes('ebay.io') || url.includes('ebay.com') || url.includes('ebay.us') || url.includes('ebay.io');
     
     if (isEbay) {
         try {
