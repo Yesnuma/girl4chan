@@ -3895,11 +3895,16 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             }
         }
 
-      // Restore last viewed page
+              // Restore last viewed page
         async function restoreLastPage() {
             try {
                 const savedPage = localStorage.getItem('currentPage');
+                if (!savedPage) {
+                    await loadEverythingFeed();
+                    return;
+                }
                 if (savedPage) {
+
                     const page = JSON.parse(savedPage);
 
                     // Logged-out users can't restore personal pages — fall back to everything feed
