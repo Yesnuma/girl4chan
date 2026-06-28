@@ -1,9 +1,10 @@
 const fetch = require('node-fetch');
 
-// Crawler UA that social/messaging unfurlers use. Depop (and most e-commerce
-// behind Cloudflare) serves clean og tags to this but challenges Googlebot
-// impersonation from non-Google IPs.
-const UNFURL_UA = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
+// Desktop browser UA. Confirmed (by fetching a real depop.app.link) that Branch
+// serves its "deepview" interstitial to desktop requests — and that page contains
+// a plain depop.app.link/nullproducts/<slug> anchor we can parse. A MOBILE UA gets
+// a different interstitial where the slug is buried in escaped JS the regex misses.
+const UNFURL_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 async function getEbayToken() {
     const credentials = Buffer.from(
