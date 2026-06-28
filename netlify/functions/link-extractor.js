@@ -1,5 +1,10 @@
 const fetch = require('node-fetch');
 
+// Crawler UA that social/messaging unfurlers use. Depop (and most e-commerce
+// behind Cloudflare) serves clean og tags to this but challenges Googlebot
+// impersonation from non-Google IPs.
+const UNFURL_UA = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
+
 async function getEbayToken() {
     const credentials = Buffer.from(
         `${process.env.EBAY_CLIENT_ID}:${process.env.EBAY_CLIENT_SECRET}`
@@ -19,15 +24,15 @@ async function getEbayToken() {
 }
 
 async function fetchEbayItem(url) {
-    const itemIdMatch = url.match(/\/itm\/(?:[^/]+\/)?(\d+)/) || 
+    const itemIdMatch = url.match(/\/itm\/(?:[^/]+\/)?(\d+)/) ||
                         url.match(/item=(\d+)/) ||
                         url.match(/\/(\d{10,13})(?:\?|$)/);
-    
+
     if (!itemIdMatch) return null;
-    
+
     const itemId = itemIdMatch[1];
     const token = await getEbayToken();
-    
+
     const res = await fetch(`https://api.ebay.com/buy/browse/v1/item/v1|${itemId}|0`, {
         headers: {
             'Authorization': `Bearer ${token}`,
@@ -37,9 +42,9 @@ async function fetchEbayItem(url) {
     });
 
     if (!res.ok) return null;
-    
+
     const data = await res.json();
-    
+
     return {
         image: data.image?.imageUrl || data.additionalImages?.[0]?.imageUrl || null,
         title: data.title || null,
@@ -71,49 +76,63 @@ exports.handler = async (event) => {
         url = urlMatch[0];
     }
 
-    // Resolve short URLs first
     let finalUrl = url;
     const isShortEbayUrl = url.includes('ebay.us') || url.includes('ebay.to') || url.includes('ebay.io') || url.includes('rover.ebay.com');
-    
-    try {
-        const res = await fetch(url, {
-            method: isShortEbayUrl ? 'GET' : 'HEAD',
-            redirect: 'follow',
-            headers: { 
-                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15'
-            },
-            signal: AbortSignal.timeout(8000)
-        });
-        finalUrl = res.url;
-        console.log('Resolved URL:', finalUrl);
-    } catch (e) {
-        console.error('URL resolution failed:', e.message);
-        finalUrl = url;
+    const isBranchLink = url.includes('app.link');
+
+    // Resolve short eBay URLs ONLY. (Branch links serve 200 HTML, not a redirect,
+    // so a HEAD here is wasted budget — the Branch block below does its own GET.
+    // Plain full URLs don't need pre-resolution; the final scraper follows redirects.)
+    if (isShortEbayUrl) {
+        try {
+            const res = await fetch(url, {
+                method: 'GET',
+                redirect: 'follow',
+                headers: { 'User-Agent': UNFURL_UA },
+                signal: AbortSignal.timeout(6000)
+            });
+            finalUrl = res.url;
+            console.log('Resolved short eBay URL:', finalUrl);
+        } catch (e) {
+            console.error('URL resolution failed:', e.message);
+            finalUrl = url;
+        }
     }
 
     // Branch deep links (Depop share links, etc.) — parse HTML for real destination
-    const isBranchLink = url.includes('app.link') || finalUrl.includes('app.link');
     if (isBranchLink) {
         try {
             const res = await fetch(url, {
                 method: 'GET',
                 redirect: 'follow',
-                headers: { 
-                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15'
-                },
-                signal: AbortSignal.timeout(8000)
+                headers: { 'User-Agent': UNFURL_UA },
+                signal: AbortSignal.timeout(6000)
             });
             const html = await res.text();
+            const htmlUnescaped = html.replace(/\\\//g, '/'); // Branch JSON escapes slashes
 
-            // First try standard meta tags
+            // Standard meta tags first
             const alWebUrl = html.match(/<meta[^>]+property=["']al:web:url["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
                              html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']al:web:url["']/i)?.[1];
             const ogUrl = html.match(/<meta[^>]+property=["']og:url["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
                           html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:url["']/i)?.[1];
 
-            let destination = alWebUrl || ogUrl;
+            let destination = alWebUrl || (ogUrl && !ogUrl.includes('app.link') ? ogUrl : null);
 
-            // Depop-specific: extract product slug buried in the Branch deep link
+            // Branch embeds the real URL in its branch_data JSON blob
+            if (!destination || destination.includes('app.link')) {
+                const canonical = htmlUnescaped.match(/["']\$canonical_url["']\s*:\s*["']([^"']+)["']/i)?.[1] ||
+                                  htmlUnescaped.match(/["']\$desktop_url["']\s*:\s*["']([^"']+)["']/i)?.[1];
+                if (canonical && !canonical.includes('app.link')) destination = canonical;
+            }
+
+            // Any direct Depop product URL anywhere in the page
+            if (!destination || destination.includes('app.link')) {
+                const direct = htmlUnescaped.match(/https?:\/\/(?:www\.)?depop\.com\/products\/[^?"\s'&]+/i)?.[0];
+                if (direct) destination = direct;
+            }
+
+            // Last resort: slug appended to the app.link domain
             if ((!destination || destination.includes('app.link')) && (url.includes('depop.app.link') || finalUrl.includes('depop.app.link'))) {
                 const depopProductMatch = html.match(/depop\.app\.link\/(?:null)?products?\/([^?"\s'&]+)/i);
                 if (depopProductMatch && depopProductMatch[1]) {
@@ -124,6 +143,8 @@ exports.handler = async (event) => {
             if (destination && !destination.includes('app.link')) {
                 finalUrl = destination;
                 console.log('Branch link resolved to:', finalUrl);
+            } else {
+                console.warn('Branch link did NOT resolve to a destination. Falling back to:', finalUrl);
             }
         } catch (e) {
             console.error('Branch resolution failed:', e.message);
@@ -132,7 +153,7 @@ exports.handler = async (event) => {
 
     // Use eBay API if it's an eBay URL
     const isEbay = finalUrl.includes('ebay.com') || finalUrl.includes('ebay.us') || finalUrl.includes('ebay.io') || url.includes('ebay.com') || url.includes('ebay.us') || url.includes('ebay.io');
-    
+
     if (isEbay) {
         try {
             const ebayData = await fetchEbayItem(finalUrl);
@@ -152,13 +173,15 @@ exports.handler = async (event) => {
     try {
         const response = await fetch(finalUrl, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                'User-Agent': UNFURL_UA,
                 'Accept': 'text/html,application/xhtml+xml',
                 'Accept-Language': 'en-US,en;q=0.9',
             },
             redirect: 'follow',
-            signal: AbortSignal.timeout(8000)
+            signal: AbortSignal.timeout(6000)
         });
+
+        console.log('Scrape fetch:', finalUrl, '->', response.status);
 
         if (!response.ok) {
             return { statusCode: 200, body: JSON.stringify({ error: `Could not fetch page (${response.status})` }) };
@@ -183,6 +206,8 @@ exports.handler = async (event) => {
         const ogPrice = html.match(/<meta[^>]+property=["']product:price:amount["'][^>]+content=["']([^"']+)["']/i)?.[1];
         const ogDescription = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
                               html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i)?.[1];
+
+        if (!ogImage) console.warn('No og:image found on', finalUrl);
 
         return {
             statusCode: 200,
