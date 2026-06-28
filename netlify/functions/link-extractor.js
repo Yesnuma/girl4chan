@@ -103,6 +103,8 @@ exports.handler = async (event) => {
                 signal: AbortSignal.timeout(5000)
             });
             const html = await res.text();
+            console.log('INTERSTITIAL SNIPPET:', html.slice(0, 1500));
+console.log('HAS nullproducts:', html.includes('nullproducts'), '| HAS depop.com/products:', html.includes('depop.com/products'));
             const unescaped = html.replace(/\\\//g, '/'); // Branch JSON escapes slashes
 
             let destination = null;
