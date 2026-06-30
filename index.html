@@ -4791,7 +4791,8 @@ window.extractLink = async function() {
         const data = await response.json();
 
         if (data.error) {
-            fetchStatus.textContent = 'couldn\'t fetch that link — try another one';
+            fetchStatus.textContent = 'couldn\'t fetch — ' + data.error;
+            console.log('Extract failed:', data._resolved, data);
             fetchStatus.style.color = '#ff0000';
         } else {
             // Show extracted image
