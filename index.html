@@ -4884,6 +4884,91 @@ window.getCurrentUploadTab = function() {
         window.currentUser = currentUser;
         window.loadEverythingFeed = loadEverythingFeed;
     </script>
+
+<script>
+async function loadSimilarListings() {
+    var btn = document.getElementById('loadSimilarBtn');
+    var grid = document.getElementById('similarResults');
+    var yandexLink = document.getElementById('yandexFallback');
+    var productImageUrl = document.getElementById('detailImage').src;
+    if (!productImageUrl) return;
+    btn.textContent = 'searching...';
+    btn.disabled = true;
+    var yandexUrl = 'https://lens.google.com/uploadbyurl?url=' + encodeURIComponent(productImageUrl);
+    try {
+        var res = await fetch('/.netlify/functions/searchByImage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageUrl: productImageUrl })
+        });
+        var data = await res.json();
+        yandexLink.setAttribute('href', yandexUrl);
+        yandexLink.setAttribute('style', 'display:block; margin-top:12px; font-family:Courier New,monospace; font-size:10px; color:#0600ff; text-decoration:underline; text-align:center;');
+        var items = data.itemSummaries || [];
+        if (items.length === 0) {
+            grid.innerHTML = '<p style="font-family:Courier New,monospace; font-size:11px; color:#666; padding:8px;">no similar listings on eBay — try the web search below</p>';
+            btn.setAttribute('style', 'display:none;');
+            return;
+        }
+        var html = '';
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            var img = '';
+            if (item.image && item.image.imageUrl) img = item.image.imageUrl;
+            else if (item.thumbnailImages && item.thumbnailImages[0]) img = item.thumbnailImages[0].imageUrl;
+            img = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
+            var link = item.itemAffiliateWebUrl || item.itemWebUrl || '#';
+            var price = '';
+            if (item.price && item.price.value) price = '$' + item.price.value;
+            var title = item.title || '';
+            var safeTitle = title.replace(/"/g, '&quot;');
+            html = html + '<a href="' + link + '" target="_blank" rel="noopener" style="text-decoration:none; color:inherit; display:block; background:#fff;">';
+            html = html + '<img src="' + img + '" alt="' + safeTitle + '" loading="lazy" style="width:100%; aspect-ratio:4/5; object-fit:cover; display:block;">';
+            html = html + '<div style="font-family:Courier New,monospace; font-size:10px; padding:3px; line-height:1.2; overflow:hidden;">' + title + '</div>';
+            html = html + '<div style="font-family:Courier New,monospace; font-size:11px; font-weight:bold; color:#0600ff; padding:0 3px 4px;">' + price + '</div>';
+            html = html + '</a>';
+        }
+        html = html + '<a href="/explore.html?img=' + encodeURIComponent(productImageUrl) + '" style="text-decoration: none; width: 100%; aspect-ratio: 4/5; background: #0600FF; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #F9FF00; font-family: Courier New, monospace; font-size: 12px; font-weight: bold; cursor: pointer; box-sizing: border-box; overflow: hidden;">';
+        html = html + '<div>see more</div>';
+        html = html + '<div style="margin-top: 6px; font-size: 18px;">→</div>';
+        html = html + '</a>';
+        grid.innerHTML = html;
+        btn.setAttribute('style', 'display:none;');
+    } catch (err) {
+        btn.textContent = 'try again';
+        btn.disabled = false;
+        yandexLink.setAttribute('href', yandexUrl);
+        yandexLink.setAttribute('style', 'display:block; margin-top:12px; font-family:Courier New,monospace; font-size:10px; color:#0600ff; text-decoration:underline; text-align:center;');
+    }
+}
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('active');
+}
+function closeSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+    sidebar.classList.remove('open');
+    overlay.classList.remove('active');
+}
+function loadPage(page) {
+    toggleSidebar();
+    const titleMap = {
+        'everything': '/ everything',
+        'profile': '/ my profile',
+        'collection': '/ vintage denim',
+        'collections': '/ boards'
+    };
+    document.getElementById('pageTitle').textContent = titleMap[page] || '/ ' + page;
+    if (page === 'everything') {
+        window.loadEverythingFeed();
+    }
+}
+</script>
+
+    
     <!-- Premium Landing Modal -->
 <div class="pp-overlay" id="premiumModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
     <div class="pp-modal-content" style="max-width:375px; width:90%; max-height:90vh; overflow-y:auto; padding:24px; background:#f0e0d6; display:flex; flex-direction:column; align-items:center; text-align:center;">
