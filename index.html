@@ -4868,6 +4868,12 @@ window.getExtractedImageUrl = function() { return extractedImageUrl; };
 window.getCurrentUploadTab = function() {
     return document.getElementById('fileTab').style.display === 'none' ? 'link' : 'file';
 };
+        window.auth = auth;
+        window.db = db;
+        window.storage = storage;
+        window.currentUser = currentUser;
+        window.loadEverythingFeed = loadEverythingFeed;
+    </script>
     <!-- Premium Landing Modal -->
 <div class="pp-overlay" id="premiumModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
     <div class="pp-modal-content" style="max-width:375px; width:90%; max-height:90vh; overflow-y:auto; padding:24px; background:#f0e0d6; display:flex; flex-direction:column; align-items:center; text-align:center;">
@@ -4912,7 +4918,6 @@ window.getCurrentUploadTab = function() {
         <button onclick="closeImageDetail()" style="width: 100%; padding: 12px; background: #ccc; color: #000; border: 2px solid #999;">close</button>
     </div>
 </div>
-
 <!-- Profile Photo Picker Modal -->
 <div class="pp-overlay" id="photoPickerModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
     <div class="pp-modal-content" style="max-width:420px; width:90%; max-height:90vh; overflow-y:auto; padding:16px; background:#f0e0d6; display:flex; flex-direction:column;">
