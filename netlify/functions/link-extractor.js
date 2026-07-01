@@ -1,11 +1,64 @@
 const fetch = require('node-fetch');
 
-// Desktop UA: Branch serves its parseable "deepview" interstitial (with the
-// depop.app.link/nullproducts/<slug> anchor) to desktop requests, not mobile.
-// Confirmed live that Depop product pages return og:image to a plain server
-// fetch (status 200), so this same UA works for the final scrape too — the og
-// tags live in the server-rendered <head>.
 const DESKTOP_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+// ── ScraperAPI fallback ──────────────────────────────────────────────
+// Only used when a direct fetch is blocked (403/401/429). Sites that work
+// directly (eBay via API, Poshmark) never touch the proxy, so credits are
+// spent only on genuinely-blocked sites (Etsy, Depop).
+const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY;
+
+function proxiedUrl(targetUrl) {
+    // premium=true uses residential IPs — needed because these sites block
+    // datacenter IPs (which is the whole problem). No render=true: the og tags
+    // live in the server-rendered HTML, so we don't need JS execution, which
+    // keeps it fast (under Netlify's timeout) and cheap (fewer credits).
+    return 'https://api.scraperapi.com/?api_key=' + SCRAPER_API_KEY +
+           '&url=' + encodeURIComponent(targetUrl) +
+           '&premium=true&country_code=us';
+}
+
+// Fetch directly; if blocked and a proxy key exists, retry through ScraperAPI.
+// Returns { status, html, finalUrl, viaProxy }. html is null on hard failure.
+async function smartFetch(targetUrl, timeout = 5000) {
+    let status = 'ERR';
+    try {
+        const res = await fetch(targetUrl, {
+            method: 'GET', redirect: 'follow',
+            headers: {
+                'User-Agent': DESKTOP_UA,
+                'Accept': 'text/html,application/xhtml+xml',
+                'Accept-Language': 'en-US,en;q=0.9',
+            },
+            signal: AbortSignal.timeout(timeout)
+        });
+        status = res.status;
+        if (res.ok) {
+            return { status, html: await res.text(), finalUrl: res.url, viaProxy: false };
+        }
+    } catch (e) {
+        console.error('Direct fetch error for', targetUrl, '-', e.message);
+    }
+
+    // Blocked/errored — try proxy if we have a key
+    if (SCRAPER_API_KEY && (status === 403 || status === 401 || status === 429 || status === 'ERR')) {
+        console.log('Direct fetch got', status, '— retrying via ScraperAPI:', targetUrl);
+        try {
+            const pRes = await fetch(proxiedUrl(targetUrl), { signal: AbortSignal.timeout(8000) });
+            console.log('ScraperAPI status:', pRes.status);
+            if (pRes.ok) {
+                return { status: pRes.status, html: await pRes.text(), finalUrl: targetUrl, viaProxy: true };
+            }
+            return { status: pRes.status, html: null, finalUrl: targetUrl, viaProxy: true };
+        } catch (e) {
+            console.error('ScraperAPI fetch error:', e.message);
+            return { status: 'PROXY_ERR', html: null, finalUrl: targetUrl, viaProxy: true };
+        }
+    }
+
+    return { status, html: null, finalUrl: targetUrl, viaProxy: false };
+}
+// ─────────────────────────────────────────────────────────────────────
 
 async function getEbayToken() {
     const credentials = Buffer.from(
@@ -67,18 +120,15 @@ exports.handler = async (event) => {
         return { statusCode: 400, body: JSON.stringify({ error: 'No URL provided' }) };
     }
 
-    // Pull just the URL out if the user pasted surrounding text
     const urlMatch = url.match(/https?:\/\/[^\s]+/);
     if (urlMatch) url = urlMatch[0];
 
     let finalUrl = url;
-    let prefetchedHtml = null; // page captured during eBay redirect resolution, reused below
+    let prefetchedHtml = null;
     const isShortEbayUrl = url.includes('ebay.us') || url.includes('ebay.to') || url.includes('ebay.io') || url.includes('rover.ebay.com');
     const isBranchLink = url.includes('app.link');
 
-    // Resolve short eBay redirects only. The redirect-following GET already downloads
-    // the full item page, so we keep its HTML instead of throwing it away — that lets
-    // the scrape fallback below reuse it instead of making a second (timeout-risking) request.
+    // Resolve short eBay redirects (not blocked — direct fetch, keep the HTML to reuse)
     if (isShortEbayUrl) {
         try {
             const res = await fetch(url, {
@@ -95,36 +145,24 @@ exports.handler = async (event) => {
     }
 
     // Branch deep links (Depop share links) -> find the real product URL.
+    // Uses smartFetch because Depop now 403s the interstitial from server IPs.
     if (isBranchLink) {
         try {
-            const res = await fetch(url, {
-                method: 'GET', redirect: 'follow',
-                headers: { 'User-Agent': DESKTOP_UA },
-                signal: AbortSignal.timeout(5000)
-            });
-            const html = await res.text();
-            console.log('INTERSTITIAL SNIPPET:', html.slice(0, 1500));
-console.log('HAS nullproducts:', html.includes('nullproducts'), '| HAS depop.com/products:', html.includes('depop.com/products'));
-            const unescaped = html.replace(/\\\//g, '/'); // Branch JSON escapes slashes
+            const r = await smartFetch(url, 5000);
+            console.log('Branch fetch:', url, '-> status', r.status, r.viaProxy ? '(via proxy)' : '(direct)');
+            const html = r.html || '';
+            const unescaped = html.replace(/\\\//g, '/');
 
             let destination = null;
 
-            // PRIMARY: the product slug sits in a depop.app.link/(null)products/<slug>
-            // anchor in the interstitial. Confirmed reliable — build canonical URL from it.
             const slugMatch = unescaped.match(/depop\.app\.link\/(?:null)?products?\/([^?"\s'&<]+)/i);
             if (slugMatch && slugMatch[1]) {
                 destination = `https://www.depop.com/products/${slugMatch[1]}/`;
             }
-
-            // FALLBACK: an explicit product URL printed anywhere in the page
             if (!destination) {
                 const direct = unescaped.match(/https?:\/\/(?:www\.)?depop\.com\/products\/[^?"\s'&<]+/i)?.[0];
                 if (direct) destination = direct;
             }
-
-            // LAST RESORT: al:web:url — but ONLY if it points at a real product page.
-            // (Do NOT use $desktop_url / og:url here: for Depop they resolve to the
-            // homepage, which scrapes the generic Depop icon.)
             if (!destination) {
                 const meta = html.match(/<meta[^>]+property=["']al:web:url["'][^>]+content=["']([^"']+)["']/i)?.[1];
                 if (meta && meta.includes('/products/')) destination = meta;
@@ -141,7 +179,7 @@ console.log('HAS nullproducts:', html.includes('nullproducts'), '| HAS depop.com
         }
     }
 
-    // eBay API path
+    // eBay API path (never uses the proxy)
     const isEbay = finalUrl.includes('ebay.com') || finalUrl.includes('ebay.us') || finalUrl.includes('ebay.io') || url.includes('ebay.com') || url.includes('ebay.us') || url.includes('ebay.io');
     if (isEbay) {
         try {
@@ -158,30 +196,21 @@ console.log('HAS nullproducts:', html.includes('nullproducts'), '| HAS depop.com
         }
     }
 
-    // Scrape og tags (works for Depop product pages, Grailed, Poshmark, etc.)
+    // Scrape og tags. smartFetch handles the 403 -> proxy retry for blocked sites.
     try {
-        let html;
+        let html, viaProxy = false, status = 200;
         if (prefetchedHtml) {
-            // We already downloaded this page while resolving the short link — reuse it.
             html = prefetchedHtml;
             console.log('Scrape: reusing prefetched HTML for', finalUrl);
         } else {
-            const response = await fetch(finalUrl, {
-                headers: {
-                    'User-Agent': DESKTOP_UA,
-                    'Accept': 'text/html,application/xhtml+xml',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                },
-                redirect: 'follow',
-                signal: AbortSignal.timeout(5000)
-            });
-
-            console.log('Scrape fetch:', finalUrl, '->', response.status);
-
-            if (!response.ok) {
-                return { statusCode: 200, body: JSON.stringify({ error: `Could not fetch page (${response.status})`, _resolved: finalUrl }) };
+            const r = await smartFetch(finalUrl, 5000);
+            viaProxy = r.viaProxy;
+            status = r.status;
+            console.log('Scrape:', finalUrl, '-> status', status, viaProxy ? '(via proxy)' : '(direct)');
+            if (!r.html) {
+                return { statusCode: 200, body: JSON.stringify({ error: `Could not fetch page (${status})`, _resolved: finalUrl, _viaProxy: viaProxy }) };
             }
-            html = await response.text();
+            html = r.html;
         }
 
         function decodeHtml(str) {
@@ -212,7 +241,8 @@ console.log('HAS nullproducts:', html.includes('nullproducts'), '| HAS depop.com
                 title: ogTitle ? decodeHtml(ogTitle) : null,
                 price: ogPrice ? decodeHtml(ogPrice) : null,
                 description: ogDescription ? decodeHtml(ogDescription) : null,
-                _resolved: finalUrl
+                _resolved: finalUrl,
+                _viaProxy: viaProxy
             })
         };
     } catch (error) {
