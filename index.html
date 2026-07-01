@@ -1381,7 +1381,7 @@
                 <!-- LINK TAB -->
                 <div id="linkTab">
                     <div class="upload-fetch-row">
-                        <textarea id="productUrlInput" placeholder="paste link from any resale site" rows="2" style="flex:1; padding:11px 12px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:11px; background:#f8f8ff; resize:none;"></textarea>
+                        <input type="text" id="productUrlInput" placeholder="paste link from any resale site" onpaste="const el=this; setTimeout(function(){ const m=el.value.match(/https?:\/\/[^\s]+/); if(m) el.value=m[0]; },0)">
                         <button type="button" onclick="extractLink()" id="fetchBtn">fetch →</button>
                     </div>
 
@@ -4868,6 +4868,16 @@ window.getCurrentUploadTab = function() {
     return document.getElementById('fileTab').style.display === 'none' ? 'link' : 'file';
 };
 
+// Strip pasted text down to just the URL, reliably
+(function() {
+    const box = document.getElementById('productUrlInput');
+    if (box) {
+        box.addEventListener('input', function() {
+            const m = box.value.match(/https?:\/\/[^\s]+/);
+            if (m && box.value !== m[0]) box.value = m[0];
+        });
+    }
+})();
         window.auth = auth;
         window.db = db;
         window.storage = storage;
