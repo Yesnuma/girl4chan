@@ -1381,7 +1381,7 @@
                 <!-- LINK TAB -->
                 <div id="linkTab">
                     <div class="upload-fetch-row">
-                        <input type="text" id="productUrlInput" placeholder="paste link from any resale site" onpaste="const el=this; setTimeout(function(){ const m=el.value.match(/https?:\/\/[^\s]+/); if(m) el.value=m[0]; },0)">
+                        <textarea id="productUrlInput" placeholder="paste link from any resale site" rows="2" style="flex:1; padding:11px 12px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:11px; background:#f8f8ff; resize:none;"></textarea>
                         <button type="button" onclick="extractLink()" id="fetchBtn">fetch →</button>
                     </div>
 
