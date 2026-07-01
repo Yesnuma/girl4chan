@@ -4862,12 +4862,22 @@ window.closeUploadModal = function() {
     // Reset to link tab
     switchUploadTab('link');
 };
-
 // ── IMPORTANT: Expose extractedImageUrl to upload handler ────
 window.getExtractedImageUrl = function() { return extractedImageUrl; };
 window.getCurrentUploadTab = function() {
     return document.getElementById('fileTab').style.display === 'none' ? 'link' : 'file';
 };
+
+// Strip pasted text down to just the URL, reliably
+(function() {
+    const box = document.getElementById('productUrlInput');
+    if (box) {
+        box.addEventListener('input', function() {
+            const m = box.value.match(/https?:\/\/[^\s]+/);
+            if (m && box.value !== m[0]) box.value = m[0];
+        });
+    }
+})();
         window.auth = auth;
         window.db = db;
         window.storage = storage;
