@@ -1115,6 +1115,7 @@
         <div class="sidebar-content">
             <div class="sidebar-section">
                 <h3>MAIN</h3>
+                <a href="#" onclick="loadPage('today')">/ today</a>
                 <a href="#" onclick="loadPage('everything')">/ everything</a>
                 <a href="#" onclick="loadMyProfile()">/ my profile</a>
             </div>
@@ -1675,13 +1676,13 @@ async function getAllExistingTags() {
 // Open image detail modal
 window.openImageDetail = async function(imageId, imageUrl, link, tags) {
     document.getElementById('detailImage').src = imageUrl;
-    // reset the "more like this" section for the new product
-    document.getElementById('similarResults').innerHTML = '';
-    document.getElementById('yandexFallback').setAttribute('style', 'display:none;');
-    var simBtn = document.getElementById('loadSimilarBtn');
-    simBtn.setAttribute('style', 'width: 100%; padding: 12px; background: #f5ecd7; color: #0600ff; border: 2px solid #0600ff; font-family: Courier New, Courier, monospace; font-size: 12px; cursor: pointer; margin-bottom: 10px;');
-    simBtn.disabled = false;
-    simBtn.textContent = 'load visually similar listings →';
+    // wire junction buttons
+    document.getElementById('exploreBtn').onclick = () => {
+        window.location.href = '/explore.html?img=' + encodeURIComponent(imageUrl);
+    };
+    document.getElementById('fileBtn').onclick = () => {
+        handleAddToCollection({ dataset: { imageId: imageId } });
+    };
     // Display tags
     const tagsContainer = document.getElementById('detailTags');
     tagsContainer.innerHTML = '';
@@ -1835,28 +1836,28 @@ window.openImageDetail = async function(imageId, imageUrl, link, tags) {
         // Store cleanup function for when modal closes
         window.tagAutocompleteCleanup = cleanupHandler;
     }
-// Setup like/heart button
-            const existingHeart = document.getElementById('likeButton');
-            if (existingHeart) existingHeart.remove();
-            
-            const heartBtn = document.createElement('button');
-            heartBtn.id = 'likeButton';
-            heartBtn.style.cssText = 'background:none; border:none; padding:4px 0; font-size:22px; cursor:pointer; display:block; margin:8px 0;';
-            
-            // Check if already liked
+// Setup like button (static, in the junction row)
+            const likeBtnRow = document.getElementById('likeBtnRow');
+            const heartIcon = document.getElementById('likeHeartIcon');
+            const likeTxt = document.getElementById('likeTxt');
+
+            function paintLike(liked) {
+                heartIcon.textContent = liked ? '♥' : '♡';
+                likeTxt.textContent = liked ? 'liked' : 'like';
+                likeBtnRow.style.background = liked ? '#ff007a' : '#fff';
+                likeBtnRow.style.borderColor = liked ? '#ff007a' : '#0600ff';
+                likeBtnRow.style.color = liked ? '#fff' : '#0600ff';
+            }
+
+            let isLikedNow = false;
             if (window.isPremium && auth.currentUser) {
                 const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
                 const likes = userDoc.data()?.likes || [];
-                const isLiked = likes.includes(imageId);
-                heartBtn.textContent = isLiked ? '♥ liked' : '♡ like';
-                heartBtn.style.color = isLiked ? '#ff007a' : '#333';
-                heartBtn.style.borderColor = isLiked ? '#ff007a' : '#8b7355';
-            } else {
-                heartBtn.textContent = '♡ like';
-                heartBtn.style.color = '#333';
+                isLikedNow = likes.includes(imageId);
             }
-            
-            heartBtn.onclick = async () => {
+            paintLike(isLikedNow);
+
+            likeBtnRow.onclick = async () => {
                 if (!requireAuth()) return;
                 if (!window.isPremium) {
                     if (confirm('Likes are a premium feature! Upgrade for $5/mo?')) {
@@ -1867,21 +1868,15 @@ window.openImageDetail = async function(imageId, imageUrl, link, tags) {
                 const userRef = doc(db, 'users', auth.currentUser.uid);
                 const userDoc2 = await getDoc(userRef);
                 const currentLikes = userDoc2.data()?.likes || [];
-                
                 if (currentLikes.includes(imageId)) {
                     await updateDoc(userRef, { likes: arrayRemove(imageId) });
-                    heartBtn.textContent = '♡ like';
-                    heartBtn.style.color = '#333';
-                    heartBtn.style.borderColor = '#8b7355';
+                    isLikedNow = false;
                 } else {
                     await updateDoc(userRef, { likes: arrayUnion(imageId) });
-                    heartBtn.textContent = '♥ liked';
-                    heartBtn.style.color = '#ff007a';
-                    heartBtn.style.borderColor = '#ff007a';
+                    isLikedNow = true;
                 }
+                paintLike(isLikedNow);
             };
-            
-            document.getElementById('detailTags').after(heartBtn);
     
             // Setup shop button
             const shopBtn = document.getElementById('shopButton');
@@ -2656,6 +2651,45 @@ async function deleteCollection(collectionId, collectionName) {
             try {
                 const collectionDoc = await getDoc(doc(db, 'collections', collectionId));
                 const imageIds = collectionDoc.data().images || [];
+
+                // Admin: homepage section controls
+                if (isAdmin()) {
+                    const cdata = collectionDoc.data();
+                    const isOnHomepage = cdata.homepage === true;
+                    const hpBar = document.createElement('div');
+                    hpBar.id = 'profileHeader';
+                    hpBar.style.cssText = 'padding:8px 12px; margin-bottom:10px; background:#fff; border:1px dashed #0600ff; font-family:Courier New,monospace; font-size:11px; display:flex; justify-content:space-between; align-items:center;';
+                    const hpLabel = document.createElement('span');
+                    hpLabel.textContent = isOnHomepage
+                        ? (cdata.homepageTags && cdata.homepageTags.length ? '★ on homepage (tags: ' + cdata.homepageTags.join('+') + ')' : '★ on homepage')
+                        : '☆ not on homepage';
+                    hpBar.appendChild(hpLabel);
+                    const tBtn = document.createElement('button');
+                    tBtn.textContent = isOnHomepage ? 'remove' : 'add to homepage';
+                    tBtn.style.cssText = 'padding:4px 10px; background:#9ed2f5; border:1px solid #0600ff; color:#0600ff; font-family:Courier New,monospace; font-size:10px; cursor:pointer;';
+                    tBtn.onclick = async () => {
+                        if (isOnHomepage) {
+                            await updateDoc(doc(db, 'collections', collectionId), { homepage: false });
+                        } else {
+                            const sub = prompt('section subtitle (optional):', cdata.homepageSubtitle || '');
+                            if (sub === null) return;
+                            const tagsIn = prompt('auto-fill from tags? comma separated (leave blank to use the items filed in this collection):', (cdata.homepageTags || []).join(', '));
+                            if (tagsIn === null) return;
+                            const fmt = prompt('format: row or grid?', cdata.homepageFormat || 'row');
+                            const tags = tagsIn.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+                            await updateDoc(doc(db, 'collections', collectionId), {
+                                homepage: true,
+                                homepageSubtitle: sub || '',
+                                homepageTags: tags,
+                                homepageFormat: (fmt === 'grid' ? 'grid' : 'row'),
+                                homepageOrder: cdata.homepageOrder || Date.now()
+                            });
+                        }
+                        loadCollection(collectionId, collectionName, false);
+                    };
+                    hpBar.appendChild(tBtn);
+                    grid.parentNode.insertBefore(hpBar, grid);
+                }
                 
                 
                 for (const imageId of imageIds) {
@@ -3808,6 +3842,147 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             document.getElementById('ppStep2').style.display = 'block';
         };
 
+        // ── /TODAY: curated homepage ──
+        // Section = collection doc with homepage:true.
+        // If it has homepageTags (array), it auto-fills from images matching ALL tags.
+        // Otherwise it uses its filed images array.
+        async function loadTodayPage(addToHistory = true) {
+            closeSidebar();
+            if (addToHistory && currentContext.type !== 'today') {
+                navigationHistory.push({ ...currentContext });
+            }
+            activeTagFilters = [];
+            const existingFilterControls = document.querySelector('.tag-filter-controls');
+            if (existingFilterControls) existingFilterControls.remove();
+
+            currentContext = { type: 'today', id: null };
+            document.getElementById('pageTitle').innerHTML = '/ today <span style="font-size:10px; color:#888; font-weight:normal;">pick a rabbit hole</span>';
+            localStorage.setItem('currentPage', JSON.stringify({ type: 'today' }));
+
+            const grid = document.getElementById('imageGrid');
+            grid.innerHTML = '';
+            const oldHeader = document.getElementById('profileHeader'); if (oldHeader) oldHeader.remove();
+            const oldSortBar = document.getElementById('profileSortBar'); if (oldSortBar) oldSortBar.remove();
+            const oldTagFilters = document.getElementById('profileTagFilters'); if (oldTagFilters) oldTagFilters.remove();
+            const tagRow = document.getElementById('recentTagsRow'); if (tagRow) tagRow.style.display = 'none';
+
+            try {
+                const snap = await getDocs(collection(db, 'collections'));
+                const sections = [];
+                snap.forEach((d) => {
+                    const data = d.data();
+                    if (data.homepage === true) sections.push({ id: d.id, data: data });
+                });
+                sections.sort((a, b) => (a.data.homepageOrder || 0) - (b.data.homepageOrder || 0));
+
+                if (sections.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.style.cssText = 'grid-column:1 / -1; padding:20px; text-align:center; color:#666; font-family:Courier New,monospace; font-size:12px;';
+                    empty.textContent = 'nothing curated yet — check back soon ✿';
+                    grid.appendChild(empty);
+                }
+
+                // Preload all images once if any tag sections exist
+                let allImages = null;
+                if (sections.some(s => Array.isArray(s.data.homepageTags) && s.data.homepageTags.length > 0)) {
+                    allImages = [];
+                    const imgSnap = await getDocs(query(collection(db, 'images'), orderBy('createdAt', 'desc')));
+                    imgSnap.forEach(d => allImages.push({ id: d.id, data: d.data() }));
+                }
+
+                for (const section of sections) {
+                    const sec = document.createElement('div');
+                    sec.style.cssText = 'grid-column:1 / -1; padding:4px 0 14px; border-bottom:1px dashed #c9b8ac; margin-bottom:10px;';
+
+                    const titleEl = document.createElement('div');
+                    titleEl.style.cssText = 'font-family:Courier New,monospace; font-size:12px; color:#0600ff; font-weight:bold; padding:0 2px;';
+                    titleEl.textContent = '━ ' + section.data.name + ' ━';
+                    sec.appendChild(titleEl);
+
+                    if (section.data.homepageSubtitle) {
+                        const subEl = document.createElement('div');
+                        subEl.style.cssText = 'font-family:Courier New,monospace; font-size:10px; color:#666; margin:3px 0 8px; padding:0 2px;';
+                        subEl.textContent = section.data.homepageSubtitle;
+                        sec.appendChild(subEl);
+                    } else {
+                        titleEl.style.marginBottom = '8px';
+                    }
+
+                    const isTagSection = Array.isArray(section.data.homepageTags) && section.data.homepageTags.length > 0;
+
+                    // gather items
+                    let items = [];
+                    if (isTagSection) {
+                        items = allImages.filter(({ data }) => {
+                            const t = data.tags || [];
+                            return section.data.homepageTags.every(tag => t.includes(tag));
+                        }).slice(0, 9);
+                    } else {
+                        const imageIds = (section.data.images || []).slice(0, 12);
+                        for (const imageId of imageIds) {
+                            try {
+                                const imageDoc = await getDoc(doc(db, 'images', imageId));
+                                if (imageDoc.exists()) items.push({ id: imageDoc.id, data: imageDoc.data() });
+                            } catch (e) {}
+                        }
+                    }
+
+                    // render: grid format or scroll row, zero gaps
+                    const fmt = section.data.homepageFormat === 'grid' ? 'grid' : 'row';
+                    const rowEl = document.createElement('div');
+                    if (fmt === 'grid') {
+                        rowEl.style.cssText = 'display:grid; grid-template-columns:repeat(3,1fr); gap:0;';
+                    } else {
+                        rowEl.style.cssText = 'display:flex; gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px;';
+                    }
+                    sec.appendChild(rowEl);
+
+                    let firstImageUrl = null;
+                    items.forEach(({ id, data }) => {
+                        if (!firstImageUrl) firstImageUrl = data.imageUrl;
+                        const img = document.createElement('img');
+                        img.src = data.imageUrl;
+                        img.alt = '';
+                        img.draggable = false;
+                        if (fmt === 'grid') {
+                            img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
+                        } else {
+                            img.style.cssText = 'flex:0 0 90px; width:90px; height:118px; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
+                        }
+                        img.onclick = () => openImageDetail(id, data.imageUrl, data.link || '', data.tags || []);
+                        rowEl.appendChild(img);
+                    });
+
+                    // rabbit hole button
+                    const rh = document.createElement('a');
+                    rh.textContent = 'go down this rabbit hole →';
+                    rh.style.cssText = 'display:inline-block; margin:8px 2px 0; background:#fff; border:1px solid #0600ff; color:#0600ff; font-family:Courier New,monospace; font-size:11px; padding:4px 10px; text-decoration:none; cursor:pointer;';
+                    if (isTagSection) {
+                        rh.onclick = () => {
+                            activeTagFilters = [...section.data.homepageTags];
+                            loadTagFeed(section.data.homepageTags[0], true, false);
+                        };
+                    } else if (firstImageUrl) {
+                        rh.href = '/explore.html?img=' + encodeURIComponent(firstImageUrl);
+                    }
+                    if (isTagSection || firstImageUrl) sec.appendChild(rh);
+
+                    grid.appendChild(sec);
+                }
+
+                const foot = document.createElement('div');
+                foot.style.cssText = 'grid-column:1 / -1; text-align:center; padding:8px 0 20px;';
+                const seeAll = document.createElement('span');
+                seeAll.textContent = 'see everything →';
+                seeAll.style.cssText = 'font-family:Courier New,monospace; font-size:11px; color:#0600ff; text-decoration:underline; cursor:pointer;';
+                seeAll.onclick = () => loadEverythingFeed();
+                foot.appendChild(seeAll);
+                grid.appendChild(foot);
+            } catch (error) {
+                console.error('Error loading today page:', error);
+            }
+        }
+
         // Load everything feed
         async function loadEverythingFeed(addToHistory = true) {
             // Save CURRENT page to history BEFORE navigating
@@ -3895,45 +4070,46 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             }
         }
 
-              // Restore last viewed page
+        // Restore last viewed page
         async function restoreLastPage() {
             try {
                 const savedPage = localStorage.getItem('currentPage');
                 if (!savedPage) {
-                    await loadEverythingFeed();
+                    await loadTodayPage();
                     return;
                 }
-                if (savedPage) {
+                const page = JSON.parse(savedPage);
 
-                    const page = JSON.parse(savedPage);
+                // Logged-out users can't restore personal pages — fall back to today
+                if (!auth.currentUser && (page.type === 'profile' || page.type === 'likes' || page.type === 'accountSettings')) {
+                    await loadTodayPage();
+                    return;
+                }
 
-                    // Logged-out users can't restore personal pages — fall back to everything feed
-                    if (!auth.currentUser && (page.type === 'profile' || page.type === 'likes' || page.type === 'accountSettings')) {
-                        await loadEverythingFeed();
-                        return;
+                if (page.type === 'today') {
+                    await loadTodayPage();
+                } else if (page.type === 'profile') {
+                    await loadMyProfile();
+                } else if (page.type === 'collection' && page.id && page.name) {
+                    await loadCollection(page.id, page.name);
+                } else if (page.type === 'userProfile' && page.id && page.username) {
+                    await loadUserProfile(page.id, page.username);
+                } else if (page.type === 'tag') {
+                    // Handle both old (single tag) and new (tags array) format
+                    if (page.tags && Array.isArray(page.tags)) {
+                        activeTagFilters = page.tags;
+                        await loadTagFeed(page.tags[0], true, false);
+                    } else if (page.tag) {
+                        await loadTagFeed(page.tag);
                     }
-
-                    if (page.type === 'profile') {
-                        await loadMyProfile();
-                    } else if (page.type === 'collection' && page.id && page.name) {
-                        await loadCollection(page.id, page.name);
-                   } else if (page.type === 'userProfile' && page.id && page.username) {
-                        await loadUserProfile(page.id, page.username);
-                    } else if (page.type === 'tag') {
-                        // Handle both old (single tag) and new (tags array) format
-                        if (page.tags && Array.isArray(page.tags)) {
-                            activeTagFilters = page.tags;
-                            await loadTagFeed(page.tags[0], true, false);
-                        } else if (page.tag) {
-                            await loadTagFeed(page.tag);
-                        }
-                    } else {
-                        await loadEverythingFeed();
-                    }
-                    }
+                } else if (page.type === 'everything') {
+                    await loadEverythingFeed();
+                } else {
+                    await loadTodayPage();
+                }
             } catch (error) {
                 console.error('Error restoring page:', error);
-                await loadEverythingFeed();
+                await loadTodayPage();
             }
         }
         // Gesture detection for images - UPDATED WITH SMOOTH DRAG
@@ -4883,6 +5059,7 @@ window.getCurrentUploadTab = function() {
         window.storage = storage;
         window.currentUser = currentUser;
         window.loadEverythingFeed = loadEverythingFeed;
+        window.loadTodayPage = loadTodayPage;
     </script>
 
 <script>
@@ -4956,13 +5133,16 @@ function closeSidebar() {
 function loadPage(page) {
     toggleSidebar();
     const titleMap = {
+        'today': '/ today',
         'everything': '/ everything',
         'profile': '/ my profile',
         'collection': '/ vintage denim',
         'collections': '/ boards'
     };
     document.getElementById('pageTitle').textContent = titleMap[page] || '/ ' + page;
-    if (page === 'everything') {
+    if (page === 'today') {
+        window.loadTodayPage();
+    } else if (page === 'everything') {
         window.loadEverythingFeed();
     }
 }
@@ -4998,18 +5178,12 @@ function loadPage(page) {
             <h3 style="font-size: 14px; margin-bottom: 10px; color: #666;">tags:</h3>
             <div id="detailTags" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
         </div>
-        <!-- more like this section -->
-<div class="similar-section" style="margin-bottom: 16px;">
-    <h3 style="font-size: 14px; margin-bottom: 10px; color: #666;">more like this:</h3>
-    <button id="loadSimilarBtn" onclick="loadSimilarListings()" style="width: 100%; padding: 12px; background: #f5ecd7; color: #0600ff; border: 2px solid #0600ff; font-family: 'Courier New', Courier, monospace; font-size: 12px; cursor: pointer; margin-bottom: 10px;">
-        load visually similar listings →
-    </button>
-    <div id="similarResults" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;"></div>
-    <a id="yandexFallback" target="_blank" rel="noopener" style="display: none; margin-top: 12px; font-family: 'Courier New', monospace; font-size: 10px; color: #0600ff; text-decoration: underline; text-align: center;">
-        didn't find it? search the wider web →
-    </a>
-</div>
-        <button id="shopButton" style="width: 100%; padding: 15px; background: #0600ff; color: white; border: 2px solid #0600ff; font-family: 'Courier New', Courier, monospace; cursor: pointer; margin-bottom: 10px;">shop this item →</button>
+        <button id="shopButton" style="width: 100%; padding: 15px; background: #0600ff; color: white; border: 2px solid #0600ff; font-family: 'Courier New', Courier, monospace; cursor: pointer; margin-bottom: 10px;">shop on eBay →</button>
+        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+            <button id="exploreBtn" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer;"><span style="font-size:18px; display:block; margin-bottom:4px;">⌕</span>explore</button>
+            <button id="fileBtn" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer;"><span style="font-size:18px; display:block; margin-bottom:4px;">📁</span>file</button>
+            <button id="likeBtnRow" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer;"><span id="likeHeartIcon" style="font-size:18px; display:block; margin-bottom:4px;">♡</span><span id="likeTxt">like</span></button>
+        </div>
         <button onclick="closeImageDetail()" style="width: 100%; padding: 12px; background: #ccc; color: #000; border: 2px solid #999;">close</button>
     </div>
 </div>
