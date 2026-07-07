@@ -77,6 +77,30 @@
     overflow: hidden;
     box-shadow: 6px 6px 0px #0600ff;
   }
+  .outfit-canvas.landscape {
+    width: 100%;
+    max-width: 560px;
+    height: 300px;
+  }
+  .layout-toggle {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .layout-toggle button {
+    padding: 5px 12px;
+    background: #fff;
+    border: 1px solid #0600ff;
+    color: #0600ff;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 10px;
+    cursor: pointer;
+  }
+  .layout-toggle button.active {
+    background: #0600ff;
+    color: #F9FF00;
+  }
   .canvas-empty {
     position: absolute;
     top: 50%;
@@ -174,6 +198,11 @@
 
 <div class="og-subtitle" id="ogSubtitle">loading closet...</div>
 
+<div class="layout-toggle">
+  <button id="modePortrait" class="active" onclick="setLayoutMode('portrait')">▯ portrait</button>
+  <button id="modeLandscape" onclick="setLayoutMode('landscape')">▭ landscape</button>
+</div>
+
 <div class="canvas-wrap">
   <div class="outfit-canvas" id="outfitCanvas">
     <div class="canvas-empty" id="canvasEmpty">press shuffle ↓</div>
@@ -234,18 +263,45 @@
     return null; // not shuffleable — quietly skipped
   }
 
-  // ── layout slots: her original paper-doll positions, verbatim ──
+  // ── layout slots ──
+  // portrait: her original paper-doll positions, verbatim
+  // landscape: outfit column sits left-of-center, right column gives bags/accessories/footwear real room
   const SLOTS = {
-    tops:         { top: '3.33%', left: '50%', tx: true, width: '55%', height: '35%', z: 3 },
-    jackets:      { top: '3.33%', left: '50%', tx: true, width: '62%', height: '48%', z: 3 },
-    shortdress:   { top: '3.33%', left: '50%', tx: true, width: '55%', height: '55%', z: 3 },
-    longdress:    { top: '3.33%', left: '50%', tx: true, width: '55%', height: '75%', z: 3 },
-    bottoms:      { top: '30%',   left: '50%', tx: true, width: '50%', height: '50%', z: 2 },
-    shortbottoms: { top: '33%',   left: '50%', tx: true, width: '42%', height: '24%', z: 2 },
-    bags:         { top: '22.22%', left: '5.56%', width: '38%', height: '30%', z: 5 },
-    accessories:  { top: '17.78%', right: '5.56%', width: '18%', height: '14%', z: 4 },
-    shoes:        { bottom: '5.56%', left: '50%', tx: true, width: '35%', height: '20%', z: 1 },
-    boots:        { bottom: '5.56%', left: '50%', tx: true, width: '48%', height: '28%', z: 1 }
+    portrait: {
+      tops:         { top: '3.33%', left: '50%', tx: true, width: '55%', height: '35%', z: 3 },
+      jackets:      { top: '3.33%', left: '50%', tx: true, width: '62%', height: '48%', z: 3 },
+      shortdress:   { top: '3.33%', left: '50%', tx: true, width: '55%', height: '55%', z: 3 },
+      longdress:    { top: '3.33%', left: '50%', tx: true, width: '55%', height: '75%', z: 3 },
+      bottoms:      { top: '30%',   left: '50%', tx: true, width: '50%', height: '50%', z: 2 },
+      shortbottoms: { top: '33%',   left: '50%', tx: true, width: '42%', height: '24%', z: 2 },
+      bags:         { top: '22.22%', left: '5.56%', width: '38%', height: '30%', z: 5 },
+      accessories:  { top: '17.78%', right: '5.56%', width: '18%', height: '14%', z: 4 },
+      shoes:        { bottom: '5.56%', left: '50%', tx: true, width: '35%', height: '20%', z: 1 },
+      boots:        { bottom: '5.56%', left: '50%', tx: true, width: '48%', height: '28%', z: 1 }
+    },
+    landscape: {
+      tops:         { top: '4%',  left: '30%', tx: true, width: '32%', height: '46%', z: 3 },
+      jackets:      { top: '4%',  left: '30%', tx: true, width: '38%', height: '60%', z: 3 },
+      shortdress:   { top: '5%',  left: '30%', tx: true, width: '34%', height: '68%', z: 3 },
+      longdress:    { top: '3%',  left: '30%', tx: true, width: '34%', height: '90%', z: 3 },
+      bottoms:      { top: '40%', left: '30%', tx: true, width: '30%', height: '55%', z: 2 },
+      shortbottoms: { top: '44%', left: '30%', tx: true, width: '25%', height: '28%', z: 2 },
+      bags:         { top: '6%',  right: '4%', width: '28%', height: '42%', z: 5 },
+      accessories:  { top: '42%', right: '30%', width: '20%', height: '24%', z: 4 },
+      shoes:        { bottom: '5%', right: '4%', width: '26%', height: '30%', z: 1 },
+      boots:        { bottom: '5%', right: '4%', width: '28%', height: '38%', z: 1 }
+    }
+  };
+
+  let layoutMode = 'portrait';
+  let lastPicks = null;
+
+  window.setLayoutMode = function(mode) {
+    layoutMode = mode;
+    document.getElementById('outfitCanvas').classList.toggle('landscape', mode === 'landscape');
+    document.getElementById('modePortrait').classList.toggle('active', mode === 'portrait');
+    document.getElementById('modeLandscape').classList.toggle('active', mode === 'landscape');
+    if (lastPicks && lastPicks.length > 0) renderPicks(lastPicks);
   };
 
   let closet = { tops: [], jackets: [], shortdress: [], longdress: [], bottoms: [], shortbottoms: [], shoes: [], boots: [], bags: [], accessories: [] };
@@ -306,11 +362,19 @@
 
     if (picks.length === 0) {
       canvas.innerHTML = '<div class="canvas-empty">no shuffleable finds yet —<br>post some tops, bottoms, shoes ✿</div>';
+      lastPicks = null;
       return;
     }
 
+    lastPicks = picks;
+    renderPicks(picks);
+  };
+
+  function renderPicks(picks) {
+    const canvas = document.getElementById('outfitCanvas');
+    canvas.innerHTML = '';
     picks.forEach(({ item, slot }, i) => {
-      const s = SLOTS[slot];
+      const s = SLOTS[layoutMode][slot];
       const tile = document.createElement('div');
       tile.className = 'collage-tile';
       let css = 'z-index:' + s.z + '; width:' + s.width + '; height:' + s.height + ';';
@@ -333,7 +397,7 @@
       }
       canvas.appendChild(tile);
     });
-  };
+  }
 
   async function loadCloset() {
     const params = new URLSearchParams(window.location.search);
