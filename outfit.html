@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>outfit generator - girlchan</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    background-color: #f0e0d6;
+    max-width: 600px;
+    margin: 0 auto;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  .explore-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #0600ff;
+  }
+  .back-link {
+    font-size: 12px;
+    color: #0600ff;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .back-link:hover { text-decoration: underline; }
+
+  /* letter block title */
+  .og-title {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 6px;
+    user-select: none;
+  }
+  .og-title-row { display: flex; }
+  .letter-block {
+    background: #F9FF00;
+    border: 2px solid #000;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+    color: #000;
+    margin: 0 1px;
+    font-family: 'Courier New', Courier, monospace;
+  }
+  .og-subtitle {
+    text-align: center;
+    font-size: 11px;
+    color: #666;
+    margin-bottom: 16px;
+  }
+  .og-subtitle span { color: #0600ff; font-weight: bold; }
+
+  /* collage canvas */
+  .canvas-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .outfit-canvas {
+    background: #fff;
+    border: 2px solid #0600ff;
+    width: 340px;
+    height: 425px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 6px 6px 0px #0600ff;
+  }
+  .canvas-empty {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 12px;
+    color: #999;
+    text-align: center;
+    width: 80%;
+    line-height: 1.6;
+  }
+  .collage-tile {
+    position: absolute;
+    background: #fff;
+    padding: 5px 5px 5px 5px;
+    border: 1px solid #d4c5b0;
+    box-shadow: 2px 3px 8px rgba(0,0,0,0.18);
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+  .collage-tile:hover { transform: scale(1.03) !important; z-index: 20 !important; }
+  .collage-tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    background: #f5f5f5;
+    pointer-events: none;
+  }
+  .collage-tile .tile-tape {
+    position: absolute;
+    top: -7px;
+    left: 50%;
+    transform: translateX(-50%) rotate(-2deg);
+    width: 40px;
+    height: 14px;
+    background: rgba(158, 210, 245, 0.75);
+    border: 1px solid rgba(6, 0, 255, 0.25);
+    pointer-events: none;
+  }
+
+  .shuffle-btn {
+    display: block;
+    width: 100%;
+    max-width: 340px;
+    margin: 0 auto 10px;
+    padding: 15px;
+    background: #0600ff;
+    color: #F9FF00;
+    border: 2px solid #000;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 #000;
+    text-transform: lowercase;
+  }
+  .shuffle-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #000; }
+  .shuffle-btn:disabled { opacity: 0.5; cursor: wait; }
+
+  .og-hint {
+    text-align: center;
+    font-size: 10px;
+    color: #999;
+    margin-bottom: 20px;
+  }
+
+  .closet-note {
+    text-align: center;
+    font-size: 10px;
+    color: #666;
+    padding: 8px;
+    border-top: 1px dashed #c9b8ac;
+  }
+  .closet-note a { color: #0600ff; }
+
+  @keyframes tileIn {
+    from { opacity: 0; transform: scale(0.7) rotate(0deg); }
+  }
+</style>
+</head>
+<body>
+
+<div class="explore-header">
+  <a href="#" onclick="history.back(); return false;" class="back-link">← back</a>
+  <a href="/" class="back-link">← home</a>
+</div>
+
+<div class="og-title">
+  <div class="og-title-row">
+    <div class="letter-block">O</div>
+    <div class="letter-block">U</div>
+    <div class="letter-block">T</div>
+    <div class="letter-block">F</div>
+    <div class="letter-block">I</div>
+    <div class="letter-block">T</div>
+  </div>
+  <div class="og-title-row">
+    <div class="letter-block">G</div>
+    <div class="letter-block">E</div>
+    <div class="letter-block">N</div>
+    <div class="letter-block">E</div>
+    <div class="letter-block">R</div>
+    <div class="letter-block">A</div>
+    <div class="letter-block">T</div>
+    <div class="letter-block">O</div>
+    <div class="letter-block">R</div>
+  </div>
+</div>
+
+<div class="og-subtitle" id="ogSubtitle">loading closet...</div>
+
+<div class="canvas-wrap">
+  <div class="outfit-canvas" id="outfitCanvas">
+    <div class="canvas-empty" id="canvasEmpty">press shuffle ↓</div>
+  </div>
+</div>
+
+<button class="shuffle-btn" id="shuffleBtn" onclick="shuffleOutfit()" disabled>shuffle ✦</button>
+<div class="og-hint">tap any piece to shop it</div>
+
+<div class="closet-note" id="closetNote"></div>
+
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  import { getFirestore, collection, doc, getDoc, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDExgxdLsySYHaQp4UdXaxhQ0zcSAS72g4",
+    authDomain: "girl-4chan.firebaseapp.com",
+    projectId: "girl-4chan",
+    storageBucket: "girl-4chan.firebasestorage.app",
+    messagingSenderId: "290973679176",
+    appId: "1:290973679176:web:2074819349d9f464ba227d"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // ── tag → generator category mapping (from girlchan's tag vocabulary) ──
+  const CATEGORY_TAGS = {
+    tops: ['baby-tee', 'tank-top', 'crop-top', 'halter-top', 'tube-top', 'butterfly-top',
+           'hoodie', 'cardigan', 'sweater', 'corset', 'bodysuit', 'long-sleeve-top',
+           'graphic-tee', 'turtleneck', 'polo', 'zip-up', 'top', 'tee', 'shirt', 'blouse', 'tank'],
+    jackets: ['blazer', 'jacket', 'coat', 'windbreaker', 'puffer'],
+    dresses: ['mini-dress', 'midi-dress', 'maxi-dress', 'slip-dress', 'sundress',
+              'party-dress', 'bodycon-dress', 'babydoll-dress', 'romper', 'jumpsuit', 'dress'],
+    bottoms: ['low-rise-jeans', 'cargo-pants', 'mini-skirt', 'maxi-skirt', 'midi-skirt',
+              'pleated-skirt', 'denim-skirt', 'flare-jeans', 'baggy-jeans', 'shorts',
+              'yoga-pants', 'leggings', 'sweatpants', 'track-pants', 'bike-shorts',
+              'wide-leg-pants', 'straight-leg-jeans', 'skinny-jeans', 'mom-jeans',
+              'pants', 'jeans', 'skirt', 'trousers'],
+    shoes: ['platform-shoes', 'heels', 'sneakers', 'mary-janes', 'ballet-flats',
+            'shoes', 'sandals', 'flats', 'pumps', 'loafers', 'mules', 'stiletto', 'wedges'],
+    boots: ['boots'],
+    bags: ['bag', 'purse', 'handbag', 'tote', 'duffle', 'backpack', 'clutch'],
+    accessories: ['belt', 'sunglasses', 'jewelry', 'hair-clip', 'necklace', 'earrings',
+                  'bracelet', 'hat', 'scarf', 'ring', 'accessories', 'accessory']
+  };
+
+  function bucketItem(tags) {
+    const t = (tags || []).map(x => String(x).toLowerCase());
+    // dresses first (a "mini-dress" also matching nothing else), then order of specificity
+    const order = ['dresses', 'boots', 'shoes', 'bags', 'jackets', 'bottoms', 'tops', 'accessories'];
+    for (const cat of order) {
+      if (CATEGORY_TAGS[cat].some(ct => t.includes(ct))) return cat;
+    }
+    return null; // not shuffleable — quietly skipped
+  }
+
+  // ── collage layout slots (fixed composition, slight zine rotations) ──
+  const SLOTS = {
+    dresses:     { left: '6%',  top: '5%',    width: '54%', height: '62%', rot: -2,  z: 2 },
+    tops:        { left: '6%',  top: '4%',    width: '50%', height: '40%', rot: -2,  z: 3 },
+    bottoms:     { left: '12%', top: '42%',   width: '46%', height: '44%', rot: 1.5, z: 2 },
+    jackets:     { right: '3%', top: '3%',    width: '36%', height: '34%', rot: 3,   z: 4 },
+    bags:        { right: '4%', top: '40%',   width: '33%', height: '28%', rot: 2,   z: 4 },
+    footwear:    { right: '6%', bottom: '4%', width: '38%', height: '26%', rot: -3,  z: 3 },
+    accessories: { left: '4%',  bottom: '3%', width: '26%', height: '20%', rot: -4,  z: 5 }
+  };
+
+  let closet = { tops: [], jackets: [], dresses: [], bottoms: [], shoes: [], boots: [], bags: [], accessories: [] };
+  let closetOwner = '';
+  let totalShuffleable = 0;
+
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  window.shuffleOutfit = function() {
+    const canvas = document.getElementById('outfitCanvas');
+    canvas.innerHTML = '';
+
+    const picks = []; // { item, slot }
+
+    // dress vs separates
+    const hasDress = closet.dresses.length > 0;
+    const hasSeparates = closet.tops.length > 0 || closet.bottoms.length > 0;
+    const goDress = hasDress && (!hasSeparates || Math.random() < 0.5);
+
+    if (goDress) {
+      picks.push({ item: pick(closet.dresses), slot: 'dresses' });
+    } else {
+      if (closet.tops.length > 0) picks.push({ item: pick(closet.tops), slot: 'tops' });
+      if (closet.bottoms.length > 0) picks.push({ item: pick(closet.bottoms), slot: 'bottoms' });
+    }
+
+    // jacket: 25% chance when it exists (works over dress or separates)
+    if (closet.jackets.length > 0 && Math.random() < 0.25) {
+      picks.push({ item: pick(closet.jackets), slot: 'jackets' });
+    }
+
+    // one footwear: shoes or boots
+    const footPool = [];
+    if (closet.shoes.length > 0) footPool.push('shoes');
+    if (closet.boots.length > 0) footPool.push('boots');
+    if (footPool.length > 0) {
+      const footCat = pick(footPool);
+      picks.push({ item: pick(closet[footCat]), slot: 'footwear' });
+    }
+
+    // bag: 65% chance when it exists
+    if (closet.bags.length > 0 && Math.random() < 0.65) {
+      picks.push({ item: pick(closet.bags), slot: 'bags' });
+    }
+
+    // accessory: 50% chance when it exists
+    if (closet.accessories.length > 0 && Math.random() < 0.5) {
+      picks.push({ item: pick(closet.accessories), slot: 'accessories' });
+    }
+
+    if (picks.length === 0) {
+      canvas.innerHTML = '<div class="canvas-empty">no shuffleable finds yet —<br>post some tops, bottoms, shoes ✿</div>';
+      return;
+    }
+
+    picks.forEach(({ item, slot }, i) => {
+      const s = SLOTS[slot];
+      const tile = document.createElement('div');
+      tile.className = 'collage-tile';
+      const jitter = (Math.random() * 2 - 1) * 1.5; // ±1.5deg extra wobble
+      let css = 'z-index:' + s.z + '; width:' + s.width + '; height:' + s.height + ';';
+      if (s.left) css += 'left:' + s.left + ';';
+      if (s.right) css += 'right:' + s.right + ';';
+      if (s.top) css += 'top:' + s.top + ';';
+      if (s.bottom) css += 'bottom:' + s.bottom + ';';
+      css += 'transform: rotate(' + (s.rot + jitter) + 'deg);';
+      css += 'animation: tileIn 0.25s ease ' + (i * 0.05) + 's backwards;';
+      tile.style.cssText = css;
+
+      const tape = document.createElement('div');
+      tape.className = 'tile-tape';
+      tile.appendChild(tape);
+
+      const img = document.createElement('img');
+      img.src = item.imageUrl;
+      img.alt = '';
+      tile.appendChild(img);
+
+      if (item.link) {
+        tile.onclick = () => window.open(item.link, '_blank');
+        tile.title = 'shop this piece';
+      }
+      canvas.appendChild(tile);
+    });
+  };
+
+  async function loadCloset() {
+    const params = new URLSearchParams(window.location.search);
+    const paramUser = params.get('u');
+
+    // wait for auth to settle so we can default to the logged-in user
+    const user = await new Promise((resolve) => {
+      const unsub = onAuthStateChanged(auth, (u) => { unsub(); resolve(u); });
+    });
+
+    const targetUid = paramUser || (user ? user.uid : null);
+    const sub = document.getElementById('ogSubtitle');
+    const note = document.getElementById('closetNote');
+
+    if (!targetUid) {
+      sub.innerHTML = 'log in on <a href="/" style="color:#0600ff;">girlchan</a> to shuffle your closet';
+      document.getElementById('canvasEmpty').textContent = 'no closet to shuffle';
+      return;
+    }
+
+    try {
+      // username for display
+      let username = 'someone';
+      try {
+        const userDoc = await getDoc(doc(db, 'users', targetUid));
+        if (userDoc.exists() && userDoc.data().username) username = userDoc.data().username;
+      } catch (e) {}
+      closetOwner = username;
+
+      // pull their uploads
+      const snap = await getDocs(query(collection(db, 'images'), orderBy('createdAt', 'desc')));
+      let skipped = 0;
+      snap.forEach((d) => {
+        const data = d.data();
+        if (data.userId !== targetUid) return;
+        const cat = bucketItem(data.tags);
+        if (cat) {
+          closet[cat].push({ imageUrl: data.imageUrl, link: data.link || '' });
+          totalShuffleable++;
+        } else {
+          skipped++;
+        }
+      });
+
+      sub.innerHTML = 'shuffling <span>' + username + '.finds</span> closet — ' + totalShuffleable + ' pieces';
+
+      if (totalShuffleable === 0) {
+        document.getElementById('canvasEmpty').innerHTML = 'nothing shuffleable in this closet yet —<br>post finds with item tags (tops, shoes, bags...) ✿';
+        return;
+      }
+
+      document.getElementById('shuffleBtn').disabled = false;
+      note.innerHTML = 'pulls from <span style="color:#0600ff;">' + username + '</span>\u2019s girlchan finds automatically — every new post joins the closet';
+
+      // auto-shuffle once on load so the page never opens empty
+      window.shuffleOutfit();
+    } catch (err) {
+      console.error('Error loading closet:', err);
+      sub.textContent = 'something went wrong — try refreshing';
+    }
+  }
+
+  loadCloset();
+</script>
+
+</body>
+</html>
