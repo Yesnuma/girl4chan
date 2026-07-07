@@ -3842,10 +3842,175 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             document.getElementById('ppStep2').style.display = 'block';
         };
 
-        // ── /TODAY: curated homepage ──
-        // Section = collection doc with homepage:true.
-        // If it has homepageTags (array), it auto-fills from images matching ALL tags.
-        // Otherwise it uses its filed images array.
+        // ── /TODAY: self-generating homepage ──
+        // Admin-flagged collections (homepage:true) still float to the top.
+        // Below: auto-sections — a random girlchan find seeds each one; its tags
+        // title the section; reverse-image search fills the row. Results are
+        // cached in Firestore (homepageAuto/current) so the page loads instantly
+        // for everyone; 🎲 re-rolls a single section fresh.
+        const TODAY_CACHE_MS = 6 * 60 * 60 * 1000; // 6 hours
+        const TODAY_AUTO_SECTIONS = 3;
+
+        function sampleSeedTags(tags) {
+            const usable = (tags || []).filter(t => t && !String(t).toLowerCase().startsWith('size-'));
+            if (usable.length === 0) return [];
+            const shuffled = [...usable].sort(() => Math.random() - 0.5);
+            const n = Math.min(usable.length, 1 + Math.floor(Math.random() * 3)); // 1-3 tags
+            return shuffled.slice(0, n);
+        }
+
+        async function fetchTodayPool() {
+            const pool = [];
+            try {
+                const snap = await getDocs(query(collection(db, 'images'), orderBy('createdAt', 'desc')));
+                snap.forEach(d => pool.push({ id: d.id, data: d.data() }));
+            } catch (e) { console.error('Error fetching pool:', e); }
+            return pool;
+        }
+
+        async function buildAutoSection(pool, excludeIds) {
+            const tagged = pool.filter(p => (p.data.tags || []).length > 0 && !excludeIds.has(p.id));
+            const pickFrom = tagged.length > 0 ? tagged : pool.filter(p => !excludeIds.has(p.id));
+            if (pickFrom.length === 0) return null;
+            const seed = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+            excludeIds.add(seed.id);
+            const tags = sampleSeedTags(seed.data.tags);
+            let items = [];
+            try {
+                const res = await fetch('/.netlify/functions/searchByImage', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imageUrl: seed.data.imageUrl, limit: 12 })
+                });
+                const data = await res.json();
+                (data.itemSummaries || []).forEach(it => {
+                    let img = '';
+                    if (it.image && it.image.imageUrl) img = it.image.imageUrl;
+                    else if (it.thumbnailImages && it.thumbnailImages[0]) img = it.thumbnailImages[0].imageUrl;
+                    if (!img) return;
+                    img = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
+                    items.push({ img: img, link: it.itemAffiliateWebUrl || it.itemWebUrl || '' });
+                });
+            } catch (e) { console.error('Auto-section search failed:', e); }
+            return {
+                tags: tags,
+                seed: { id: seed.id, imageUrl: seed.data.imageUrl, link: seed.data.link || '', tags: seed.data.tags || [] },
+                items: items.slice(0, 11)
+            };
+        }
+
+        async function generateTodaySections() {
+            const pool = await fetchTodayPool();
+            if (pool.length === 0) return [];
+            const exclude = new Set();
+            const jobs = [];
+            for (let i = 0; i < TODAY_AUTO_SECTIONS; i++) jobs.push(buildAutoSection(pool, exclude));
+            return (await Promise.all(jobs)).filter(Boolean);
+        }
+
+        async function getTodayAutoSections() {
+            try {
+                const cacheDoc = await getDoc(doc(db, 'homepageAuto', 'current'));
+                if (cacheDoc.exists()) {
+                    const c = cacheDoc.data();
+                    const age = Date.now() - (c.generatedAt || 0);
+                    if (age < TODAY_CACHE_MS && Array.isArray(c.sections) && c.sections.length > 0) {
+                        return c.sections;
+                    }
+                }
+            } catch (e) {}
+            const sections = await generateTodaySections();
+            if (sections.length > 0) {
+                try {
+                    await setDoc(doc(db, 'homepageAuto', 'current'), { generatedAt: Date.now(), sections: sections });
+                } catch (e) { console.error('Cache write failed:', e); }
+            }
+            return sections;
+        }
+
+        function renderAutoSection(section, sectionIndex) {
+            const sec = document.createElement('div');
+            sec.dataset.autoIndex = sectionIndex;
+            sec.style.cssText = 'grid-column:1 / -1; padding:4px 0 14px; border-bottom:1px dashed #c9b8ac; margin-bottom:10px;';
+
+            const titleRow = document.createElement('div');
+            titleRow.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:0 2px; margin-bottom:8px;';
+
+            const titleEl = document.createElement('div');
+            titleEl.style.cssText = 'font-family:Courier New,monospace; font-size:12px; color:#0600ff; font-weight:bold;';
+            titleEl.textContent = section.tags && section.tags.length > 0
+                ? '━ ' + section.tags.join(' + ') + ' ━'
+                : '━ random rabbit hole ━';
+            titleRow.appendChild(titleEl);
+
+            const dice = document.createElement('button');
+            dice.textContent = '🎲';
+            dice.title = 'new rabbit hole';
+            dice.style.cssText = 'background:none; border:1px solid #0600ff; padding:2px 8px; font-size:13px; cursor:pointer; line-height:1.4;';
+            dice.onclick = async () => {
+                dice.disabled = true;
+                dice.textContent = '…';
+                try {
+                    const pool = await fetchTodayPool();
+                    const fresh = await buildAutoSection(pool, new Set());
+                    if (fresh) {
+                        const replacement = renderAutoSection(fresh, sectionIndex);
+                        sec.replaceWith(replacement);
+                        // update the shared cache so the next visitor sees this roll too
+                        try {
+                            const cacheDoc = await getDoc(doc(db, 'homepageAuto', 'current'));
+                            if (cacheDoc.exists()) {
+                                const c = cacheDoc.data();
+                                const sections = Array.isArray(c.sections) ? c.sections : [];
+                                sections[sectionIndex] = fresh;
+                                await setDoc(doc(db, 'homepageAuto', 'current'), { generatedAt: c.generatedAt || Date.now(), sections: sections });
+                            }
+                        } catch (e) {}
+                    } else {
+                        dice.disabled = false;
+                        dice.textContent = '🎲';
+                    }
+                } catch (e) {
+                    dice.disabled = false;
+                    dice.textContent = '🎲';
+                }
+            };
+            titleRow.appendChild(dice);
+            sec.appendChild(titleRow);
+
+            const rowEl = document.createElement('div');
+            rowEl.style.cssText = 'display:flex; gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px;';
+            sec.appendChild(rowEl);
+
+            // seed find leads the row — a girlchan item opens every rabbit hole
+            const seedImg = document.createElement('img');
+            seedImg.src = section.seed.imageUrl;
+            seedImg.alt = '';
+            seedImg.draggable = false;
+            seedImg.style.cssText = 'flex:0 0 90px; width:90px; height:118px; object-fit:cover; display:block; cursor:pointer; background:#ddd; border-bottom:3px solid #0600ff;';
+            seedImg.onclick = () => openImageDetail(section.seed.id, section.seed.imageUrl, section.seed.link || '', section.seed.tags || []);
+            rowEl.appendChild(seedImg);
+
+            // eBay results follow — straight to shop
+            (section.items || []).forEach(it => {
+                const img = document.createElement('img');
+                img.src = it.img;
+                img.alt = '';
+                img.draggable = false;
+                img.style.cssText = 'flex:0 0 90px; width:90px; height:118px; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
+                if (it.link) img.onclick = () => window.open(it.link, '_blank');
+                rowEl.appendChild(img);
+            });
+
+            const rh = document.createElement('a');
+            rh.textContent = 'go down this rabbit hole →';
+            rh.href = '/explore.html?img=' + encodeURIComponent(section.seed.imageUrl);
+            rh.style.cssText = 'display:inline-block; margin:8px 2px 0; background:#fff; border:1px solid #0600ff; color:#0600ff; font-family:Courier New,monospace; font-size:11px; padding:4px 10px; text-decoration:none; cursor:pointer;';
+            sec.appendChild(rh);
+
+            return sec;
+        }
+
         async function loadTodayPage(addToHistory = true) {
             closeSidebar();
             if (addToHistory && currentContext.type !== 'today') {
@@ -3866,31 +4031,29 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             const oldTagFilters = document.getElementById('profileTagFilters'); if (oldTagFilters) oldTagFilters.remove();
             const tagRow = document.getElementById('recentTagsRow'); if (tagRow) tagRow.style.display = 'none';
 
+            const loadingEl = document.createElement('div');
+            loadingEl.style.cssText = 'grid-column:1 / -1; padding:20px; text-align:center; color:#666; font-family:Courier New,monospace; font-size:12px;';
+            loadingEl.textContent = 'digging rabbit holes... ✿';
+            grid.appendChild(loadingEl);
+
             try {
+                // 1) admin-curated sections (collections flagged homepage:true) — float to the top
                 const snap = await getDocs(collection(db, 'collections'));
-                const sections = [];
+                const curated = [];
                 snap.forEach((d) => {
                     const data = d.data();
-                    if (data.homepage === true) sections.push({ id: d.id, data: data });
+                    if (data.homepage === true) curated.push({ id: d.id, data: data });
                 });
-                sections.sort((a, b) => (a.data.homepageOrder || 0) - (b.data.homepageOrder || 0));
+                curated.sort((a, b) => (a.data.homepageOrder || 0) - (b.data.homepageOrder || 0));
 
-                if (sections.length === 0) {
-                    const empty = document.createElement('div');
-                    empty.style.cssText = 'grid-column:1 / -1; padding:20px; text-align:center; color:#666; font-family:Courier New,monospace; font-size:12px;';
-                    empty.textContent = 'nothing curated yet — check back soon ✿';
-                    grid.appendChild(empty);
-                }
-
-                // Preload all images once if any tag sections exist
+                // preload all images once if any curated tag-sections exist
                 let allImages = null;
-                if (sections.some(s => Array.isArray(s.data.homepageTags) && s.data.homepageTags.length > 0)) {
-                    allImages = [];
-                    const imgSnap = await getDocs(query(collection(db, 'images'), orderBy('createdAt', 'desc')));
-                    imgSnap.forEach(d => allImages.push({ id: d.id, data: d.data() }));
+                if (curated.some(s => Array.isArray(s.data.homepageTags) && s.data.homepageTags.length > 0)) {
+                    allImages = await fetchTodayPool();
                 }
 
-                for (const section of sections) {
+                const curatedEls = [];
+                for (const section of curated) {
                     const sec = document.createElement('div');
                     sec.style.cssText = 'grid-column:1 / -1; padding:4px 0 14px; border-bottom:1px dashed #c9b8ac; margin-bottom:10px;';
 
@@ -3910,7 +4073,6 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
 
                     const isTagSection = Array.isArray(section.data.homepageTags) && section.data.homepageTags.length > 0;
 
-                    // gather items
                     let items = [];
                     if (isTagSection) {
                         items = allImages.filter(({ data }) => {
@@ -3927,7 +4089,6 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                         }
                     }
 
-                    // render: grid format or scroll row, zero gaps
                     const fmt = section.data.homepageFormat === 'grid' ? 'grid' : 'row';
                     const rowEl = document.createElement('div');
                     if (fmt === 'grid') {
@@ -3953,7 +4114,6 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                         rowEl.appendChild(img);
                     });
 
-                    // rabbit hole button
                     const rh = document.createElement('a');
                     rh.textContent = 'go down this rabbit hole →';
                     rh.style.cssText = 'display:inline-block; margin:8px 2px 0; background:#fff; border:1px solid #0600ff; color:#0600ff; font-family:Courier New,monospace; font-size:11px; padding:4px 10px; text-decoration:none; cursor:pointer;';
@@ -3967,7 +4127,21 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     }
                     if (isTagSection || firstImageUrl) sec.appendChild(rh);
 
-                    grid.appendChild(sec);
+                    curatedEls.push(sec);
+                }
+
+                // 2) auto-generated sections (cached)
+                const autoSections = await getTodayAutoSections();
+
+                loadingEl.remove();
+                curatedEls.forEach(el => grid.appendChild(el));
+                autoSections.forEach((s, i) => grid.appendChild(renderAutoSection(s, i)));
+
+                if (curatedEls.length === 0 && autoSections.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.style.cssText = 'grid-column:1 / -1; padding:20px; text-align:center; color:#666; font-family:Courier New,monospace; font-size:12px;';
+                    empty.textContent = 'nothing here yet — check back soon ✿';
+                    grid.appendChild(empty);
                 }
 
                 const foot = document.createElement('div');
@@ -3980,6 +4154,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 grid.appendChild(foot);
             } catch (error) {
                 console.error('Error loading today page:', error);
+                loadingEl.textContent = 'something went wrong — try refreshing';
             }
         }
 
