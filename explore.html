@@ -775,14 +775,14 @@ var activeFilters = [];      // chip words filtering current image search
 var currentMode = 'image';
 var currentModalItem = null;
 
-var cabinetItems = JSON.parse(sessionStorage.getItem('girlchan_cabinet_items') || '[]');
-var cabinetWords = JSON.parse(sessionStorage.getItem('girlchan_cabinet_words') || '[]');
-var cabinetCounter = parseInt(sessionStorage.getItem('girlchan_cabinet_counter') || '0', 10);
+var cabinetItems = JSON.parse(localStorage.getItem('girlchan_cabinet_items') || sessionStorage.getItem('girlchan_cabinet_items') || '[]');
+var cabinetWords = JSON.parse(localStorage.getItem('girlchan_cabinet_words') || sessionStorage.getItem('girlchan_cabinet_words') || '[]');
+var cabinetCounter = parseInt(localStorage.getItem('girlchan_cabinet_counter') || sessionStorage.getItem('girlchan_cabinet_counter') || '0', 10);
 
 function saveCabinet() {
-  sessionStorage.setItem('girlchan_cabinet_items', JSON.stringify(cabinetItems));
-  sessionStorage.setItem('girlchan_cabinet_words', JSON.stringify(cabinetWords));
-  sessionStorage.setItem('girlchan_cabinet_counter', String(cabinetCounter));
+  localStorage.setItem('girlchan_cabinet_items', JSON.stringify(cabinetItems));
+  localStorage.setItem('girlchan_cabinet_words', JSON.stringify(cabinetWords));
+  localStorage.setItem('girlchan_cabinet_counter', String(cabinetCounter));
 }
 
 function getSearchBody(offset, limit) {
