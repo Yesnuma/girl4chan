@@ -90,31 +90,16 @@
   }
   .collage-tile {
     position: absolute;
-    background: #fff;
-    padding: 5px 5px 5px 5px;
-    border: 1px solid #d4c5b0;
-    box-shadow: 2px 3px 8px rgba(0,0,0,0.18);
+    background: transparent;
     cursor: pointer;
     transition: transform 0.15s ease;
   }
-  .collage-tile:hover { transform: scale(1.03) !important; z-index: 20 !important; }
+  .collage-tile:hover { transform: scale(1.05); z-index: 20 !important; }
   .collage-tile img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     display: block;
-    background: #f5f5f5;
-    pointer-events: none;
-  }
-  .collage-tile .tile-tape {
-    position: absolute;
-    top: -7px;
-    left: 50%;
-    transform: translateX(-50%) rotate(-2deg);
-    width: 40px;
-    height: 14px;
-    background: rgba(158, 210, 245, 0.75);
-    border: 1px solid rgba(6, 0, 255, 0.25);
     pointer-events: none;
   }
 
@@ -154,7 +139,7 @@
   .closet-note a { color: #0600ff; }
 
   @keyframes tileIn {
-    from { opacity: 0; transform: scale(0.7) rotate(0deg); }
+    from { opacity: 0; }
   }
 </style>
 </head>
@@ -224,13 +209,14 @@
            'hoodie', 'cardigan', 'sweater', 'corset', 'bodysuit', 'long-sleeve-top',
            'graphic-tee', 'turtleneck', 'polo', 'zip-up', 'top', 'tee', 'shirt', 'blouse', 'tank'],
     jackets: ['blazer', 'jacket', 'coat', 'windbreaker', 'puffer'],
-    dresses: ['mini-dress', 'midi-dress', 'maxi-dress', 'slip-dress', 'sundress',
-              'party-dress', 'bodycon-dress', 'babydoll-dress', 'romper', 'jumpsuit', 'dress'],
-    bottoms: ['low-rise-jeans', 'cargo-pants', 'mini-skirt', 'maxi-skirt', 'midi-skirt',
-              'pleated-skirt', 'denim-skirt', 'flare-jeans', 'baggy-jeans', 'shorts',
-              'yoga-pants', 'leggings', 'sweatpants', 'track-pants', 'bike-shorts',
+    shortdress: ['mini-dress', 'babydoll-dress', 'sundress', 'party-dress', 'bodycon-dress', 'romper', 'dress'],
+    longdress: ['midi-dress', 'maxi-dress', 'slip-dress', 'jumpsuit'],
+    bottoms: ['low-rise-jeans', 'cargo-pants', 'maxi-skirt', 'midi-skirt',
+              'pleated-skirt', 'denim-skirt', 'flare-jeans', 'baggy-jeans',
+              'yoga-pants', 'leggings', 'sweatpants', 'track-pants',
               'wide-leg-pants', 'straight-leg-jeans', 'skinny-jeans', 'mom-jeans',
               'pants', 'jeans', 'skirt', 'trousers'],
+    shortbottoms: ['mini-skirt', 'shorts', 'bike-shorts'],
     shoes: ['platform-shoes', 'heels', 'sneakers', 'mary-janes', 'ballet-flats',
             'shoes', 'sandals', 'flats', 'pumps', 'loafers', 'mules', 'stiletto', 'wedges'],
     boots: ['boots'],
@@ -241,26 +227,28 @@
 
   function bucketItem(tags) {
     const t = (tags || []).map(x => String(x).toLowerCase());
-    // dresses first (a "mini-dress" also matching nothing else), then order of specificity
-    const order = ['dresses', 'boots', 'shoes', 'bags', 'jackets', 'bottoms', 'tops', 'accessories'];
+    const order = ['longdress', 'shortdress', 'boots', 'shoes', 'bags', 'jackets', 'shortbottoms', 'bottoms', 'tops', 'accessories'];
     for (const cat of order) {
       if (CATEGORY_TAGS[cat].some(ct => t.includes(ct))) return cat;
     }
     return null; // not shuffleable — quietly skipped
   }
 
-  // ── collage layout slots (fixed composition, slight zine rotations) ──
+  // ── layout slots: her original paper-doll positions, verbatim ──
   const SLOTS = {
-    dresses:     { left: '6%',  top: '5%',    width: '54%', height: '62%', rot: -2,  z: 2 },
-    tops:        { left: '6%',  top: '4%',    width: '50%', height: '40%', rot: -2,  z: 3 },
-    bottoms:     { left: '12%', top: '42%',   width: '46%', height: '44%', rot: 1.5, z: 2 },
-    jackets:     { right: '3%', top: '3%',    width: '36%', height: '34%', rot: 3,   z: 4 },
-    bags:        { right: '4%', top: '40%',   width: '33%', height: '28%', rot: 2,   z: 4 },
-    footwear:    { right: '6%', bottom: '4%', width: '38%', height: '26%', rot: -3,  z: 3 },
-    accessories: { left: '4%',  bottom: '3%', width: '26%', height: '20%', rot: -4,  z: 5 }
+    tops:         { top: '3.33%', left: '50%', tx: true, width: '55%', height: '35%', z: 3 },
+    jackets:      { top: '3.33%', left: '50%', tx: true, width: '62%', height: '48%', z: 3 },
+    shortdress:   { top: '3.33%', left: '50%', tx: true, width: '55%', height: '55%', z: 3 },
+    longdress:    { top: '3.33%', left: '50%', tx: true, width: '55%', height: '75%', z: 3 },
+    bottoms:      { top: '30%',   left: '50%', tx: true, width: '50%', height: '50%', z: 2 },
+    shortbottoms: { top: '33%',   left: '50%', tx: true, width: '42%', height: '24%', z: 2 },
+    bags:         { top: '22.22%', left: '5.56%', width: '38%', height: '30%', z: 5 },
+    accessories:  { top: '17.78%', right: '5.56%', width: '18%', height: '14%', z: 4 },
+    shoes:        { bottom: '5.56%', left: '50%', tx: true, width: '35%', height: '20%', z: 1 },
+    boots:        { bottom: '5.56%', left: '50%', tx: true, width: '48%', height: '28%', z: 1 }
   };
 
-  let closet = { tops: [], jackets: [], dresses: [], bottoms: [], shoes: [], boots: [], bags: [], accessories: [] };
+  let closet = { tops: [], jackets: [], shortdress: [], longdress: [], bottoms: [], shortbottoms: [], shoes: [], boots: [], bags: [], accessories: [] };
   let closetOwner = '';
   let totalShuffleable = 0;
 
@@ -272,40 +260,48 @@
 
     const picks = []; // { item, slot }
 
-    // dress vs separates
-    const hasDress = closet.dresses.length > 0;
-    const hasSeparates = closet.tops.length > 0 || closet.bottoms.length > 0;
-    const goDress = hasDress && (!hasSeparates || Math.random() < 0.5);
+    // dress vs separates — OG: 50% dress when any dress exists
+    const allDresses = [
+      ...closet.shortdress.map(i => ({ item: i, slot: 'shortdress' })),
+      ...closet.longdress.map(i => ({ item: i, slot: 'longdress' }))
+    ];
+    const dressGenerated = allDresses.length > 0 && Math.random() < 0.5;
 
-    if (goDress) {
-      picks.push({ item: pick(closet.dresses), slot: 'dresses' });
+    if (dressGenerated) {
+      picks.push(pick(allDresses));
     } else {
-      if (closet.tops.length > 0) picks.push({ item: pick(closet.tops), slot: 'tops' });
-      if (closet.bottoms.length > 0) picks.push({ item: pick(closet.bottoms), slot: 'bottoms' });
+      // OG: 20% chance a jacket takes the top slot instead of a top
+      const showJacket = closet.jackets.length > 0 && Math.random() < 0.2;
+      if (showJacket) {
+        picks.push({ item: pick(closet.jackets), slot: 'jackets' });
+      } else if (closet.tops.length > 0) {
+        picks.push({ item: pick(closet.tops), slot: 'tops' });
+      }
+      // OG: bottoms and shortbottoms share one pool, each keeps its own slot
+      const allBottoms = [
+        ...closet.bottoms.map(i => ({ item: i, slot: 'bottoms' })),
+        ...closet.shortbottoms.map(i => ({ item: i, slot: 'shortbottoms' }))
+      ];
+      if (allBottoms.length > 0) picks.push(pick(allBottoms));
     }
 
-    // jacket: 25% chance when it exists (works over dress or separates)
-    if (closet.jackets.length > 0 && Math.random() < 0.25) {
-      picks.push({ item: pick(closet.jackets), slot: 'jackets' });
+    // bag: always when it exists (OG behavior)
+    if (closet.bags.length > 0) {
+      picks.push({ item: pick(closet.bags), slot: 'bags' });
     }
 
-    // one footwear: shoes or boots
+    // accessory: always when it exists (OG behavior)
+    if (closet.accessories.length > 0) {
+      picks.push({ item: pick(closet.accessories), slot: 'accessories' });
+    }
+
+    // one footwear only: shoes or boots, coin flip when both exist (OG behavior)
     const footPool = [];
     if (closet.shoes.length > 0) footPool.push('shoes');
     if (closet.boots.length > 0) footPool.push('boots');
     if (footPool.length > 0) {
       const footCat = pick(footPool);
-      picks.push({ item: pick(closet[footCat]), slot: 'footwear' });
-    }
-
-    // bag: 65% chance when it exists
-    if (closet.bags.length > 0 && Math.random() < 0.65) {
-      picks.push({ item: pick(closet.bags), slot: 'bags' });
-    }
-
-    // accessory: 50% chance when it exists
-    if (closet.accessories.length > 0 && Math.random() < 0.5) {
-      picks.push({ item: pick(closet.accessories), slot: 'accessories' });
+      picks.push({ item: pick(closet[footCat]), slot: footCat });
     }
 
     if (picks.length === 0) {
@@ -317,19 +313,14 @@
       const s = SLOTS[slot];
       const tile = document.createElement('div');
       tile.className = 'collage-tile';
-      const jitter = (Math.random() * 2 - 1) * 1.5; // ±1.5deg extra wobble
       let css = 'z-index:' + s.z + '; width:' + s.width + '; height:' + s.height + ';';
       if (s.left) css += 'left:' + s.left + ';';
       if (s.right) css += 'right:' + s.right + ';';
       if (s.top) css += 'top:' + s.top + ';';
       if (s.bottom) css += 'bottom:' + s.bottom + ';';
-      css += 'transform: rotate(' + (s.rot + jitter) + 'deg);';
+      if (s.tx) css += 'transform: translateX(-50%);';
       css += 'animation: tileIn 0.25s ease ' + (i * 0.05) + 's backwards;';
       tile.style.cssText = css;
-
-      const tape = document.createElement('div');
-      tape.className = 'tile-tape';
-      tile.appendChild(tape);
 
       const img = document.createElement('img');
       img.src = item.imageUrl;
