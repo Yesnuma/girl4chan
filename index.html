@@ -3842,21 +3842,21 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             document.getElementById('ppStep2').style.display = 'block';
         };
 
-        // ── /TODAY: self-generating homepage ──
-        // Admin-flagged collections (homepage:true) still float to the top.
-        // Below: auto-sections — a random girlchan find seeds each one; its tags
-        // title the section; reverse-image search fills the row. Results are
-        // cached in Firestore (homepageAuto/current) so the page loads instantly
-        // for everyone; 🎲 re-rolls a single section fresh.
+        // ── /TODAY: self-generating homepage (v2) ──
+        // Sections are girlchan-first: a random tag combo (sampled from a real
+        // find, verified to have matches) fills an everything-style grid with
+        // community items, plus a few eBay finds woven in as doors to explore.
+        // Nothing hard-links off-site: girlchan items open the normal modal,
+        // eBay items open an explore-style modal (shop / explore / add).
+        // Cached in Firestore (homepageAuto/current); 🎲 re-rolls one section.
         const TODAY_CACHE_MS = 6 * 60 * 60 * 1000; // 6 hours
         const TODAY_AUTO_SECTIONS = 3;
+        const TODAY_CACHE_VERSION = 2;
+        const TODAY_GC_PER_SECTION = 9;
+        const TODAY_EBAY_PER_SECTION = 3;
 
-        function sampleSeedTags(tags) {
-            const usable = (tags || []).filter(t => t && !String(t).toLowerCase().startsWith('size-'));
-            if (usable.length === 0) return [];
-            const shuffled = [...usable].sort(() => Math.random() - 0.5);
-            const n = Math.min(usable.length, 1 + Math.floor(Math.random() * 3)); // 1-3 tags
-            return shuffled.slice(0, n);
+        function usableTags(tags) {
+            return (tags || []).filter(t => t && !String(t).toLowerCase().startsWith('size-'));
         }
 
         async function fetchTodayPool() {
@@ -3868,44 +3868,101 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             return pool;
         }
 
-        async function buildAutoSection(pool, excludeIds) {
-            const tagged = pool.filter(p => (p.data.tags || []).length > 0 && !excludeIds.has(p.id));
-            const pickFrom = tagged.length > 0 ? tagged : pool.filter(p => !excludeIds.has(p.id));
-            if (pickFrom.length === 0) return null;
-            const seed = pickFrom[Math.floor(Math.random() * pickFrom.length)];
-            excludeIds.add(seed.id);
-            const tags = sampleSeedTags(seed.data.tags);
-            let items = [];
-            try {
-                const res = await fetch('/.netlify/functions/searchByImage', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ imageUrl: seed.data.imageUrl, limit: 12 })
-                });
-                const data = await res.json();
-                (data.itemSummaries || []).forEach(it => {
-                    let img = '';
-                    if (it.image && it.image.imageUrl) img = it.image.imageUrl;
-                    else if (it.thumbnailImages && it.thumbnailImages[0]) img = it.thumbnailImages[0].imageUrl;
-                    if (!img) return;
-                    img = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
-                    items.push({ img: img, link: it.itemAffiliateWebUrl || it.itemWebUrl || '' });
-                });
-            } catch (e) { console.error('Auto-section search failed:', e); }
-            return {
-                tags: tags,
-                seed: { id: seed.id, imageUrl: seed.data.imageUrl, link: seed.data.link || '', tags: seed.data.tags || [] },
-                items: items.slice(0, 11)
-            };
+        function gcMatchesForTags(pool, tags) {
+            return pool.filter(({ data }) => {
+                const t = data.tags || [];
+                return tags.every(tag => t.includes(tag));
+            });
+        }
+
+        // Pick a tag combo that actually has enough girlchan matches.
+        // Tries 2-tag combos from a random seed item first, falls back to 1 tag.
+        function pickTagCombo(pool, excludeKey) {
+            const tagged = pool.filter(p => usableTags(p.data.tags).length > 0);
+            if (tagged.length === 0) return null;
+            for (let attempt = 0; attempt < 12; attempt++) {
+                const seed = tagged[Math.floor(Math.random() * tagged.length)];
+                const tags = usableTags(seed.data.tags).sort(() => Math.random() - 0.5);
+                const candidates = [];
+                if (tags.length >= 2) candidates.push([tags[0], tags[1]]);
+                if (tags.length >= 1) candidates.push([tags[0]]);
+                for (const combo of candidates) {
+                    const key = combo.slice().sort().join('+');
+                    if (key === excludeKey) continue;
+                    const matches = gcMatchesForTags(pool, combo);
+                    const minMatches = combo.length === 2 ? 4 : 5;
+                    if (matches.length >= minMatches) {
+                        return { tags: combo, seed: seed, matches: matches };
+                    }
+                }
+            }
+            // last resort: single most common tag
+            const counts = {};
+            tagged.forEach(p => usableTags(p.data.tags).forEach(t => counts[t] = (counts[t] || 0) + 1));
+            const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+            if (!best) return null;
+            const matches = gcMatchesForTags(pool, [best[0]]);
+            return { tags: [best[0]], seed: matches[0], matches: matches };
+        }
+
+        async function buildAutoSection(pool, excludeKeys) {
+            const combo = pickTagCombo(pool, null);
+            if (!combo) return null;
+            let key = combo.tags.slice().sort().join('+');
+            let finalCombo = combo;
+            if (excludeKeys.has(key)) {
+                const retry = pickTagCombo(pool, key);
+                if (retry) { finalCombo = retry; key = retry.tags.slice().sort().join('+'); }
+            }
+            excludeKeys.add(key);
+
+            const shuffledMatches = [...finalCombo.matches].sort(() => Math.random() - 0.5);
+            const gc = shuffledMatches.slice(0, TODAY_GC_PER_SECTION).map(({ id, data }) => ({
+                id: id, imageUrl: data.imageUrl, link: data.link || '', tags: data.tags || []
+            }));
+
+            // a few eBay finds, seeded off the first girlchan item, as doors to explore
+            let ebay = [];
+            const seedImageUrl = gc.length > 0 ? gc[0].imageUrl : (finalCombo.seed ? finalCombo.seed.data.imageUrl : null);
+            if (seedImageUrl) {
+                try {
+                    const res = await fetch('/.netlify/functions/searchByImage', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ imageUrl: seedImageUrl, limit: 10 })
+                    });
+                    const data = await res.json();
+                    for (const it of (data.itemSummaries || [])) {
+                        if (ebay.length >= TODAY_EBAY_PER_SECTION) break;
+                        let img = '';
+                        if (it.image && it.image.imageUrl) img = it.image.imageUrl;
+                        else if (it.thumbnailImages && it.thumbnailImages[0]) img = it.thumbnailImages[0].imageUrl;
+                        if (!img) continue;
+                        img = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
+                        ebay.push({
+                            img: img,
+                            link: it.itemAffiliateWebUrl || it.itemWebUrl || '',
+                            title: it.title || '',
+                            price: (it.price && it.price.value) ? '$' + it.price.value : '',
+                            itemId: it.itemId || ''
+                        });
+                    }
+                } catch (e) { console.error('Auto-section search failed:', e); }
+            }
+
+            return { tags: finalCombo.tags, seedImageUrl: seedImageUrl, gc: gc, ebay: ebay };
         }
 
         async function generateTodaySections() {
             const pool = await fetchTodayPool();
             if (pool.length === 0) return [];
-            const exclude = new Set();
-            const jobs = [];
-            for (let i = 0; i < TODAY_AUTO_SECTIONS; i++) jobs.push(buildAutoSection(pool, exclude));
-            return (await Promise.all(jobs)).filter(Boolean);
+            const excludeKeys = new Set();
+            const sections = [];
+            for (let i = 0; i < TODAY_AUTO_SECTIONS; i++) {
+                const s = await buildAutoSection(pool, excludeKeys);
+                if (s) sections.push(s);
+            }
+            return sections;
         }
 
         async function getTodayAutoSections() {
@@ -3914,7 +3971,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 if (cacheDoc.exists()) {
                     const c = cacheDoc.data();
                     const age = Date.now() - (c.generatedAt || 0);
-                    if (age < TODAY_CACHE_MS && Array.isArray(c.sections) && c.sections.length > 0) {
+                    if (c.v === TODAY_CACHE_VERSION && age < TODAY_CACHE_MS && Array.isArray(c.sections) && c.sections.length > 0) {
                         return c.sections;
                     }
                 }
@@ -3922,11 +3979,94 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             const sections = await generateTodaySections();
             if (sections.length > 0) {
                 try {
-                    await setDoc(doc(db, 'homepageAuto', 'current'), { generatedAt: Date.now(), sections: sections });
+                    await setDoc(doc(db, 'homepageAuto', 'current'), { v: TODAY_CACHE_VERSION, generatedAt: Date.now(), sections: sections });
                 } catch (e) { console.error('Cache write failed:', e); }
             }
             return sections;
         }
+
+        // ── eBay item modal for /today mix-ins (explore-style: shop / explore / add) ──
+        let currentEbayItem = null;
+
+        window.openEbayDetail = function(item) {
+            currentEbayItem = item;
+            document.getElementById('ebayDetailImg').src = item.img;
+            document.getElementById('ebayDetailTitle').textContent = item.title || '';
+            document.getElementById('ebayDetailPrice').textContent = item.price || '';
+            const shopBtn = document.getElementById('ebayDetailShopBtn');
+            shopBtn.onclick = () => { if (item.link) window.open(item.link, '_blank'); };
+            document.getElementById('ebayDetailExploreBtn').onclick = () => {
+                window.location.href = '/explore.html?img=' + encodeURIComponent(item.img);
+            };
+            const addBtn = document.getElementById('ebayDetailAddBtn');
+            addBtn.disabled = false;
+            addBtn.style.background = '#9ed2f5';
+            document.getElementById('ebayAddLabel').textContent = 'add';
+            document.getElementById('ebayDetailModal').style.display = 'flex';
+        };
+
+        window.closeEbayDetail = function() {
+            document.getElementById('ebayDetailModal').style.display = 'none';
+            currentEbayItem = null;
+        };
+
+        window.addEbayToGirlchan = async function() {
+            if (!currentEbayItem) return;
+            if (!requireAuth()) return;
+            const addBtn = document.getElementById('ebayDetailAddBtn');
+            const label = document.getElementById('ebayAddLabel');
+            if (addBtn.disabled) return;
+            addBtn.disabled = true;
+            label.textContent = 'adding...';
+            try {
+                const item = currentEbayItem;
+                // dedupe: already added this eBay item?
+                if (item.itemId) {
+                    const existingQ = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
+                    const snap = await getDocs(existingQ);
+                    let already = false;
+                    snap.forEach(d => {
+                        const dd = d.data();
+                        if (dd.userId === auth.currentUser.uid && dd.ebayItemId === item.itemId) already = true;
+                    });
+                    if (already) {
+                        label.textContent = 'already added ✓';
+                        setTimeout(() => { closeEbayDetail(); }, 1200);
+                        return;
+                    }
+                }
+                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+                const campaignId = userDoc.data()?.ebayAffiliateCode || null;
+                let finalLink = item.link || '';
+                if (campaignId && finalLink && (finalLink.indexOf('ebay.com') !== -1 || finalLink.indexOf('ebay.us') !== -1)) {
+                    try { const u = new URL(finalLink); u.searchParams.set('campid', campaignId); finalLink = u.toString(); } catch (e) {}
+                }
+                const newDocRef = await addDoc(collection(db, 'images'), {
+                    imageUrl: item.img, link: finalLink, userId: auth.currentUser.uid, createdAt: new Date(),
+                    tags: [], aiTags: [], source: 'link', ebayItemId: item.itemId || ''
+                });
+                setTimeout(async () => {
+                    try {
+                        const res = await fetch('/.netlify/functions/ai-tagger', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ image: item.img })
+                        });
+                        const tagData = await res.json();
+                        const bgTags = Array.isArray(tagData.tags) ? tagData.tags : [];
+                        if (bgTags.length > 0) {
+                            await updateDoc(doc(db, 'images', newDocRef.id), { tags: bgTags, aiTags: bgTags });
+                        }
+                    } catch (e) { console.log('background tagging failed silently:', e); }
+                }, 2000);
+                label.textContent = 'added! ✓';
+                addBtn.style.background = '#9ed2f5';
+                setTimeout(() => { closeEbayDetail(); }, 1200);
+            } catch (err) {
+                console.error('add error:', err);
+                label.textContent = 'try again';
+                addBtn.disabled = false;
+            }
+        };
 
         function renderAutoSection(section, sectionIndex) {
             const sec = document.createElement('div');
@@ -3939,7 +4079,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             const titleEl = document.createElement('div');
             titleEl.style.cssText = 'font-family:Courier New,monospace; font-size:12px; color:#0600ff; font-weight:bold;';
             titleEl.textContent = section.tags && section.tags.length > 0
-                ? '━ ' + section.tags.join(' + ') + ' ━'
+                ? '━ ' + section.tags.map(t => '#' + t).join(' + ') + ' ━'
                 : '━ random rabbit hole ━';
             titleRow.appendChild(titleEl);
 
@@ -3956,14 +4096,13 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     if (fresh) {
                         const replacement = renderAutoSection(fresh, sectionIndex);
                         sec.replaceWith(replacement);
-                        // update the shared cache so the next visitor sees this roll too
                         try {
                             const cacheDoc = await getDoc(doc(db, 'homepageAuto', 'current'));
                             if (cacheDoc.exists()) {
                                 const c = cacheDoc.data();
                                 const sections = Array.isArray(c.sections) ? c.sections : [];
                                 sections[sectionIndex] = fresh;
-                                await setDoc(doc(db, 'homepageAuto', 'current'), { generatedAt: c.generatedAt || Date.now(), sections: sections });
+                                await setDoc(doc(db, 'homepageAuto', 'current'), { v: TODAY_CACHE_VERSION, generatedAt: c.generatedAt || Date.now(), sections: sections });
                             }
                         } catch (e) {}
                     } else {
@@ -3978,34 +4117,47 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             titleRow.appendChild(dice);
             sec.appendChild(titleRow);
 
-            const rowEl = document.createElement('div');
-            rowEl.style.cssText = 'display:flex; gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px;';
-            sec.appendChild(rowEl);
+            // everything-style 3-col grid, zero gaps, girlchan items with eBay woven in
+            const gridEl = document.createElement('div');
+            gridEl.style.cssText = 'display:grid; grid-template-columns:repeat(3,1fr); gap:0;';
+            sec.appendChild(gridEl);
 
-            // seed find leads the row — a girlchan item opens every rabbit hole
-            const seedImg = document.createElement('img');
-            seedImg.src = section.seed.imageUrl;
-            seedImg.alt = '';
-            seedImg.draggable = false;
-            seedImg.style.cssText = 'flex:0 0 90px; width:90px; height:118px; object-fit:cover; display:block; cursor:pointer; background:#ddd; border-bottom:3px solid #0600ff;';
-            seedImg.onclick = () => openImageDetail(section.seed.id, section.seed.imageUrl, section.seed.link || '', section.seed.tags || []);
-            rowEl.appendChild(seedImg);
-
-            // eBay results follow — straight to shop
-            (section.items || []).forEach(it => {
-                const img = document.createElement('img');
-                img.src = it.img;
-                img.alt = '';
-                img.draggable = false;
-                img.style.cssText = 'flex:0 0 90px; width:90px; height:118px; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
-                if (it.link) img.onclick = () => window.open(it.link, '_blank');
-                rowEl.appendChild(img);
+            // weave: eBay finds slot in at positions 2, 5, 8 among the girlchan items
+            const tiles = [];
+            (section.gc || []).forEach(g => tiles.push({ type: 'gc', item: g }));
+            const ebayPositions = [2, 5, 8];
+            (section.ebay || []).forEach((e, i) => {
+                const posn = ebayPositions[i] !== undefined ? ebayPositions[i] : tiles.length;
+                tiles.splice(Math.min(posn, tiles.length), 0, { type: 'ebay', item: e });
             });
 
+            tiles.forEach(({ type, item }) => {
+                const img = document.createElement('img');
+                img.src = type === 'gc' ? item.imageUrl : item.img;
+                img.alt = '';
+                img.draggable = false;
+                if (type === 'gc') {
+                    img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
+                    img.onclick = () => openImageDetail(item.id, item.imageUrl, item.link || '', item.tags || []);
+                } else {
+                    img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; cursor:pointer; background:#ddd; border-bottom:3px solid #0600ff;';
+                    img.onclick = () => openEbayDetail(item);
+                }
+                gridEl.appendChild(img);
+            });
+
+            // rabbit hole → internal tag feed with these filters loaded
             const rh = document.createElement('a');
             rh.textContent = 'go down this rabbit hole →';
-            rh.href = '/explore.html?img=' + encodeURIComponent(section.seed.imageUrl);
             rh.style.cssText = 'display:inline-block; margin:8px 2px 0; background:#fff; border:1px solid #0600ff; color:#0600ff; font-family:Courier New,monospace; font-size:11px; padding:4px 10px; text-decoration:none; cursor:pointer;';
+            if (section.tags && section.tags.length > 0) {
+                rh.onclick = () => {
+                    activeTagFilters = [...section.tags];
+                    loadTagFeed(section.tags[0], true, false);
+                };
+            } else if (section.seedImageUrl) {
+                rh.href = '/explore.html?img=' + encodeURIComponent(section.seedImageUrl);
+            }
             sec.appendChild(rh);
 
             return sec;
@@ -5360,6 +5512,20 @@ function loadPage(page) {
             <button id="likeBtnRow" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer;"><span id="likeHeartIcon" style="font-size:18px; display:block; margin-bottom:4px; line-height:22px;">♡</span><span id="likeTxt">like</span></button>
         </div>
         <button onclick="closeImageDetail()" style="width: 100%; padding: 12px; background: #ccc; color: #000; border: 2px solid #999;">close</button>
+    </div>
+</div>
+<!-- eBay Item Modal (today mix-ins) — white bg = from the wider web -->
+<div class="pp-overlay" id="ebayDetailModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+    <div class="pp-modal-content" style="max-width:360px; width:90%; max-height:90vh; overflow-y:auto; padding:16px; background:#fff; display:flex; flex-direction:column; font-family:'Courier New',Courier,monospace;">
+        <img id="ebayDetailImg" style="width:100%; max-height:50vh; object-fit:contain; margin-bottom:16px; background:#f5f5f5;" alt="">
+        <div id="ebayDetailTitle" style="font-size:11px; color:#333; line-height:1.5; margin-bottom:8px;"></div>
+        <div id="ebayDetailPrice" style="font-size:16px; font-weight:bold; color:#0600ff; margin-bottom:16px;"></div>
+        <button id="ebayDetailShopBtn" style="width:100%; padding:12px; background:#0600ff; color:#fff; border:2px solid #0600ff; font-family:'Courier New',Courier,monospace; font-size:12px; cursor:pointer; margin-bottom:8px;">shop on eBay →</button>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+            <button id="ebayDetailExploreBtn" style="border:2px solid #0600ff; background:#fff; padding:10px 4px 6px; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; font-family:'Courier New',Courier,monospace;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0600ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span style="font-size:10px; color:#0600ff;">explore</span></button>
+            <button id="ebayDetailAddBtn" onclick="addEbayToGirlchan()" style="border:2px solid #0600ff; background:#9ed2f5; padding:10px 4px 6px; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; font-family:'Courier New',Courier,monospace;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0600ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg><span id="ebayAddLabel" style="font-size:10px; color:#0600ff;">add</span></button>
+        </div>
+        <button onclick="closeEbayDetail()" style="width:100%; padding:12px; background:#f5f5f5; color:#000; border:2px solid #ccc; font-family:'Courier New',Courier,monospace; font-size:12px; cursor:pointer;">close</button>
     </div>
 </div>
 <!-- Profile Photo Picker Modal -->
