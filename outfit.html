@@ -157,6 +157,27 @@
   }
   .edit-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #000; }
 
+  .save-outfit-btn {
+    display: block;
+    width: 100%;
+    max-width: 340px;
+    margin: 0 auto 10px;
+    padding: 10px;
+    background: #fff;
+    color: #ff007a;
+    border: 2px solid #ff007a;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    text-transform: lowercase;
+  }
+  .save-outfit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .save-outfit-btn.saved {
+    background: #ff007a;
+    color: #fff;
+  }
+
   .edit-controls {
     display: none;
     justify-content: center;
@@ -269,6 +290,7 @@
   <button class="shuffle-btn" id="shuffleBtn" onclick="shuffleOutfit()" disabled>shuffle ✦</button>
   <button class="edit-btn" id="editBtn" onclick="toggleEditMode()">✎</button>
 </div>
+<button class="save-outfit-btn" id="saveBtn" onclick="saveOutfit()" disabled>save this ♡</button>
 <div class="edit-hint" id="editHint">tap a piece to select it, drag to move</div>
 <div class="edit-controls" id="editControls">
   <button onclick="resizeSelected(-1)">－ smaller</button>
@@ -283,7 +305,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
   import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-  import { getFirestore, collection, doc, getDoc, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+  import { getFirestore, initializeFirestore, collection, addDoc, doc, getDoc, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyDExgxdLsySYHaQp4UdXaxhQ0zcSAS72g4",
@@ -296,7 +318,7 @@
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
-  const db = getFirestore(app);
+  const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
 
   // ── tag → generator category mapping (from girlchan's tag vocabulary) ──
   const CATEGORY_TAGS = {
@@ -361,6 +383,7 @@
 
   let layoutMode = 'portrait';
   let lastPicks = null;
+  let currentTiles = []; // [{tile, item, slot}] — for saving positions
 
   window.setLayoutMode = function(mode) {
     layoutMode = mode;
@@ -372,6 +395,7 @@
 
   let closet = { tops: [], jackets: [], shortdress: [], longdress: [], bottoms: [], shortbottoms: [], shoes: [], boots: [], bags: [], accessories: [] };
   let closetOwner = '';
+  let closetSource = null;
   let totalShuffleable = 0;
 
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -440,6 +464,7 @@
     const canvas = document.getElementById('outfitCanvas');
     canvas.innerHTML = '';
     selectedTile = null;
+    currentTiles = [];
     updateEditControls();
     picks.forEach(({ item, slot }, i) => {
       const s = SLOTS[layoutMode][slot];
@@ -461,6 +486,7 @@
 
       makeTileInteractive(tile, item);
       canvas.appendChild(tile);
+      currentTiles.push({ tile: tile, item: item, slot: slot });
     });
   }
 
@@ -594,6 +620,71 @@
     selectedTile.style.height = nh + 'px';
   };
 
+  window.saveOutfit = async function() {
+    const btn = document.getElementById('saveBtn');
+    if (!currentTiles || currentTiles.length === 0) {
+      btn.textContent = 'shuffle first!';
+      setTimeout(() => { btn.textContent = 'save this ♡'; }, 1500);
+      return;
+    }
+    const user = auth.currentUser;
+    if (!user) {
+      btn.textContent = 'log in on girlchan to save';
+      setTimeout(() => { btn.textContent = 'save this ♡'; }, 2200);
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'saving...';
+    try {
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const userData = userDoc.exists() ? userDoc.data() : {};
+      if (userData.premium !== true) {
+        btn.textContent = 'saving outfits is a premium perk ✦';
+        setTimeout(() => { btn.textContent = 'save this ♡'; btn.disabled = false; }, 2500);
+        return;
+      }
+      const canvas = document.getElementById('outfitCanvas');
+      const cr = canvas.getBoundingClientRect();
+      const pieces = currentTiles.map(({ tile, item, slot }) => {
+        const tr = tile.getBoundingClientRect();
+        const cs = window.getComputedStyle(tile);
+        return {
+          imageId: item.id || '',
+          imageUrl: item.imageUrl,
+          link: item.link || '',
+          tags: item.tags || [],
+          slot: slot,
+          l: +(((tr.left - cr.left) / cr.width) * 100).toFixed(2),
+          t: +(((tr.top - cr.top) / cr.height) * 100).toFixed(2),
+          w: +((tr.width / cr.width) * 100).toFixed(2),
+          h: +((tr.height / cr.height) * 100).toFixed(2),
+          z: parseInt(cs.zIndex, 10) || 1
+        };
+      });
+      await addDoc(collection(db, 'outfits'), {
+        userId: user.uid,
+        username: userData.username || 'someone',
+        createdAt: new Date(),
+        layout: layoutMode,
+        canvasW: Math.round(cr.width),
+        canvasH: Math.round(cr.height),
+        source: closetSource || null,
+        pieces: pieces
+      });
+      btn.textContent = 'saved to /outfits ♥';
+      btn.classList.add('saved');
+      setTimeout(() => {
+        btn.textContent = 'save this ♡';
+        btn.classList.remove('saved');
+        btn.disabled = false;
+      }, 2500);
+    } catch (err) {
+      console.error('save outfit error:', err);
+      btn.textContent = 'try again';
+      btn.disabled = false;
+    }
+  };
+
   window.layerSelected = function(dir) {
     if (!selectedTile) return;
     if (dir > 0) {
@@ -608,55 +699,82 @@
   async function loadCloset() {
     const params = new URLSearchParams(window.location.search);
     const paramUser = params.get('u');
+    const paramCollection = params.get('c');
 
     // wait for auth to settle so we can default to the logged-in user
     const user = await new Promise((resolve) => {
       const unsub = onAuthStateChanged(auth, (u) => { unsub(); resolve(u); });
     });
 
-    const targetUid = paramUser || (user ? user.uid : null);
     const sub = document.getElementById('ogSubtitle');
     const note = document.getElementById('closetNote');
 
-    if (!targetUid) {
-      sub.innerHTML = 'log in on <a href="/" style="color:#0600ff;">girlchan</a> to shuffle your closet';
-      document.getElementById('canvasEmpty').textContent = 'no closet to shuffle';
-      return;
-    }
-
     try {
-      // username for display
-      let username = 'someone';
-      try {
-        const userDoc = await getDoc(doc(db, 'users', targetUid));
-        if (userDoc.exists() && userDoc.data().username) username = userDoc.data().username;
-      } catch (e) {}
-      closetOwner = username;
-
-      // pull their uploads
-      const snap = await getDocs(query(collection(db, 'images'), orderBy('createdAt', 'desc')));
-      let skipped = 0;
-      snap.forEach((d) => {
-        const data = d.data();
-        if (data.userId !== targetUid) return;
-        const cat = bucketItem(data.tags);
-        if (cat) {
-          closet[cat].push({ imageUrl: data.imageUrl, link: data.link || '' });
-          totalShuffleable++;
-        } else {
-          skipped++;
+      if (paramCollection) {
+        // ── collection mode: shuffle from a collection's filed items ──
+        const colDoc = await getDoc(doc(db, 'collections', paramCollection));
+        if (!colDoc.exists()) {
+          sub.textContent = "couldn't find that collection";
+          return;
         }
-      });
+        const colName = colDoc.data().name || 'collection';
+        closetSource = { type: 'collection', id: paramCollection, name: colName };
+        const imageIds = colDoc.data().images || [];
+        for (const imageId of imageIds) {
+          try {
+            const imageDoc = await getDoc(doc(db, 'images', imageId));
+            if (!imageDoc.exists()) continue;
+            const data = imageDoc.data();
+            const cat = bucketItem(data.tags);
+            if (cat) {
+              closet[cat].push({ id: imageDoc.id, imageUrl: data.imageUrl, link: data.link || '', tags: data.tags || [] });
+              totalShuffleable++;
+            }
+          } catch (e) {}
+        }
+        sub.innerHTML = 'shuffling <span>/ ' + colName + '</span> — ' + totalShuffleable + ' pieces';
+        if (totalShuffleable === 0) {
+          document.getElementById('canvasEmpty').innerHTML = 'nothing shuffleable in this collection yet —<br>file finds with item tags into it ✿';
+          return;
+        }
+        note.innerHTML = 'pulls from the <span style="color:#0600ff;">/ ' + colName + '</span> collection — file more finds to grow the pool';
+      } else {
+        // ── closet mode: a user's own uploads ──
+        const targetUid = paramUser || (user ? user.uid : null);
+        if (!targetUid) {
+          sub.innerHTML = 'log in on <a href="/" style="color:#0600ff;">girlchan</a> to shuffle your closet';
+          document.getElementById('canvasEmpty').textContent = 'no closet to shuffle';
+          return;
+        }
+        let username = 'someone';
+        try {
+          const userDoc = await getDoc(doc(db, 'users', targetUid));
+          if (userDoc.exists() && userDoc.data().username) username = userDoc.data().username;
+        } catch (e) {}
+        closetOwner = username;
+        closetSource = { type: 'user', id: targetUid, name: username };
 
-      sub.innerHTML = 'shuffling <span>' + username + '.finds</span> closet — ' + totalShuffleable + ' pieces';
+        const snap = await getDocs(query(collection(db, 'images'), orderBy('createdAt', 'desc')));
+        snap.forEach((d) => {
+          const data = d.data();
+          if (data.userId !== targetUid) return;
+          const cat = bucketItem(data.tags);
+          if (cat) {
+            closet[cat].push({ id: d.id, imageUrl: data.imageUrl, link: data.link || '', tags: data.tags || [] });
+            totalShuffleable++;
+          }
+        });
 
-      if (totalShuffleable === 0) {
-        document.getElementById('canvasEmpty').innerHTML = 'nothing shuffleable in this closet yet —<br>post finds with item tags (tops, shoes, bags...) ✿';
-        return;
+        sub.innerHTML = 'shuffling <span>' + username + '.finds</span> closet — ' + totalShuffleable + ' pieces';
+        if (totalShuffleable === 0) {
+          document.getElementById('canvasEmpty').innerHTML = 'nothing shuffleable in this closet yet —<br>post finds with item tags (tops, shoes, bags...) ✿';
+          return;
+        }
+        note.innerHTML = 'pulls from <span style="color:#0600ff;">' + username + '</span>\u2019s girlchan finds automatically — every new post joins the closet';
       }
 
       document.getElementById('shuffleBtn').disabled = false;
-      note.innerHTML = 'pulls from <span style="color:#0600ff;">' + username + '</span>\u2019s girlchan finds automatically — every new post joins the closet';
+      document.getElementById('saveBtn').disabled = false;
 
       // auto-shuffle once on load so the page never opens empty
       window.shuffleOutfit();
