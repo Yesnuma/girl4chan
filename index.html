@@ -1227,6 +1227,8 @@
                 <h3>MAIN</h3>
                 <a href="#" onclick="loadPage('today')">/ today</a>
                 <a href="#" onclick="loadPage('everything')">/ everything</a>
+                <a href="#" onclick="loadPage('outfits')">/ outfits</a>
+                <a href="/outfit.html">/ outfit generator</a>
                 <a href="#" onclick="loadMyProfile()">/ my profile</a>
             </div>
             <div class="sidebar-section">
@@ -1290,6 +1292,7 @@
         <div class="cabinet-drawer-body">
             <p class="cabinet-drawer-empty" id="cabinetDrawerEmpty">nothing filed yet — tap file on any item</p>
             <div class="cabinet-drawer-grid" id="cabinetDrawerGrid"></div>
+            <div id="cabinetDrawerWords"></div>
         </div>
     </div>
 
@@ -1566,7 +1569,7 @@
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, collection, addDoc, doc, setDoc, getDoc, getDocs, query, orderBy, updateDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, initializeFirestore, collection, addDoc, doc, setDoc, getDoc, getDocs, query, orderBy, updateDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
         // Firebase configuration
@@ -1582,7 +1585,7 @@
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
-        const db = getFirestore(app);
+        const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
         const storage = getStorage(app);
 
         // Admin configuration
@@ -1621,7 +1624,9 @@ function isAdmin() {
             
             // Item types - shoes & accessories
             'platform-shoes', 'heels', 'sneakers', 'boots', 'mary-janes', 'ballet-flats',
-            'bag', 'belt', 'sunglasses', 'jewelry', 'hair-clip',
+            'sandals', 'flats', 'pumps', 'loafers', 'mules', 'wedges',
+            'bag', 'purse', 'tote', 'backpack', 'clutch', 'belt', 'sunglasses', 'jewelry', 'hair-clip',
+            'necklace', 'earrings', 'bracelet', 'hat', 'scarf',
             
             // Aesthetics & eras
             'y2k', 'grunge', 'coquette', 'cottagecore', 'mcbling', 'indie-sleaze',
@@ -1655,7 +1660,9 @@ function isAdmin() {
                 'mini-dress', 'midi-dress', 'maxi-dress', 'slip-dress', 'sundress',
                 'party-dress', 'bodycon-dress', 'babydoll-dress', 'romper', 'jumpsuit',
                 'platform-shoes', 'heels', 'sneakers', 'boots', 'mary-janes', 'ballet-flats',
-                'bag', 'belt', 'sunglasses', 'jewelry', 'hair-clip'
+                'sandals', 'flats', 'pumps', 'loafers', 'mules', 'wedges',
+                'bag', 'purse', 'tote', 'backpack', 'clutch', 'belt', 'sunglasses', 'jewelry', 'hair-clip',
+                'necklace', 'earrings', 'bracelet', 'hat', 'scarf'
             ],
             Aesthetics: [
                 'y2k', 'grunge', 'coquette', 'cottagecore', 'mcbling', 'indie-sleaze',
@@ -1959,7 +1966,19 @@ window.openImageDetail = async function(imageId, imageUrl, link, tags) {
         // Store cleanup function for when modal closes
         window.tagAutocompleteCleanup = cleanupHandler;
     }
-// Setup like button (static, in the junction row)
+// Setup shop button
+            const shopBtn = document.getElementById('shopButton');
+            if (link) {
+                shopBtn.style.display = 'block';
+                shopBtn.onclick = () => window.open(link, '_blank');
+            } else {
+                shopBtn.style.display = 'none';
+            }
+
+            // Show the modal immediately — nothing below may block it
+            document.getElementById('imageDetailModal').style.display = 'flex';
+
+// Setup like button (static, in the junction row) — paint neutral now, real state fills in async
             const likeBtnRow = document.getElementById('likeBtnRow');
             const heartIcon = document.getElementById('likeHeartIcon');
             const likeTxt = document.getElementById('likeTxt');
@@ -1973,12 +1992,17 @@ window.openImageDetail = async function(imageId, imageUrl, link, tags) {
             }
 
             let isLikedNow = false;
-            if (window.isPremium && auth.currentUser) {
-                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-                const likes = userDoc.data()?.likes || [];
-                isLikedNow = likes.includes(imageId);
-            }
-            paintLike(isLikedNow);
+            paintLike(false);
+            (async () => {
+                try {
+                    if (window.isPremium && auth.currentUser) {
+                        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+                        const likes = userDoc.data()?.likes || [];
+                        isLikedNow = likes.includes(imageId);
+                        paintLike(isLikedNow);
+                    }
+                } catch (e) {}
+            })();
 
             likeBtnRow.onclick = async () => {
                 if (!requireAuth()) return;
@@ -2000,17 +2024,6 @@ window.openImageDetail = async function(imageId, imageUrl, link, tags) {
                 }
                 paintLike(isLikedNow);
             };
-    
-            // Setup shop button
-            const shopBtn = document.getElementById('shopButton');
-            if (link) {
-                shopBtn.style.display = 'block';
-                shopBtn.onclick = () => window.open(link, '_blank');
-            } else {
-                shopBtn.style.display = 'none';
-            }
-      
-            document.getElementById('imageDetailModal').style.display = 'flex';
         };
 
         window.closeImageDetail = function() {
@@ -2210,6 +2223,10 @@ function goBack() {
         if (previousPage.type === 'tag') {
             activeTagFilters = previousPage.tags || [previousPage.id];
             loadTagFeed(activeTagFilters[0], false, false);
+        } else if (previousPage.type === 'today') {
+            loadTodayPage(false);
+        } else if (previousPage.type === 'outfits') {
+            loadOutfitsBoard(false);
         } else if (previousPage.type === 'everything') {
             loadEverythingFeed(false);
         } else if (previousPage.type === 'profile') {
@@ -2654,6 +2671,17 @@ function showAllTagsModal(categorizedTags) {
             
          try {
     const collectionsSnapshot = await getDocs(collection(db, 'collections'));
+    
+    // admin: retag sweep tool
+    if (isAdmin()) {
+        const retagLink = document.createElement('a');
+        retagLink.href = '#';
+        retagLink.textContent = '⚙ retag untagged';
+        retagLink.style.cssText = 'color: #999; font-style: italic; font-size: 12px;';
+        retagLink.onclick = (e) => { e.preventDefault(); window.retagUntagged(); };
+        collectionsList.appendChild(retagLink);
+    }
+    
     collectionsSnapshot.forEach((doc) => {
         const data = doc.data();
         
@@ -2814,6 +2842,16 @@ async function deleteCollection(collectionId, collectionName) {
                     grid.parentNode.insertBefore(hpBar, grid);
                 }
                 
+                // ✦ shuffle this collection → outfit generator seeded from it
+                const shuffleBar = document.createElement('div');
+                shuffleBar.id = 'profileSortBar';
+                shuffleBar.style.cssText = 'margin-bottom:10px; text-align:center;';
+                const shuffleLink = document.createElement('a');
+                shuffleLink.href = '/outfit.html?c=' + collectionId;
+                shuffleLink.textContent = '✦ shuffle this collection';
+                shuffleLink.style.cssText = 'display:inline-block; background:#fff; border:1px solid #0600ff; color:#0600ff; font-family:Courier New,monospace; font-size:11px; padding:5px 14px; text-decoration:none; cursor:pointer;';
+                shuffleBar.appendChild(shuffleLink);
+                grid.parentNode.insertBefore(shuffleBar, grid);
                 
                 for (const imageId of imageIds) {
                     const imageDoc = await getDoc(doc(db, 'images', imageId));
@@ -3965,6 +4003,77 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             document.getElementById('ppStep2').style.display = 'block';
         };
 
+        // ── /OUTFITS: community board of saved generator outfits ──
+        // Saved as data (pieces + % positions), rendered as live mini-collages —
+        // every piece stays tappable and shoppable.
+        async function loadOutfitsBoard(addToHistory = true) {
+            closeSidebar();
+            if (addToHistory && currentContext.type !== 'outfits') {
+                navigationHistory.push({ ...currentContext });
+            }
+            activeTagFilters = [];
+            const existingFilterControls = document.querySelector('.tag-filter-controls');
+            if (existingFilterControls) existingFilterControls.remove();
+
+            currentContext = { type: 'outfits', id: null };
+            document.getElementById('pageTitle').innerHTML = '/ outfits <span style="font-size:10px; color:#888; font-weight:normal;">shuffled &amp; saved</span>';
+            localStorage.setItem('currentPage', JSON.stringify({ type: 'outfits' }));
+
+            const grid = document.getElementById('imageGrid');
+            grid.innerHTML = '';
+            const oldHeader = document.getElementById('profileHeader'); if (oldHeader) oldHeader.remove();
+            const oldSortBar = document.getElementById('profileSortBar'); if (oldSortBar) oldSortBar.remove();
+            const oldTagFilters = document.getElementById('profileTagFilters'); if (oldTagFilters) oldTagFilters.remove();
+            const tagRow = document.getElementById('recentTagsRow'); if (tagRow) tagRow.style.display = 'none';
+
+            try {
+                const snap = await getDocs(query(collection(db, 'outfits'), orderBy('createdAt', 'desc')));
+                if (snap.empty) {
+                    const empty = document.createElement('div');
+                    empty.style.cssText = 'grid-column:1 / -1; padding:20px; text-align:center; color:#666; font-family:Courier New,monospace; font-size:12px; line-height:1.8;';
+                    empty.innerHTML = 'no outfits saved yet —<br><a href="/outfit.html" style="color:#0600ff;">go shuffle one ✦</a>';
+                    grid.appendChild(empty);
+                    return;
+                }
+
+                snap.forEach((d) => {
+                    const o = d.data();
+                    const card = document.createElement('div');
+                    card.style.cssText = 'grid-column:1 / -1; padding:6px 0 16px; border-bottom:1px dashed #c9b8ac; margin-bottom:12px; display:flex; flex-direction:column; align-items:center;';
+
+                    const ratio = (o.canvasW && o.canvasH) ? (o.canvasW / o.canvasH) : 0.8;
+                    const canvas = document.createElement('div');
+                    const maxW = ratio >= 1 ? '100%' : '300px';
+                    canvas.style.cssText = 'position:relative; overflow:hidden; background:#fff; border:2px solid #0600ff; box-shadow:4px 4px 0 #0600ff; width:' + maxW + '; max-width:100%; aspect-ratio:' + ratio + ';';
+                    card.appendChild(canvas);
+
+                    (o.pieces || []).forEach(p => {
+                        const tile = document.createElement('div');
+                        tile.style.cssText = 'position:absolute; left:' + p.l + '%; top:' + p.t + '%; width:' + p.w + '%; height:' + p.h + '%; z-index:' + (p.z || 1) + '; cursor:pointer;';
+                        const img = document.createElement('img');
+                        img.src = p.imageUrl;
+                        img.alt = '';
+                        img.draggable = false;
+                        img.style.cssText = 'width:100%; height:100%; object-fit:contain; display:block; pointer-events:none;';
+                        tile.appendChild(img);
+                        tile.onclick = () => openImageDetail(p.imageId, p.imageUrl, p.link || '', p.tags || []);
+                        canvas.appendChild(tile);
+                    });
+
+                    const credit = document.createElement('div');
+                    credit.style.cssText = 'font-family:Courier New,monospace; font-size:10px; color:#666; margin-top:8px;';
+                    const srcNote = (o.source && o.source.type === 'collection' && o.source.name)
+                        ? ' · from / ' + o.source.name : '';
+                    credit.innerHTML = 'by <span style="color:#0600ff; font-weight:bold;">' + (o.username || 'someone') + '.finds</span>' + srcNote;
+                    card.appendChild(credit);
+
+                    grid.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Error loading outfits board:', error);
+            }
+        }
+
         // ── /TODAY: self-generating homepage (v2) ──
         // Sections are girlchan-first: a random tag combo (sampled from a real
         // find, verified to have matches) fills an everything-style grid with
@@ -4538,6 +4647,8 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
 
                 if (page.type === 'today') {
                     await loadTodayPage();
+                } else if (page.type === 'outfits') {
+                    await loadOutfitsBoard();
                 } else if (page.type === 'profile') {
                     await loadMyProfile();
                 } else if (page.type === 'collection' && page.id && page.name) {
@@ -5159,6 +5270,67 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
             croppedBlob = null;
         };
 
+       // Background tagger: retries once, merges with any manual tags
+        async function backgroundTagImage(imageDocId, imgUrl, baseTags) {
+            const run = async () => {
+                const res = await fetch('/.netlify/functions/ai-tagger', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: imgUrl })
+                });
+                const tagData = await res.json();
+                return Array.isArray(tagData.tags) ? tagData.tags : [];
+            };
+            setTimeout(async () => {
+                try {
+                    let bgTags = [];
+                    try { bgTags = await run(); } catch (e) { bgTags = []; }
+                    if (bgTags.length === 0) {
+                        // one retry after a pause — covers flaky moments
+                        await new Promise(r => setTimeout(r, 5000));
+                        try { bgTags = await run(); } catch (e) { bgTags = []; }
+                    }
+                    if (bgTags.length > 0) {
+                        const allTags = [...new Set([...(baseTags || []), ...bgTags])];
+                        await updateDoc(doc(db, 'images', imageDocId), { tags: allTags, aiTags: bgTags });
+                    }
+                } catch (e) {
+                    console.log('Background tagging failed silently:', e);
+                }
+            }, 1500);
+        }
+
+        // Admin tool: sweep the site for untagged images and tag them
+        window.retagUntagged = async function() {
+            if (!isAdmin()) return;
+            const snap = await getDocs(query(collection(db, 'images'), orderBy('createdAt', 'desc')));
+            const untagged = [];
+            snap.forEach(d => {
+                const t = d.data().tags || [];
+                if (t.length === 0) untagged.push({ id: d.id, imageUrl: d.data().imageUrl });
+            });
+            if (untagged.length === 0) { alert('everything is tagged ✓'); return; }
+            if (!confirm(untagged.length + ' untagged images found. tag them now? (runs one at a time, stay on this page)')) return;
+            let done = 0, failed = 0;
+            for (const u of untagged) {
+                try {
+                    const res = await fetch('/.netlify/functions/ai-tagger', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image: u.imageUrl })
+                    });
+                    const tagData = await res.json();
+                    const bgTags = Array.isArray(tagData.tags) ? tagData.tags : [];
+                    if (bgTags.length > 0) {
+                        await updateDoc(doc(db, 'images', u.id), { tags: bgTags, aiTags: bgTags });
+                        done++;
+                    } else { failed++; }
+                } catch (e) { failed++; }
+                await new Promise(r => setTimeout(r, 800));
+            }
+            alert('retagged ' + done + ' images' + (failed > 0 ? ' (' + failed + " couldn't be tagged)" : '') + ' ✓');
+        };
+
        // Handle image upload WITH AI TAGGING
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -5193,36 +5365,10 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
     if (brand) aiTags.push(brand.toLowerCase());
     if (size) aiTags.push('size-' + size);
 
-   // AI tag in background after posting
-if (isLinkTab) {
-    setTimeout(async () => {
-        try {
-            const res = await fetch('/.netlify/functions/ai-tagger', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: extractedUrl })
-            });
-            const tagData = await res.json();
-            const backgroundTags = Array.isArray(tagData.tags) ? tagData.tags : [];
-            if (backgroundTags.length > 0) {
-                const allTags = [...new Set([...aiTags, ...backgroundTags])];
-                await updateDoc(doc(db, 'images', docRef.id), { 
-                    tags: allTags, 
-                    aiTags: backgroundTags 
-                });
-            }
-        } catch (e) {
-            console.log('Background tagging failed silently:', e);
-        }
-    }, 2000);
-}
-
                 } else {
-                    // File upload path - same as before
-                    submitBtn.textContent = 'analyzing image...';
-                    aiTags = await getAITags(croppedBlob);
-
+                    // File upload path — post first, AI tags fill in the background (same as links)
                     submitBtn.textContent = 'uploading...';
+                    aiTags = [];
                     const fileName = `${Date.now()}_cropped.jpg`;
                     const storageRef = ref(storage, `images/${fileName}`);
                     await uploadBytes(storageRef, croppedBlob);
@@ -5256,6 +5402,9 @@ if (isLinkTab) {
                     aiTags: aiTags,
                     source: isLinkTab ? 'link' : 'upload'
                 });
+
+                // AI tag in background — scheduled AFTER the doc exists, works for both paths
+                backgroundTagImage(docRef.id, imageUrl, aiTags);
 
                 submitBtn.textContent = 'upload';
                 submitBtn.disabled = false;
@@ -5510,6 +5659,7 @@ window.getCurrentUploadTab = function() {
         window.currentUser = currentUser;
         window.loadEverythingFeed = loadEverythingFeed;
         window.loadTodayPage = loadTodayPage;
+        window.loadOutfitsBoard = loadOutfitsBoard;
     </script>
 
 <script>
@@ -5626,13 +5776,22 @@ window.removeCabinetDrawerItem = function(id) {
     updateCabBadge();
     renderCabinetDrawer();
 };
+function cabReadWords() {
+    try { return JSON.parse(localStorage.getItem('girlchan_cabinet_words') || '[]'); } catch (e) { return []; }
+}
+window.removeCabinetWordCombo = function(id) {
+    var words = cabReadWords().filter(function(c) { return c.id !== id; });
+    localStorage.setItem('girlchan_cabinet_words', JSON.stringify(words));
+    renderCabinetDrawer();
+};
 window.renderCabinetDrawer = function() {
     var grid = document.getElementById('cabinetDrawerGrid');
     var empty = document.getElementById('cabinetDrawerEmpty');
     var items = cabRead();
+    var words = cabReadWords();
     updateCabBadge();
     if (!grid) return;
-    if (items.length === 0) {
+    if (items.length === 0 && words.length === 0) {
         empty.style.display = 'block';
         grid.innerHTML = '';
         return;
@@ -5647,6 +5806,23 @@ window.renderCabinetDrawer = function() {
             + '</div>';
     }
     grid.innerHTML = html;
+    // word combos (saved on explore) — tap to head to explore where they live
+    var wordsWrap = document.getElementById('cabinetDrawerWords');
+    if (wordsWrap) {
+        if (words.length === 0) { wordsWrap.innerHTML = ''; }
+        else {
+            var whtml = '<div style="font-size:10px; color:#0600ff; text-transform:uppercase; letter-spacing:0.5px; margin:10px 0 4px;">word combos</div>';
+            for (var k = 0; k < words.length; k++) {
+                var cw = words[k];
+                var label = (cw.words || []).join(' + ');
+                whtml += '<div style="display:flex; align-items:center; gap:6px; padding:4px 8px; background:#FF007A; color:#fff; font-size:11px; cursor:pointer; margin-bottom:4px;" onclick="window.location.href=\'/explore.html\'">'
+                    + '<span style="flex:1;">🏷️ ' + label + '</span>'
+                    + '<button onclick="event.stopPropagation(); removeCabinetWordCombo(\'' + cw.id + '\')" style="background:transparent; color:#fff; border:none; cursor:pointer; padding:0 4px; font-weight:bold; font-family:Courier New,monospace;">×</button>'
+                    + '</div>';
+            }
+            wordsWrap.innerHTML = whtml;
+        }
+    }
 };
 window.openCabinetEntry = function(id) {
     var items = cabRead();
@@ -5672,6 +5848,7 @@ function loadPage(page) {
     const titleMap = {
         'today': '/ today',
         'everything': '/ everything',
+        'outfits': '/ outfits',
         'profile': '/ my profile',
         'collection': '/ vintage denim',
         'collections': '/ boards'
@@ -5679,6 +5856,8 @@ function loadPage(page) {
     document.getElementById('pageTitle').textContent = titleMap[page] || '/ ' + page;
     if (page === 'today') {
         window.loadTodayPage();
+    } else if (page === 'outfits') {
+        window.loadOutfitsBoard();
     } else if (page === 'everything') {
         window.loadEverythingFeed();
     }
