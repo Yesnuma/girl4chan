@@ -3444,6 +3444,24 @@ async function deleteCollection(collectionId, collectionName) {
                 </div>
             `;
             
+            // Username change
+            const unameBox = document.createElement('div');
+            unameBox.style.cssText = 'background: #fff; padding: 20px; border: 2px solid #0600ff; margin-bottom: 20px;';
+            unameBox.innerHTML = `
+                <h3 style="font-size: 16px; margin-bottom: 12px; color: #0600ff;">username</h3>
+                <p style="font-size: 12px; color: #666; margin-bottom: 12px; line-height: 1.6;">
+                    change it as often as you like. heads up: your profile link (girlchan.shopfinds.app/u/...) changes with it, so old shared links will stop working.
+                </p>
+                <input type="text" id="newUsernameInput" placeholder="new username"
+                    style="width: 100%; padding: 12px; border: 2px solid #0600ff; font-family: 'Courier New', Courier, monospace; font-size: 14px; margin-bottom: 12px; box-sizing: border-box;">
+                <button onclick="changeUsername()"
+                    style="width: 100%; padding: 12px; background: #0600ff; color: white; border: 2px solid #0600ff; font-family: 'Courier New', Courier, monospace; cursor: pointer; font-size: 13px;">
+                    change username
+                </button>
+                <div id="unameStatus" style="font-size: 12px; text-align: center; margin-top: 10px;"></div>
+            `;
+            grid.appendChild(unameBox);
+
             grid.appendChild(settingsContainer);
             
             // Load existing Campaign ID if they have one
@@ -3453,8 +3471,59 @@ async function deleteCollection(collectionId, collectionName) {
                 if (campaignId) {
                     document.getElementById('campaignIdInput').value = campaignId;
                 }
+                const curUsername = userDoc.data()?.username || '';
+                const unameInput = document.getElementById('newUsernameInput');
+                if (unameInput && curUsername) unameInput.placeholder = curUsername + ' → new username';
             } catch (error) {
                 console.error('Error loading campaign ID:', error);
+            }
+        };
+
+        // Change username: uniqueness check, updates user doc + their saved outfits
+        window.changeUsername = async function() {
+            const input = document.getElementById('newUsernameInput');
+            const status = document.getElementById('unameStatus');
+            const wanted = input.value.trim();
+            const wantedLower = wanted.toLowerCase();
+            if (!wanted) { status.textContent = 'type a username first'; status.style.color = '#ff0000'; return; }
+            if (!/^[a-z0-9._-]+$/i.test(wanted)) {
+                status.textContent = 'letters, numbers, dots, dashes, underscores only';
+                status.style.color = '#ff0000';
+                return;
+            }
+            status.textContent = 'checking...';
+            status.style.color = '#666';
+            try {
+                const usersSnap = await getDocs(collection(db, 'users'));
+                let taken = false;
+                usersSnap.forEach(u => {
+                    if (u.id === auth.currentUser.uid) return;
+                    const un = (u.data().username || '').toLowerCase();
+                    if (un === wantedLower) taken = true;
+                });
+                if (taken) { status.textContent = 'taken — try another!'; status.style.color = '#ff0000'; return; }
+
+                await setDoc(doc(db, 'users', auth.currentUser.uid), {
+                    username: wanted,
+                    usernameLower: wantedLower
+                }, { merge: true });
+
+                // sweep their saved outfits to the new name
+                try {
+                    const outfitsSnap = await getDocs(collection(db, 'outfits'));
+                    for (const od of outfitsSnap.docs) {
+                        if (od.data().userId === auth.currentUser.uid) {
+                            await updateDoc(doc(db, 'outfits', od.id), { username: wanted });
+                        }
+                    }
+                } catch (e) { console.error('outfit sweep failed:', e); }
+
+                status.textContent = '✓ you are now ' + wanted + '.finds — new link: /u/' + wanted;
+                status.style.color = '#00a86b';
+                input.value = '';
+            } catch (err) {
+                status.textContent = 'error: ' + err.message;
+                status.style.color = '#ff0000';
             }
         };
         // Verify curator code
@@ -3839,44 +3908,100 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
         window.generateStoryCard = async function(userId, username, photoUrl) {
             const overlay = document.createElement('div');
             overlay.id = 'storyCardOverlay';
-            overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10005; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:20px;';
+            overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:10005; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:16px; overflow-y:auto;';
             overlay.innerHTML = '<div style="color:#fff; font-family:Courier New,monospace; font-size:12px;">making your story card... ✦</div>';
             overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
             document.body.appendChild(overlay);
 
+            let finds = [];
+            let avatarImg = null;
             try {
-                // gather their finds
                 const snap = await getDocs(query(collection(db, 'images'), orderBy('createdAt', 'desc')));
-                const finds = [];
                 snap.forEach(d => { const data = d.data(); if (data.userId === userId) finds.push(data); });
+                if (photoUrl) avatarImg = await loadCardImage(photoUrl);
+            } catch (e) { console.error('story data fetch failed:', e); }
 
-                // attempt an outfit; fall back to latest finds
+            if (finds.length === 0) {
+                overlay.innerHTML = '<div style="color:#fff; font-family:Courier New,monospace; font-size:12px;">post some finds first! ✿ (tap to close)</div>';
+                return;
+            }
+
+            // image cache so re-rolls are instant after first load
+            const imgCache = {};
+            async function getImg(src) {
+                if (imgCache[src] !== undefined) return imgCache[src];
+                const im = await loadCardImage(src);
+                imgCache[src] = im;
+                return im;
+            }
+
+            async function drawCard() {
                 const buckets = { tops: [], dress: [], bottoms: [], shoes: [], bags: [] };
                 finds.forEach(f => { const c = storyBucket(f.tags); if (c) buckets[c].push(f); });
                 const pickR = a => a[Math.floor(Math.random() * a.length)];
-                let pieces = [];
+
+                const used = new Set();
+                const placed = []; // {f, rect}
                 const goDress = buckets.dress.length > 0 && (buckets.tops.length === 0 || Math.random() < 0.5);
-                if (goDress) pieces.push({ f: pickR(buckets.dress), slot: 'dress' });
+                const slotRects = {
+                    tops:    { x: 300, y: 620, w: 480, h: 380 },
+                    dress:   { x: 290, y: 600, w: 500, h: 720 },
+                    bottoms: { x: 320, y: 980, w: 440, h: 420 },
+                    shoes:   { x: 620, y: 1330, w: 340, h: 230 },
+                    bags:    { x: 100, y: 800, w: 320, h: 300 }
+                };
+                function place(f, rect) { if (!f) return; used.add(f.imageUrl); placed.push({ f: f, rect: rect }); }
+                if (goDress) place(pickR(buckets.dress), slotRects.dress);
                 else {
-                    if (buckets.tops.length) pieces.push({ f: pickR(buckets.tops), slot: 'tops' });
-                    if (buckets.bottoms.length) pieces.push({ f: pickR(buckets.bottoms), slot: 'bottoms' });
+                    if (buckets.tops.length) place(pickR(buckets.tops), slotRects.tops);
+                    if (buckets.bottoms.length) place(pickR(buckets.bottoms), slotRects.bottoms);
                 }
-                if (buckets.shoes.length) pieces.push({ f: pickR(buckets.shoes), slot: 'shoes' });
-                if (buckets.bags.length) pieces.push({ f: pickR(buckets.bags), slot: 'bags' });
-                const outfitMode = pieces.length >= 2;
-                if (!outfitMode) pieces = finds.slice(0, 6).map(f => ({ f: f, slot: 'grid' }));
-                if (pieces.length === 0) { overlay.innerHTML = '<div style="color:#fff; font-family:Courier New,monospace; font-size:12px;">post some finds first! ✿ (tap to close)</div>'; return; }
+                if (buckets.shoes.length) place(pickR(buckets.shoes.filter(f => !used.has(f.imageUrl))) || pickR(buckets.shoes), slotRects.shoes);
+                if (buckets.bags.length) place(pickR(buckets.bags.filter(f => !used.has(f.imageUrl))) || pickR(buckets.bags), slotRects.bags);
+
+                // pad with extra finds (any finds, tagged or not) until the card feels full
+                const extraRects = [
+                    { x: 110,  y: 1330, w: 300, h: 300, rot: -0.06 },
+                    { x: 700,  y: 620,  w: 270, h: 290, rot: 0.05 },
+                    { x: 110,  y: 560,  w: 250, h: 270, rot: 0.055 },
+                    { x: 700,  y: 980,  w: 265, h: 285, rot: -0.05 },
+                    { x: 420,  y: 1370, w: 250, h: 250, rot: 0.045 },
+                    { x: 400,  y: 560,  w: 280, h: 300, rot: -0.04 }
+                ];
+                const target = Math.min(8, Math.max(6, finds.length));
+                const leftovers = finds.filter(f => !used.has(f.imageUrl)).sort(() => Math.random() - 0.5);
+                let ei = 0;
+                while (placed.length < target && ei < extraRects.length && leftovers.length > 0) {
+                    const f = leftovers.shift();
+                    used.add(f.imageUrl);
+                    placed.push({ f: f, rect: extraRects[ei], polaroid: true });
+                    ei++;
+                }
 
                 const canvas = document.createElement('canvas');
                 canvas.width = 1080; canvas.height = 1920;
                 const ctx = canvas.getContext('2d');
 
-                // background
                 ctx.fillStyle = '#f0e0d6';
                 ctx.fillRect(0, 0, 1080, 1920);
+
+                // scattered deco behind everything
+                ctx.fillStyle = 'rgba(6,0,255,0.14)';
+                ctx.font = '38px Courier New';
+                ctx.textAlign = 'center';
+                const deco = ['✿','✦','⋆','°','❀','✧','·'];
+                for (let i = 0; i < 26; i++) {
+                    ctx.fillText(deco[i % deco.length], 80 + Math.random() * 920, 560 + Math.random() * 1050);
+                }
+
                 ctx.strokeStyle = '#0600ff';
                 ctx.lineWidth = 8;
                 ctx.strokeRect(40, 40, 1000, 1840);
+                ctx.strokeStyle = 'rgba(6,0,255,0.35)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([10, 8]);
+                ctx.strokeRect(64, 64, 952, 1792);
+                ctx.setLineDash([]);
 
                 // letter-block username
                 const name = (username || 'girlchan').slice(0, 12);
@@ -3885,106 +4010,132 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 let bx = (1080 - totalW) / 2;
                 for (const ch of name) {
                     ctx.fillStyle = '#F9FF00';
-                    ctx.fillRect(bx, 150, blockSize, blockSize);
+                    ctx.fillRect(bx, 130, blockSize, blockSize);
                     ctx.strokeStyle = '#000'; ctx.lineWidth = 4;
-                    ctx.strokeRect(bx, 150, blockSize, blockSize);
+                    ctx.strokeRect(bx, 130, blockSize, blockSize);
                     ctx.fillStyle = '#000';
                     ctx.font = 'bold ' + Math.floor(blockSize * 0.55) + 'px Courier New';
                     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                    ctx.fillText(ch.toUpperCase(), bx + blockSize / 2, 150 + blockSize / 2 + 2);
+                    ctx.fillText(ch.toUpperCase(), bx + blockSize / 2, 130 + blockSize / 2 + 2);
                     bx += blockSize + 6;
                 }
                 ctx.fillStyle = '#0600ff';
                 ctx.font = 'bold 34px Courier New';
                 ctx.textAlign = 'center';
-                ctx.fillText('.finds', 540, 290);
+                ctx.fillText('.finds', 540, 270);
 
-                // avatar
-                if (photoUrl) {
-                    const av = await loadCardImage(photoUrl);
-                    if (av) {
-                        ctx.save();
-                        ctx.beginPath(); ctx.arc(540, 430, 95, 0, Math.PI * 2); ctx.clip();
-                        ctx.drawImage(av, 445, 335, 190, 190);
-                        ctx.restore();
-                        ctx.beginPath(); ctx.arc(540, 430, 95, 0, Math.PI * 2);
-                        ctx.strokeStyle = '#8b7355'; ctx.lineWidth = 6; ctx.stroke();
-                    }
+                // avatar — bigger, framed
+                if (avatarImg) {
+                    ctx.save();
+                    ctx.beginPath(); ctx.arc(540, 420, 110, 0, Math.PI * 2); ctx.clip();
+                    ctx.drawImage(avatarImg, 430, 310, 220, 220);
+                    ctx.restore();
+                    ctx.beginPath(); ctx.arc(540, 420, 110, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#8b7355'; ctx.lineWidth = 7; ctx.stroke();
+                    ctx.beginPath(); ctx.arc(540, 420, 118, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#0600ff'; ctx.lineWidth = 2; ctx.stroke();
                 }
 
-                // collage area: 100..980 x 620..1560
-                const slotRects = {
-                    tops:    { x: 300, y: 620, w: 480, h: 360 },
-                    dress:   { x: 300, y: 620, w: 480, h: 700 },
-                    bottoms: { x: 320, y: 960, w: 440, h: 420 },
-                    shoes:   { x: 380, y: 1370, w: 320, h: 190 },
-                    bags:    { x: 90,  y: 830, w: 300, h: 280 }
-                };
-                const gridRects = [
-                    { x: 110, y: 640, w: 275, h: 275 }, { x: 402, y: 640, w: 275, h: 275 }, { x: 694, y: 640, w: 275, h: 275 },
-                    { x: 110, y: 940, w: 275, h: 275 }, { x: 402, y: 940, w: 275, h: 275 }, { x: 694, y: 940, w: 275, h: 275 }
-                ];
-                for (let i = 0; i < pieces.length; i++) {
-                    const p = pieces[i];
-                    const img = await loadCardImage(p.f.imageUrl);
+                // draw pieces
+                for (const p of placed) {
+                    const img = await getImg(p.f.imageUrl);
                     if (!img) continue;
-                    const r = p.slot === 'grid' ? gridRects[i] : slotRects[p.slot];
-                    if (!r) continue;
-                    // contain-fit
-                    const scale = Math.min(r.w / img.width, r.h / img.height);
-                    const dw = img.width * scale, dh = img.height * scale;
-                    ctx.drawImage(img, r.x + (r.w - dw) / 2, r.y + (r.h - dh) / 2, dw, dh);
+                    const r = p.rect;
+                    ctx.save();
+                    ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
+                    if (r.rot) ctx.rotate(r.rot);
+                    if (p.polaroid) {
+                        // white polaroid frame + cover crop
+                        ctx.fillStyle = '#fff';
+                        ctx.strokeStyle = '#d4c5b0';
+                        ctx.lineWidth = 2;
+                        ctx.fillRect(-r.w / 2 - 12, -r.h / 2 - 12, r.w + 24, r.h + 48);
+                        ctx.strokeRect(-r.w / 2 - 12, -r.h / 2 - 12, r.w + 24, r.h + 48);
+                        const scale = Math.max(r.w / img.width, r.h / img.height);
+                        const sw = r.w / scale, sh = r.h / scale;
+                        ctx.drawImage(img, (img.width - sw) / 2, (img.height - sh) / 2, sw, sh, -r.w / 2, -r.h / 2, r.w, r.h);
+                    } else {
+                        const scale = Math.min(r.w / img.width, r.h / img.height);
+                        const dw = img.width * scale, dh = img.height * scale;
+                        ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+                    }
+                    ctx.restore();
                 }
 
                 // footer
+                ctx.fillStyle = '#f0e0d6';
+                ctx.fillRect(70, 1620, 940, 200);
                 ctx.fillStyle = '#0600ff';
                 ctx.font = 'bold 30px Courier New';
                 ctx.textAlign = 'center';
-                ctx.fillText('°❀⋆ my finds live here ⋆❀°', 540, 1650);
+                ctx.fillText('°❀⋆ my finds live here ⋆❀°', 540, 1680);
                 ctx.fillStyle = '#000';
                 ctx.font = 'bold 36px Courier New';
-                ctx.fillText('girlchan.shopfinds.app/u/' + username, 540, 1730);
+                ctx.fillText('girlchan.shopfinds.app/u/' + username, 540, 1760);
 
-                const profileUrl = 'https://girlchan.shopfinds.app/u/' + encodeURIComponent(username);
-                try { await navigator.clipboard.writeText(profileUrl); } catch (e) {}
+                return canvas;
+            }
 
+            const profileUrl = 'https://girlchan.shopfinds.app/u/' + encodeURIComponent(username);
+            try { await navigator.clipboard.writeText(profileUrl); } catch (e) {}
+
+            async function renderPreview() {
+                const canvas = await drawCard();
                 canvas.toBlob(async (blob) => {
                     const url = URL.createObjectURL(blob);
                     overlay.innerHTML = '';
                     const wrap = document.createElement('div');
-                    wrap.style.cssText = 'display:flex; flex-direction:column; align-items:center; gap:12px; max-height:100%;';
+                    wrap.style.cssText = 'display:flex; flex-direction:column; align-items:center; gap:10px; max-height:100%;';
                     const preview = document.createElement('img');
                     preview.src = url;
-                    preview.style.cssText = 'max-height:60vh; border:2px solid #fff;';
+                    preview.style.cssText = 'max-height:56vh; border:2px solid #fff;';
                     wrap.appendChild(preview);
                     const note = document.createElement('div');
-                    note.style.cssText = 'color:#fff; font-family:Courier New,monospace; font-size:10px; text-align:center; max-width:300px; line-height:1.6;';
-                    note.textContent = 'your profile link is copied — post this to your story and paste it in a Link sticker ✦';
+                    note.style.cssText = 'color:#fff; font-family:Courier New,monospace; font-size:10px; text-align:center; max-width:320px; line-height:1.6;';
+                    note.innerHTML = 'share ✦ → <b>save image</b> puts it in your photos · your profile link is copied for the Link sticker';
                     wrap.appendChild(note);
+
                     const btns = document.createElement('div');
-                    btns.style.cssText = 'display:flex; gap:8px;';
+                    btns.style.cssText = 'display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center;';
+
+                    const rerollB = document.createElement('button');
+                    rerollB.textContent = '↻ re-roll';
+                    rerollB.style.cssText = 'padding:14px 20px; background:#F9FF00; color:#000; border:2px solid #000; font-family:Courier New,monospace; font-size:13px; font-weight:bold; cursor:pointer;';
+                    rerollB.onclick = () => {
+                        overlay.innerHTML = '<div style="color:#fff; font-family:Courier New,monospace; font-size:12px;">re-rolling... 🎲</div>';
+                        renderPreview();
+                    };
+                    btns.appendChild(rerollB);
+
                     const file = new File([blob], username + '-girlchan-story.png', { type: 'image/png' });
                     if (navigator.canShare && navigator.canShare({ files: [file] })) {
                         const shareB = document.createElement('button');
                         shareB.textContent = 'share ✦';
-                        shareB.style.cssText = 'padding:12px 24px; background:#ff007a; color:#fff; border:2px solid #fff; font-family:Courier New,monospace; font-size:13px; font-weight:bold; cursor:pointer;';
-                        shareB.onclick = () => navigator.share({ files: [file] }).catch(() => {});
+                        shareB.style.cssText = 'padding:14px 28px; background:#ff007a; color:#fff; border:2px solid #fff; font-family:Courier New,monospace; font-size:14px; font-weight:bold; cursor:pointer; box-shadow:2px 2px 0 #000;';
+                        shareB.onclick = () => navigator.share({ files: [file], text: profileUrl }).catch(() => {});
                         btns.appendChild(shareB);
                     }
-                    const dlB = document.createElement('a');
-                    dlB.textContent = 'save image';
-                    dlB.href = url;
-                    dlB.download = username + '-girlchan-story.png';
-                    dlB.style.cssText = 'padding:12px 24px; background:#fff; color:#0600ff; border:2px solid #0600ff; font-family:Courier New,monospace; font-size:13px; font-weight:bold; cursor:pointer; text-decoration:none;';
-                    btns.appendChild(dlB);
+
                     const closeB = document.createElement('button');
                     closeB.textContent = 'close';
-                    closeB.style.cssText = 'padding:12px 18px; background:transparent; color:#fff; border:1px solid #fff; font-family:Courier New,monospace; font-size:13px; cursor:pointer;';
+                    closeB.style.cssText = 'padding:14px 16px; background:transparent; color:#fff; border:1px solid #fff; font-family:Courier New,monospace; font-size:13px; cursor:pointer;';
                     closeB.onclick = () => overlay.remove();
                     btns.appendChild(closeB);
                     wrap.appendChild(btns);
+
+                    const dlB = document.createElement('a');
+                    dlB.textContent = 'or download as a file';
+                    dlB.href = url;
+                    dlB.download = username + '-girlchan-story.png';
+                    dlB.style.cssText = 'color:#9ed2f5; font-family:Courier New,monospace; font-size:10px; text-decoration:underline;';
+                    wrap.appendChild(dlB);
+
                     overlay.appendChild(wrap);
                 }, 'image/png');
+            }
+
+            try {
+                await renderPreview();
             } catch (err) {
                 console.error('story card error:', err);
                 overlay.innerHTML = '<div style="color:#fff; font-family:Courier New,monospace; font-size:12px;">something went wrong — tap to close</div>';
