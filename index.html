@@ -271,8 +271,7 @@
             width: 30px;
             height: 60px;
             background-color: #f5ecd7;
-            border: 1px solid #8b7355;
-            border-right: none;
+            border: none;
             border-radius: 5px 0 0 5px;
             cursor: pointer;
             box-shadow: -2px 2px 5px rgba(0,0,0,0.2);
@@ -1287,12 +1286,12 @@
     <div class="chat-tab" id="chatTab" onclick="toggleChatbox()"></div>
 
     <!-- Cabinet Tab -->
-    <div class="cabinet-tab" id="cabinetTab" onclick="toggleCabinetDrawer()">📁<span class="cab-count" id="cabTabCount"></span></div>
+    <div class="cabinet-tab" id="cabinetTab" onclick="toggleCabinetDrawer()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0600ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg><span class="cab-count" id="cabTabCount"></span></div>
 
     <!-- Cabinet Drawer -->
     <div class="cabinet-drawer" id="cabinetDrawer">
         <div class="cabinet-drawer-header">
-            <h3 id="cabinetDrawerTitle">📁 file cabinet (0)</h3>
+            <h3 id="cabinetDrawerTitle">file cabinet (0)</h3>
             <button class="chatbox-minimize" onclick="toggleCabinetDrawer()">_</button>
         </div>
         <div class="cabinet-drawer-body">
@@ -6371,7 +6370,7 @@ function updateCabBadge() {
     var el = document.getElementById('cabTabCount');
     if (el) el.textContent = n > 0 ? String(n) : '';
     var t = document.getElementById('cabinetDrawerTitle');
-    if (t) t.textContent = '📁 file cabinet (' + n + ')';
+    if (t) t.textContent = 'file cabinet (' + n + ')';
 }
 window.gcFileToCabinet = function(entry) {
     var items = cabRead();
