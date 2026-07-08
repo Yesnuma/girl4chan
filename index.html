@@ -239,52 +239,56 @@
             box-shadow: -2px 2px 5px rgba(0,0,0,0.2);
         }
 
-        /* Chat Tab */
+        /* Chat Tab — tucked on the LEFT edge, barely peeking (it's a secret) */
         .chat-tab {
             position: fixed;
-            right: 0;
+            left: -22px;
             bottom: 80px;
             width: 30px;
             height: 60px;
             background-color: #b8a890;
             border: 1px solid #a0927d;
-            border-right: none;
-            border-radius: 5px 0 0 5px;
+            border-left: none;
+            border-radius: 0 5px 5px 0;
             cursor: pointer;
-            box-shadow: -2px 2px 5px rgba(0,0,0,0.2);
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.15);
             display: none;
+            transition: left 0.2s ease;
+        }
+        .chat-tab:hover, .chat-tab:active {
+            left: 0;
         }
 
         .chat-tab.unlocked {
             display: block;
         }
 
-        /* Header cabinet button */
-        .header-cabinet {
-            text-decoration: none;
-            font-size: 17px;
-            position: relative;
+        /* Cabinet Tab — right side, with upload and rules */
+        .cabinet-tab {
+            position: fixed;
+            right: 0;
+            bottom: 80px;
+            width: 30px;
+            height: 60px;
+            background-color: #f5ecd7;
+            border: 1px solid #8b7355;
+            border-right: none;
+            border-radius: 5px 0 0 5px;
             cursor: pointer;
-            line-height: 1;
-        }
-        .header-cabinet .cab-count {
-            position: absolute;
-            top: -6px;
-            right: -9px;
-            background: #0600ff;
-            color: #F9FF00;
-            font-size: 8px;
-            font-weight: bold;
-            font-family: 'Courier New', Courier, monospace;
-            min-width: 13px;
-            height: 13px;
-            border-radius: 50%;
+            box-shadow: -2px 2px 5px rgba(0,0,0,0.2);
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 0 2px;
+            font-size: 14px;
         }
-        .header-cabinet .cab-count:empty { display: none; }
+        .cabinet-tab .cab-count {
+            font-size: 9px;
+            color: #0600ff;
+            font-weight: bold;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .cabinet-tab .cab-count:empty { display: none; }
 
         /* Cabinet Drawer */
         .cabinet-drawer {
@@ -1209,7 +1213,6 @@
         <button class="menu-btn" onclick="toggleSidebar()">☰</button>
         <h1>image board</h1>
         <div style="display: flex; align-items: center; gap: 15px;">
-            <a href="#" onclick="toggleCabinetDrawer(); return false;" class="header-cabinet" id="headerCabinet">📁<span class="cab-count" id="cabTabCount"></span></a>
             <a href="#" onclick="loadAccountSettings(); return false;" id="accountLink" style="display: none; text-decoration: none; font-size: 18px; color: #000;">@</a>
             <button class="logout-btn" id="logoutBtn" onclick="handleLogout()" style="display: none;">logout</button>
             <button class="logout-btn" id="loginBtn" onclick="openLoginModal()" style="display: none;">log in</button>
@@ -1280,8 +1283,11 @@
     <!-- Rules Tab -->
     <div class="rules-tab" onclick="openRulesModal()"></div>
 
-    <!-- Chat Tab -->
+    <!-- Chat Tab (left edge, tucked) -->
     <div class="chat-tab" id="chatTab" onclick="toggleChatbox()"></div>
+
+    <!-- Cabinet Tab -->
+    <div class="cabinet-tab" id="cabinetTab" onclick="toggleCabinetDrawer()">📁<span class="cab-count" id="cabTabCount"></span></div>
 
     <!-- Cabinet Drawer -->
     <div class="cabinet-drawer" id="cabinetDrawer">
