@@ -3941,59 +3941,8 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             }
 
             async function drawCard() {
-                const buckets = { tops: [], dress: [], bottoms: [], shoes: [], bags: [] };
-                finds.forEach(f => { const c = storyBucket(f.tags); if (c) buckets[c].push(f); });
-                const pickR = a => a[Math.floor(Math.random() * a.length)];
-                const used = new Set();
-                function take(arr) {
-                    const avail = arr.filter(f => !used.has(f.imageUrl));
-                    if (avail.length === 0) return null;
-                    const f = pickR(avail);
-                    used.add(f.imageUrl);
-                    return f;
-                }
-
-                // collage region: the outfit generator's portrait canvas, scaled onto the card
-                const R = { x: 120, y: 560, w: 840, h: 1040 };
-                const S = (slot) => ({
-                    x: R.x + (slot.cx - slot.w / 2) / 100 * R.w,
-                    y: R.y + slot.ty / 100 * R.h,
-                    w: slot.w / 100 * R.w,
-                    h: slot.h / 100 * R.h
-                });
-                // her portrait geometry (cx = horizontal center %, ty = top %)
-                const GEO = {
-                    tops:    { cx: 50, ty: 3.3,  w: 55, h: 35 },
-                    dress:   { cx: 50, ty: 3.3,  w: 55, h: 65 },
-                    bottoms: { cx: 50, ty: 30,   w: 50, h: 50 },
-                    bags:    { cx: 24.5, ty: 22.2, w: 38, h: 30 },
-                    acc:     { cx: 85,  ty: 17.8, w: 22, h: 18 },
-                    shoes:   { cx: 50, ty: 74,   w: 38, h: 22 }
-                };
-
-                // build the doll: category first, any leftover find stands in — every slot fills
-                const placed = [];
-                const goDress = buckets.dress.length > 0 && (buckets.tops.length === 0 || Math.random() < 0.5);
-                const leftovers = () => finds.filter(f => !used.has(f.imageUrl));
-                function fillSlot(geo, preferred, z) {
-                    let f = preferred ? take(preferred) : null;
-                    if (!f) {
-                        const rest = leftovers();
-                        if (rest.length === 0) return;
-                        f = rest[Math.floor(Math.random() * rest.length)];
-                        used.add(f.imageUrl);
-                    }
-                    placed.push({ f: f, rect: S(geo), z: z });
-                }
-                if (goDress) {
-                    fillSlot(GEO.dress, buckets.dress, 3);
-                } else {
-                    fillSlot(GEO.tops, buckets.tops, 3);
-                    fillSlot(GEO.bottoms, buckets.bottoms, 2);
-                }
-                fillSlot(GEO.bags, buckets.bags, 5);
-                fillSlot(GEO.acc, null, 4);
-                fillSlot(GEO.shoes, buckets.shoes, 1);
+                // 9 finds, natural proportions, packed into 3 masonry columns — imageboard energy
+                const picks = [...finds].sort(() => Math.random() - 0.5).slice(0, 9);
 
                 const canvas = document.createElement('canvas');
                 canvas.width = 1080; canvas.height = 1920;
@@ -4002,23 +3951,39 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 ctx.fillStyle = '#f0e0d6';
                 ctx.fillRect(0, 0, 1080, 1920);
 
-                // faint deco scatter behind the collage
-                ctx.fillStyle = 'rgba(6,0,255,0.12)';
-                ctx.font = '36px Courier New';
-                ctx.textAlign = 'center';
-                const deco = ['✿','✦','⋆','°','❀','✧','·'];
-                for (let i = 0; i < 22; i++) {
-                    ctx.fillText(deco[i % deco.length], 80 + Math.random() * 920, 560 + Math.random() * 1040);
+                // logo-wordmark wallpaper: brand letterforms, monochrome blue, low opacity
+                ctx.save();
+                ctx.translate(540, 960);
+                ctx.rotate(-0.3);
+                ctx.fillStyle = 'rgba(6,0,255,0.13)';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
+                const WALL_MARKS = [
+                    { t: 'ebay',     f: 'bold 46px Arial' },
+                    { t: 'depop',    f: '800 40px Arial' },
+                    { t: '✿',        f: '30px Courier New' },
+                    { t: 'Poshmark', f: 'bold 36px Georgia' },
+                    { t: 'vinted',   f: 'bold italic 38px Georgia' },
+                    { t: 'GRAILED',  f: '900 32px Arial' },
+                    { t: 'girlchan', f: 'bold 34px Courier New' },
+                    { t: '✦',        f: '28px Courier New' }
+                ];
+                for (let row = -13; row <= 13; row++) {
+                    let wx = -1400 - (Math.abs(row) % 3) * 130;
+                    let mi = Math.abs(row) % WALL_MARKS.length;
+                    while (wx < 1400) {
+                        const m = WALL_MARKS[mi % WALL_MARKS.length];
+                        ctx.font = m.f;
+                        ctx.fillText(m.t, wx, row * 96);
+                        wx += ctx.measureText(m.t).width + 56;
+                        mi++;
+                    }
                 }
+                ctx.restore();
 
                 ctx.strokeStyle = '#0600ff';
                 ctx.lineWidth = 8;
                 ctx.strokeRect(40, 40, 1000, 1840);
-                ctx.strokeStyle = 'rgba(6,0,255,0.35)';
-                ctx.lineWidth = 2;
-                ctx.setLineDash([10, 8]);
-                ctx.strokeRect(64, 64, 952, 1792);
-                ctx.setLineDash([]);
 
                 // letter-block username
                 const name = (username || 'girlchan').slice(0, 12);
@@ -4027,51 +3992,70 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 let bx = (1080 - totalW) / 2;
                 for (const ch of name) {
                     ctx.fillStyle = '#F9FF00';
-                    ctx.fillRect(bx, 130, blockSize, blockSize);
+                    ctx.fillRect(bx, 110, blockSize, blockSize);
                     ctx.strokeStyle = '#000'; ctx.lineWidth = 4;
-                    ctx.strokeRect(bx, 130, blockSize, blockSize);
+                    ctx.strokeRect(bx, 110, blockSize, blockSize);
                     ctx.fillStyle = '#000';
                     ctx.font = 'bold ' + Math.floor(blockSize * 0.55) + 'px Courier New';
                     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                    ctx.fillText(ch.toUpperCase(), bx + blockSize / 2, 130 + blockSize / 2 + 2);
+                    ctx.fillText(ch.toUpperCase(), bx + blockSize / 2, 110 + blockSize / 2 + 2);
                     bx += blockSize + 6;
                 }
                 ctx.fillStyle = '#0600ff';
-                ctx.font = 'bold 34px Courier New';
+                ctx.font = 'bold 32px Courier New';
                 ctx.textAlign = 'center';
-                ctx.fillText('.finds', 540, 270);
+                ctx.fillText('.finds', 540, 246);
 
                 // avatar
+                let masonryTop = 300;
                 if (avatarImg) {
                     ctx.save();
-                    ctx.beginPath(); ctx.arc(540, 420, 100, 0, Math.PI * 2); ctx.clip();
-                    ctx.drawImage(avatarImg, 440, 320, 200, 200);
+                    ctx.beginPath(); ctx.arc(540, 370, 84, 0, Math.PI * 2); ctx.clip();
+                    ctx.drawImage(avatarImg, 456, 286, 168, 168);
                     ctx.restore();
-                    ctx.beginPath(); ctx.arc(540, 420, 100, 0, Math.PI * 2);
-                    ctx.strokeStyle = '#8b7355'; ctx.lineWidth = 7; ctx.stroke();
-                    ctx.beginPath(); ctx.arc(540, 420, 108, 0, Math.PI * 2);
-                    ctx.strokeStyle = '#0600ff'; ctx.lineWidth = 2; ctx.stroke();
+                    ctx.beginPath(); ctx.arc(540, 370, 84, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#8b7355'; ctx.lineWidth = 6; ctx.stroke();
+                    masonryTop = 490;
                 }
 
-                // draw doll pieces: contain-fit, layered by z like the generator
-                placed.sort((a, b) => a.z - b.z);
-                for (const p of placed) {
-                    const img = await getImg(p.f.imageUrl);
-                    if (!img) continue;
-                    const r = p.rect;
-                    const scale = Math.min(r.w / img.width, r.h / img.height);
-                    const dw = img.width * scale, dh = img.height * scale;
-                    ctx.drawImage(img, r.x + (r.w - dw) / 2, r.y + (r.h - dh) / 2, dw, dh);
+                // masonry: 3 columns, natural aspect ratios, zero gaps
+                const region = { x: 78, w: 924, top: masonryTop, bottom: 1660 };
+                const colW = region.w / 3;
+                const colY = [region.top, region.top, region.top];
+                const loaded = [];
+                for (const f of picks) {
+                    const img = await getImg(f.imageUrl);
+                    if (img) loaded.push(img);
+                }
+                for (const img of loaded) {
+                    // shortest column takes the next image
+                    let ci = 0;
+                    if (colY[1] < colY[ci]) ci = 1;
+                    if (colY[2] < colY[ci]) ci = 2;
+                    const drawH = colW * (img.height / img.width);
+                    const x = region.x + ci * colW;
+                    const y = colY[ci];
+                    if (y >= region.bottom) continue;
+                    // clip so nothing spills past the region bottom
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.rect(x, y, colW, Math.min(drawH, region.bottom - y));
+                    ctx.clip();
+                    ctx.drawImage(img, x, y, colW, drawH);
+                    ctx.restore();
+                    colY[ci] += drawH;
                 }
 
-                // footer
+                // footer on a clean band
+                ctx.fillStyle = '#f0e0d6';
+                ctx.fillRect(48, 1668, 984, 204);
                 ctx.fillStyle = '#0600ff';
                 ctx.font = 'bold 30px Courier New';
                 ctx.textAlign = 'center';
-                ctx.fillText('°❀⋆ my finds live here ⋆❀°', 540, 1690);
+                ctx.fillText('°❀⋆ my finds live here ⋆❀°', 540, 1730);
                 ctx.fillStyle = '#000';
                 ctx.font = 'bold 36px Courier New';
-                ctx.fillText('girlchan.shopfinds.app/u/' + username, 540, 1770);
+                ctx.fillText('girlchan.shopfinds.app/u/' + username, 540, 1806);
 
                 return canvas;
             }
