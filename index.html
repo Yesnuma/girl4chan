@@ -1589,11 +1589,30 @@
         const storage = getStorage(app);
 
         // Admin configuration
-const ADMIN_USER_ID = 'D3nHi7OKBMU583Ibr2koBAVdxsB2';
+const ADMIN_USER_IDS = [
+    'D3nHi7OKBMU583Ibr2koBAVdxsB2', // main account
+    'yEdoUGre5FWUWw8tIBGxLkpPVi33'  // checkit.finds
+];
+
+function isRealAdmin() {
+    return auth.currentUser && ADMIN_USER_IDS.includes(auth.currentUser.uid);
+}
 
 function isAdmin() {
-    return auth.currentUser && auth.currentUser.uid === ADMIN_USER_ID;
+    if (sessionStorage.getItem('gc_visitor_view') === '1') return false;
+    return isRealAdmin();
 }
+
+window.toggleVisitorView = function() {
+    if (!isRealAdmin()) return;
+    if (sessionStorage.getItem('gc_visitor_view') === '1') {
+        sessionStorage.removeItem('gc_visitor_view');
+    } else {
+        sessionStorage.setItem('gc_visitor_view', '1');
+    }
+    loadCollections();
+    restoreLastPage();
+};
 
 
         // Global variables
@@ -1717,6 +1736,25 @@ function isAdmin() {
 
             // Always load public content regardless of auth state
             await loadCollections();
+
+            // /u/username inbound links land on that profile
+            const uMatch = window.location.pathname.match(/^\/u\/([^\/]+)\/?$/);
+            if (uMatch) {
+                const wantedLower = decodeURIComponent(uMatch[1]).toLowerCase();
+                try {
+                    const usersSnap = await getDocs(collection(db, 'users'));
+                    let found = null;
+                    usersSnap.forEach(u => {
+                        const un = (u.data().username || '').toLowerCase();
+                        if (un === wantedLower) found = { id: u.id, username: u.data().username };
+                    });
+                    if (found) {
+                        await loadUserProfile(found.id, found.username, false);
+                        return;
+                    }
+                } catch (e) { console.error('profile link lookup failed:', e); }
+            }
+
             await restoreLastPage();
         });
         
@@ -2672,7 +2710,16 @@ function showAllTagsModal(categorizedTags) {
          try {
     const collectionsSnapshot = await getDocs(collection(db, 'collections'));
     
-    // admin: retag sweep tool
+    // admin tools: visitor-view toggle + retag sweep
+    if (isRealAdmin()) {
+        const visitorLink = document.createElement('a');
+        visitorLink.href = '#';
+        const inVisitorView = sessionStorage.getItem('gc_visitor_view') === '1';
+        visitorLink.textContent = inVisitorView ? '👁 back to admin view' : '👁 view as visitor';
+        visitorLink.style.cssText = 'color: #0600ff; font-style: italic; font-size: 12px;';
+        visitorLink.onclick = (e) => { e.preventDefault(); window.toggleVisitorView(); };
+        collectionsList.appendChild(visitorLink);
+    }
     if (isAdmin()) {
         const retagLink = document.createElement('a');
         retagLink.href = '#';
@@ -2906,9 +2953,27 @@ async function deleteCollection(collectionId, collectionName) {
 
             try {
                 if (isSignupMode) {
+                    // usernames must be unique (case-insensitive) — they become /u/ URLs
+                    const wanted = username.trim();
+                    const wantedLower = wanted.toLowerCase();
+                    if (!/^[a-z0-9._-]+$/i.test(wanted)) {
+                        alert('usernames can only use letters, numbers, dots, dashes, underscores');
+                        return;
+                    }
+                    const usersSnap = await getDocs(collection(db, 'users'));
+                    let taken = false;
+                    usersSnap.forEach(u => {
+                        const un = (u.data().username || '').toLowerCase();
+                        if (un === wantedLower) taken = true;
+                    });
+                    if (taken) {
+                        alert('that username is taken — try another!');
+                        return;
+                    }
                     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                     await setDoc(doc(db, 'users', userCredential.user.uid), {
-                        username: username,
+                        username: wanted,
+                        usernameLower: wantedLower,
                         email: email,
                         createdAt: new Date()
                     });
@@ -3188,6 +3253,58 @@ async function deleteCollection(collectionId, collectionName) {
             
             const grid = document.getElementById('imageGrid');
             grid.innerHTML = '';
+            const oldHeader = document.getElementById('profileHeader');
+            if (oldHeader) oldHeader.remove();
+            const oldSortBar = document.getElementById('profileSortBar');
+            if (oldSortBar) oldSortBar.remove();
+            const oldTagFilters = document.getElementById('profileTagFilters');
+            if (oldTagFilters) oldTagFilters.remove();
+            const tagRow = document.getElementById('recentTagsRow');
+            if (tagRow) tagRow.style.display = 'none';
+
+            // profile header: photo, name, bio, shuffle + share
+            try {
+                const profUserDoc = await getDoc(doc(db, 'users', userId));
+                const profData = profUserDoc.exists() ? profUserDoc.data() : {};
+                const header = document.createElement('div');
+                header.id = 'profileHeader';
+                header.style.cssText = 'width:100%; padding:20px 16px; display:flex; flex-direction:column; align-items:center; border-bottom:1px solid #d4c5b0; margin-bottom:10px;';
+
+                if (profData.profilePhoto) {
+                    const photoEl = document.createElement('div');
+                    photoEl.style.cssText = 'width:90px; height:90px; border-radius:50%; border:3px solid #8b7355; overflow:hidden; margin-bottom:10px; background:#d4c5b0;';
+                    photoEl.innerHTML = `<img src="${profData.profilePhoto}" style="width:100%;height:100%;object-fit:cover;">`;
+                    header.appendChild(photoEl);
+                }
+
+                const nameEl = document.createElement('div');
+                nameEl.style.cssText = 'font-size:16px; font-weight:bold; font-family:Courier New,monospace; margin-bottom:2px;';
+                nameEl.textContent = username + '.finds';
+                header.appendChild(nameEl);
+
+                if (profData.bio) {
+                    const bioEl = document.createElement('div');
+                    bioEl.style.cssText = 'font-size:11px; color:#666; text-align:center; max-width:240px; font-family:Courier New,monospace; margin-bottom:8px;';
+                    bioEl.textContent = profData.bio;
+                    header.appendChild(bioEl);
+                }
+
+                const btnRow = document.createElement('div');
+                btnRow.style.cssText = 'display:flex; gap:8px; margin-top:6px;';
+                const shuffleBtn = document.createElement('a');
+                shuffleBtn.href = '/outfit.html?u=' + userId;
+                shuffleBtn.textContent = '✦ shuffle their closet';
+                shuffleBtn.style.cssText = 'display:inline-block; background:#fff; border:1px solid #0600ff; color:#0600ff; font-family:Courier New,monospace; font-size:11px; padding:5px 12px; text-decoration:none; cursor:pointer;';
+                btnRow.appendChild(shuffleBtn);
+                const shareBtn = document.createElement('button');
+                shareBtn.textContent = 'share to story ✦';
+                shareBtn.style.cssText = 'background:#ff007a; border:1px solid #ff007a; color:#fff; font-family:Courier New,monospace; font-size:11px; padding:5px 12px; cursor:pointer;';
+                shareBtn.onclick = () => generateStoryCard(userId, username, profData.profilePhoto || '');
+                btnRow.appendChild(shareBtn);
+                header.appendChild(btnRow);
+
+                grid.parentNode.insertBefore(header, grid);
+            } catch (e) { console.error('profile header failed:', e); }
             
             try {
                 const imagesQuery = query(
@@ -3453,8 +3570,9 @@ window.loadMyProfile = async function(addToHistory = true) {
                     photoEl.innerHTML = `<img src="${photoSrc}" style="width:100%;height:100%;object-fit:cover;">`;
                 } else {
                     photoEl.innerHTML = `<span style="font-size:10px; color:#8b7355; text-align:center; font-family:Courier New,monospace;">tap to<br>choose</span>`;
-                    photoEl.onclick = () => openPhotoPicker();
                 }
+                photoEl.style.cursor = 'pointer';
+                photoEl.onclick = () => openProfilePhotoChooser();
                 profileHeader.appendChild(photoEl);
                 
                 // Username
@@ -3462,6 +3580,13 @@ window.loadMyProfile = async function(addToHistory = true) {
                 nameEl.style.cssText = 'font-size:16px; font-weight:bold; font-family:Courier New,monospace; margin-bottom:2px;';
                 nameEl.textContent = (userData.username || 'user') + '.finds';
                 profileHeader.appendChild(nameEl);
+
+                // share to story
+                const myShareBtn = document.createElement('button');
+                myShareBtn.textContent = 'share to story ✦';
+                myShareBtn.style.cssText = 'background:#ff007a; border:1px solid #ff007a; color:#fff; font-family:Courier New,monospace; font-size:10px; padding:4px 10px; cursor:pointer; margin-bottom:6px;';
+                myShareBtn.onclick = () => generateStoryCard(auth.currentUser.uid, userData.username || 'user', userData.profilePhoto || '');
+                profileHeader.appendChild(myShareBtn);
                 
                 // Get all user's images (shared between premium and free)
                 const imagesQuery = query(collection(db, 'images'), orderBy('createdAt', 'desc'));
@@ -3681,6 +3806,326 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 console.error('Error loading likes:', error);
             }
         };
+
+        // ═══════════════════════════════════════
+        // STORY CARD — 1080x1920 profile share image for IG stories
+        // ═══════════════════════════════════════
+        const STORY_CATS = {
+            tops: ['baby-tee','tank-top','crop-top','halter-top','tube-top','hoodie','cardigan','sweater','corset','bodysuit','graphic-tee','turtleneck','top','tee','shirt','blouse','tank','blazer','jacket'],
+            dress: ['mini-dress','midi-dress','maxi-dress','slip-dress','sundress','party-dress','bodycon-dress','babydoll-dress','romper','jumpsuit','dress'],
+            bottoms: ['low-rise-jeans','cargo-pants','mini-skirt','maxi-skirt','midi-skirt','pleated-skirt','denim-skirt','flare-jeans','baggy-jeans','shorts','leggings','wide-leg-pants','skinny-jeans','mom-jeans','pants','jeans','skirt'],
+            shoes: ['platform-shoes','heels','sneakers','boots','mary-janes','ballet-flats','shoes','sandals','flats','pumps','loafers','mules','wedges'],
+            bags: ['bag','purse','handbag','tote','duffle','backpack','clutch']
+        };
+
+        function storyBucket(tags) {
+            const t = (tags || []).map(x => String(x).toLowerCase());
+            for (const cat of ['dress','bottoms','tops','shoes','bags']) {
+                if (STORY_CATS[cat].some(ct => t.includes(ct))) return cat;
+            }
+            return null;
+        }
+
+        function loadCardImage(src) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = () => resolve(null);
+                img.src = src.indexOf('data:') === 0 ? src : '/.netlify/functions/image-proxy?url=' + encodeURIComponent(src);
+            });
+        }
+
+        window.generateStoryCard = async function(userId, username, photoUrl) {
+            const overlay = document.createElement('div');
+            overlay.id = 'storyCardOverlay';
+            overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10005; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:20px;';
+            overlay.innerHTML = '<div style="color:#fff; font-family:Courier New,monospace; font-size:12px;">making your story card... ✦</div>';
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+            document.body.appendChild(overlay);
+
+            try {
+                // gather their finds
+                const snap = await getDocs(query(collection(db, 'images'), orderBy('createdAt', 'desc')));
+                const finds = [];
+                snap.forEach(d => { const data = d.data(); if (data.userId === userId) finds.push(data); });
+
+                // attempt an outfit; fall back to latest finds
+                const buckets = { tops: [], dress: [], bottoms: [], shoes: [], bags: [] };
+                finds.forEach(f => { const c = storyBucket(f.tags); if (c) buckets[c].push(f); });
+                const pickR = a => a[Math.floor(Math.random() * a.length)];
+                let pieces = [];
+                const goDress = buckets.dress.length > 0 && (buckets.tops.length === 0 || Math.random() < 0.5);
+                if (goDress) pieces.push({ f: pickR(buckets.dress), slot: 'dress' });
+                else {
+                    if (buckets.tops.length) pieces.push({ f: pickR(buckets.tops), slot: 'tops' });
+                    if (buckets.bottoms.length) pieces.push({ f: pickR(buckets.bottoms), slot: 'bottoms' });
+                }
+                if (buckets.shoes.length) pieces.push({ f: pickR(buckets.shoes), slot: 'shoes' });
+                if (buckets.bags.length) pieces.push({ f: pickR(buckets.bags), slot: 'bags' });
+                const outfitMode = pieces.length >= 2;
+                if (!outfitMode) pieces = finds.slice(0, 6).map(f => ({ f: f, slot: 'grid' }));
+                if (pieces.length === 0) { overlay.innerHTML = '<div style="color:#fff; font-family:Courier New,monospace; font-size:12px;">post some finds first! ✿ (tap to close)</div>'; return; }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = 1080; canvas.height = 1920;
+                const ctx = canvas.getContext('2d');
+
+                // background
+                ctx.fillStyle = '#f0e0d6';
+                ctx.fillRect(0, 0, 1080, 1920);
+                ctx.strokeStyle = '#0600ff';
+                ctx.lineWidth = 8;
+                ctx.strokeRect(40, 40, 1000, 1840);
+
+                // letter-block username
+                const name = (username || 'girlchan').slice(0, 12);
+                const blockSize = Math.min(76, Math.floor(880 / name.length));
+                const totalW = blockSize * name.length + (name.length - 1) * 6;
+                let bx = (1080 - totalW) / 2;
+                for (const ch of name) {
+                    ctx.fillStyle = '#F9FF00';
+                    ctx.fillRect(bx, 150, blockSize, blockSize);
+                    ctx.strokeStyle = '#000'; ctx.lineWidth = 4;
+                    ctx.strokeRect(bx, 150, blockSize, blockSize);
+                    ctx.fillStyle = '#000';
+                    ctx.font = 'bold ' + Math.floor(blockSize * 0.55) + 'px Courier New';
+                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.fillText(ch.toUpperCase(), bx + blockSize / 2, 150 + blockSize / 2 + 2);
+                    bx += blockSize + 6;
+                }
+                ctx.fillStyle = '#0600ff';
+                ctx.font = 'bold 34px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText('.finds', 540, 290);
+
+                // avatar
+                if (photoUrl) {
+                    const av = await loadCardImage(photoUrl);
+                    if (av) {
+                        ctx.save();
+                        ctx.beginPath(); ctx.arc(540, 430, 95, 0, Math.PI * 2); ctx.clip();
+                        ctx.drawImage(av, 445, 335, 190, 190);
+                        ctx.restore();
+                        ctx.beginPath(); ctx.arc(540, 430, 95, 0, Math.PI * 2);
+                        ctx.strokeStyle = '#8b7355'; ctx.lineWidth = 6; ctx.stroke();
+                    }
+                }
+
+                // collage area: 100..980 x 620..1560
+                const slotRects = {
+                    tops:    { x: 300, y: 620, w: 480, h: 360 },
+                    dress:   { x: 300, y: 620, w: 480, h: 700 },
+                    bottoms: { x: 320, y: 960, w: 440, h: 420 },
+                    shoes:   { x: 380, y: 1370, w: 320, h: 190 },
+                    bags:    { x: 90,  y: 830, w: 300, h: 280 }
+                };
+                const gridRects = [
+                    { x: 110, y: 640, w: 275, h: 275 }, { x: 402, y: 640, w: 275, h: 275 }, { x: 694, y: 640, w: 275, h: 275 },
+                    { x: 110, y: 940, w: 275, h: 275 }, { x: 402, y: 940, w: 275, h: 275 }, { x: 694, y: 940, w: 275, h: 275 }
+                ];
+                for (let i = 0; i < pieces.length; i++) {
+                    const p = pieces[i];
+                    const img = await loadCardImage(p.f.imageUrl);
+                    if (!img) continue;
+                    const r = p.slot === 'grid' ? gridRects[i] : slotRects[p.slot];
+                    if (!r) continue;
+                    // contain-fit
+                    const scale = Math.min(r.w / img.width, r.h / img.height);
+                    const dw = img.width * scale, dh = img.height * scale;
+                    ctx.drawImage(img, r.x + (r.w - dw) / 2, r.y + (r.h - dh) / 2, dw, dh);
+                }
+
+                // footer
+                ctx.fillStyle = '#0600ff';
+                ctx.font = 'bold 30px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText('°❀⋆ my finds live here ⋆❀°', 540, 1650);
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 36px Courier New';
+                ctx.fillText('girlchan.shopfinds.app/u/' + username, 540, 1730);
+
+                const profileUrl = 'https://girlchan.shopfinds.app/u/' + encodeURIComponent(username);
+                try { await navigator.clipboard.writeText(profileUrl); } catch (e) {}
+
+                canvas.toBlob(async (blob) => {
+                    const url = URL.createObjectURL(blob);
+                    overlay.innerHTML = '';
+                    const wrap = document.createElement('div');
+                    wrap.style.cssText = 'display:flex; flex-direction:column; align-items:center; gap:12px; max-height:100%;';
+                    const preview = document.createElement('img');
+                    preview.src = url;
+                    preview.style.cssText = 'max-height:60vh; border:2px solid #fff;';
+                    wrap.appendChild(preview);
+                    const note = document.createElement('div');
+                    note.style.cssText = 'color:#fff; font-family:Courier New,monospace; font-size:10px; text-align:center; max-width:300px; line-height:1.6;';
+                    note.textContent = 'your profile link is copied — post this to your story and paste it in a Link sticker ✦';
+                    wrap.appendChild(note);
+                    const btns = document.createElement('div');
+                    btns.style.cssText = 'display:flex; gap:8px;';
+                    const file = new File([blob], username + '-girlchan-story.png', { type: 'image/png' });
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        const shareB = document.createElement('button');
+                        shareB.textContent = 'share ✦';
+                        shareB.style.cssText = 'padding:12px 24px; background:#ff007a; color:#fff; border:2px solid #fff; font-family:Courier New,monospace; font-size:13px; font-weight:bold; cursor:pointer;';
+                        shareB.onclick = () => navigator.share({ files: [file] }).catch(() => {});
+                        btns.appendChild(shareB);
+                    }
+                    const dlB = document.createElement('a');
+                    dlB.textContent = 'save image';
+                    dlB.href = url;
+                    dlB.download = username + '-girlchan-story.png';
+                    dlB.style.cssText = 'padding:12px 24px; background:#fff; color:#0600ff; border:2px solid #0600ff; font-family:Courier New,monospace; font-size:13px; font-weight:bold; cursor:pointer; text-decoration:none;';
+                    btns.appendChild(dlB);
+                    const closeB = document.createElement('button');
+                    closeB.textContent = 'close';
+                    closeB.style.cssText = 'padding:12px 18px; background:transparent; color:#fff; border:1px solid #fff; font-family:Courier New,monospace; font-size:13px; cursor:pointer;';
+                    closeB.onclick = () => overlay.remove();
+                    btns.appendChild(closeB);
+                    wrap.appendChild(btns);
+                    overlay.appendChild(wrap);
+                }, 'image/png');
+            } catch (err) {
+                console.error('story card error:', err);
+                overlay.innerHTML = '<div style="color:#fff; font-family:Courier New,monospace; font-size:12px;">something went wrong — tap to close</div>';
+            }
+        };
+
+        // ═══════════════════════════════════════
+        // PROFILE PHOTO CHOOSER
+        // free: pick from presets (re-pick anytime)
+        // premium: wardrobe of up to 3 claimed toy photos, free swapping, release to un-claim
+        // ═══════════════════════════════════════
+
+        // ⬇⬇ PLACEHOLDER PRESETS — swap these data-URIs for real image URLs when Carin sends them ⬇⬇
+        const PRESET_PROFILE_PHOTOS = [
+            'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90"><rect width="90" height="90" fill="%23f9ff00"/><circle cx="45" cy="34" r="16" fill="%230600ff"/><rect x="25" y="54" width="40" height="26" rx="12" fill="%230600ff"/></svg>',
+            'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90"><rect width="90" height="90" fill="%23ff007a"/><circle cx="45" cy="34" r="16" fill="%23fff"/><rect x="25" y="54" width="40" height="26" rx="12" fill="%23fff"/></svg>',
+            'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90"><rect width="90" height="90" fill="%239ed2f5"/><circle cx="45" cy="34" r="16" fill="%230600ff"/><rect x="25" y="54" width="40" height="26" rx="12" fill="%230600ff"/></svg>',
+            'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90"><rect width="90" height="90" fill="%23f0e0d6"/><circle cx="45" cy="34" r="16" fill="%23ff007a"/><rect x="25" y="54" width="40" height="26" rx="12" fill="%23ff007a"/></svg>',
+            'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90"><rect width="90" height="90" fill="%230600ff"/><circle cx="45" cy="34" r="16" fill="%23f9ff00"/><rect x="25" y="54" width="40" height="26" rx="12" fill="%23f9ff00"/></svg>'
+        ];
+        // ⬆⬆ END PLACEHOLDER PRESETS ⬆⬆
+
+        window.openProfilePhotoChooser = async function() {
+            if (!requireAuth()) return;
+            if (window.isPremium) {
+                openWardrobe();
+            } else {
+                openPresetPicker();
+            }
+        };
+
+        function buildChooserModal(titleText) {
+            const modal = document.createElement('div');
+            modal.id = 'photoChooserModal';
+            modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10002; display:flex; justify-content:center; align-items:center;';
+            const content = document.createElement('div');
+            content.style.cssText = 'background:#f0e0d6; padding:20px; border:2px solid #0600ff; max-width:340px; width:88%; max-height:75vh; overflow-y:auto; font-family:Courier New,monospace;';
+            const title = document.createElement('h3');
+            title.textContent = titleText;
+            title.style.cssText = 'font-size:14px; margin-bottom:4px; font-family:Courier New,monospace;';
+            content.appendChild(title);
+            modal.appendChild(content);
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            document.body.appendChild(modal);
+            return content;
+        }
+
+        function openPresetPicker() {
+            const content = buildChooserModal('choose your look');
+            const sub = document.createElement('p');
+            sub.style.cssText = 'font-size:10px; color:#666; margin-bottom:12px;';
+            sub.innerHTML = 'pick any, swap anytime — <span style="color:#0600ff;">premium unlocks the full toy photo picker ✦</span>';
+            content.appendChild(sub);
+            const grid2 = document.createElement('div');
+            grid2.style.cssText = 'display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px;';
+            PRESET_PROFILE_PHOTOS.forEach(url => {
+                const cell = document.createElement('div');
+                cell.style.cssText = 'aspect-ratio:1; border-radius:50%; overflow:hidden; border:2px solid #8b7355; cursor:pointer;';
+                cell.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;">`;
+                cell.onclick = async () => {
+                    try {
+                        await setDoc(doc(db, 'users', auth.currentUser.uid), { profilePhoto: url }, { merge: true });
+                        document.getElementById('photoChooserModal').remove();
+                        loadMyProfile(false);
+                    } catch (e) { alert('error: ' + e.message); }
+                };
+                grid2.appendChild(cell);
+            });
+            content.appendChild(grid2);
+            const upBtn = document.createElement('button');
+            upBtn.textContent = 'unlock toy picker — $5/mo ✦';
+            upBtn.style.cssText = 'width:100%; padding:10px; background:#0600ff; color:#fff; border:2px solid #000; font-family:Courier New,monospace; font-size:11px; cursor:pointer; box-shadow:2px 2px 0 #000;';
+            upBtn.onclick = () => { document.getElementById('photoChooserModal').remove(); upgradeToPremium(); };
+            content.appendChild(upBtn);
+        }
+
+        async function openWardrobe() {
+            const userRef = doc(db, 'users', auth.currentUser.uid);
+            const userDoc = await getDoc(userRef);
+            const data = userDoc.data() || {};
+            // migrate: a lone claimed profilePhoto becomes wardrobe slot 1 (skip presets)
+            let wardrobe = data.profilePhotos || [];
+            if (wardrobe.length === 0 && data.profilePhoto && data.profilePhoto.indexOf('data:image') !== 0) {
+                wardrobe = [{ url: data.profilePhoto, itemId: data.profilePhotoItemId || '' }];
+                await setDoc(userRef, { profilePhotos: wardrobe }, { merge: true });
+            }
+            const active = data.profilePhoto || '';
+
+            const content = buildChooserModal('your wardrobe');
+            const sub = document.createElement('p');
+            sub.style.cssText = 'font-size:10px; color:#666; margin-bottom:12px;';
+            sub.textContent = wardrobe.length + ' / 3 photos claimed — tap to wear, release to set one free';
+            content.appendChild(sub);
+
+            wardrobe.forEach((p) => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex; align-items:center; gap:10px; margin-bottom:10px; background:#fff; border:1px solid #d4c5b0; padding:8px;';
+                const isActive = p.url === active;
+                row.innerHTML = `<img src="${p.url}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid ${isActive ? '#0600ff' : '#8b7355'};">`;
+                const wearBtn = document.createElement('button');
+                wearBtn.textContent = isActive ? 'wearing ✓' : 'wear';
+                wearBtn.disabled = isActive;
+                wearBtn.style.cssText = 'flex:1; padding:8px; font-family:Courier New,monospace; font-size:11px; border:1px solid #0600ff; background:' + (isActive ? '#9ed2f5' : '#fff') + '; color:#0600ff; cursor:pointer;';
+                wearBtn.onclick = async () => {
+                    await setDoc(userRef, { profilePhoto: p.url }, { merge: true });
+                    document.getElementById('photoChooserModal').remove();
+                    loadMyProfile(false);
+                };
+                row.appendChild(wearBtn);
+                const releaseBtn = document.createElement('button');
+                releaseBtn.textContent = 'release';
+                releaseBtn.style.cssText = 'padding:8px 10px; font-family:Courier New,monospace; font-size:10px; border:1px solid #999; background:#f5f5f5; color:#666; cursor:pointer;';
+                releaseBtn.onclick = async () => {
+                    if (!confirm('release this photo? it goes back into the wild for someone else to claim')) return;
+                    const newWardrobe = wardrobe.filter(x => x.url !== p.url);
+                    const updates = { profilePhotos: newWardrobe };
+                    if (isActive) updates.profilePhoto = newWardrobe.length > 0 ? newWardrobe[0].url : '';
+                    await setDoc(userRef, updates, { merge: true });
+                    if (p.itemId) {
+                        try { await deleteDoc(doc(db, 'claimedPhotos', p.itemId)); } catch (e) {}
+                    }
+                    document.getElementById('photoChooserModal').remove();
+                    loadMyProfile(false);
+                };
+                row.appendChild(releaseBtn);
+                content.appendChild(row);
+            });
+
+            if (wardrobe.length < 3) {
+                const claimBtn = document.createElement('button');
+                claimBtn.textContent = '+ claim a new photo';
+                claimBtn.style.cssText = 'width:100%; padding:12px; background:#0600ff; color:#fff; border:2px solid #000; font-family:Courier New,monospace; font-size:12px; font-weight:bold; cursor:pointer; box-shadow:2px 2px 0 #000;';
+                claimBtn.onclick = () => { document.getElementById('photoChooserModal').remove(); openPhotoPicker(); };
+                content.appendChild(claimBtn);
+            } else {
+                const full = document.createElement('p');
+                full.style.cssText = 'font-size:10px; color:#999; text-align:center;';
+                full.textContent = 'wardrobe full — release one to claim another';
+                content.appendChild(full);
+            }
+        }
 
         // ═══════════════════════════════════════
         // PHOTO PICKER
@@ -3980,9 +4425,14 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             return;
         }
         
+        const wardrobeNow = userDoc.data()?.profilePhotos || [];
+        if (wardrobeNow.length >= 3) {
+            alert('your wardrobe is full (3/3) — release a photo first!');
+            return;
+        }
         await updateDoc(doc(db, 'users', auth.currentUser.uid), {
             profilePhoto: ppSelectedPhoto.url,
-            profilePhotoLocked: true,
+            profilePhotos: [...wardrobeNow, { url: ppSelectedPhoto.url, itemId: ppSelectedPhoto.itemId }],
             profilePhotoItemId: ppSelectedPhoto.itemId,
             profilePhotoVibes: ppSelectedTags
         });
@@ -4061,10 +4511,32 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     });
 
                     const credit = document.createElement('div');
-                    credit.style.cssText = 'font-family:Courier New,monospace; font-size:10px; color:#666; margin-top:8px;';
+                    credit.style.cssText = 'font-family:Courier New,monospace; font-size:10px; color:#666; margin-top:8px; display:flex; align-items:center; gap:10px;';
                     const srcNote = (o.source && o.source.type === 'collection' && o.source.name)
                         ? ' · from / ' + o.source.name : '';
-                    credit.innerHTML = 'by <span style="color:#0600ff; font-weight:bold;">' + (o.username || 'someone') + '.finds</span>' + srcNote;
+                    const creditName = document.createElement('span');
+                    creditName.innerHTML = 'by <span style="color:#0600ff; font-weight:bold; text-decoration:underline;">' + (o.username || 'someone') + '.finds</span>' + srcNote;
+                    if (o.userId) {
+                        creditName.style.cursor = 'pointer';
+                        creditName.onclick = () => loadUserProfile(o.userId, o.username || 'someone');
+                    }
+                    credit.appendChild(creditName);
+
+                    // delete: outfit owner or admin
+                    if (auth.currentUser && (auth.currentUser.uid === o.userId || isAdmin())) {
+                        const delBtn = document.createElement('span');
+                        delBtn.textContent = '×';
+                        delBtn.title = 'delete outfit';
+                        delBtn.style.cssText = 'cursor:pointer; color:#999; font-size:16px; padding:0 4px;';
+                        delBtn.onclick = async () => {
+                            if (!confirm('delete this outfit?')) return;
+                            try {
+                                await deleteDoc(doc(db, 'outfits', d.id));
+                                card.remove();
+                            } catch (e) { alert('delete failed: ' + e.message); }
+                        };
+                        credit.appendChild(delBtn);
+                    }
                     card.appendChild(credit);
 
                     grid.appendChild(card);
