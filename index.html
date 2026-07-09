@@ -6536,9 +6536,9 @@ window.extractLink = async function() {
     preview.style.display = 'none';
     extractedImageUrl = null;
 
-    // 8s cap: if the proxy is slow, hand off to manual instead of hanging
+    // 13s cap: proxied double-hop sites (grailed) legitimately take ~6-9s
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const timeoutId = setTimeout(() => controller.abort(), 13000);
 
     try {
         const response = await fetch('/.netlify/functions/link-extractor', {
