@@ -1590,7 +1590,7 @@
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, initializeFirestore, collection, addDoc, doc, setDoc, getDoc, getDocs, query, orderBy, updateDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-        import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+        import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
         // Firebase configuration
         const firebaseConfig = {
@@ -6305,18 +6305,43 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
 
                 } else {
                     // File upload path — post first, AI tags fill in the background (same as links)
-                    submitBtn.textContent = 'uploading...';
+                    submitBtn.textContent = 'preparing...';
                     aiTags = [];
                     const uploadBlob = await compressImage(croppedBlob);
                     console.log('upload size:', Math.round(croppedBlob.size / 1024) + 'KB →', Math.round(uploadBlob.size / 1024) + 'KB');
                     const fileName = `${Date.now()}_cropped.jpg`;
                     const storageRef = ref(storage, `images/${fileName}`);
-                    await uploadBytes(storageRef, uploadBlob);
+
+                    // resumable upload with live % so a stall is visible, plus a watchdog
+                    submitBtn.textContent = 'uploading 0%';
+                    await new Promise((resolve, reject) => {
+                        const task = uploadBytesResumable(storageRef, uploadBlob);
+                        let lastProgress = Date.now();
+                        const watchdog = setInterval(() => {
+                            if (Date.now() - lastProgress > 30000) {
+                                clearInterval(watchdog);
+                                try { task.cancel(); } catch (e) {}
+                                reject(new Error('upload stalled — check your connection and try again'));
+                            }
+                        }, 5000);
+                        task.on('state_changed',
+                            (snap) => {
+                                lastProgress = Date.now();
+                                const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+                                submitBtn.textContent = 'uploading ' + pct + '%';
+                            },
+                            (err) => { clearInterval(watchdog); reject(err); },
+                            () => { clearInterval(watchdog); resolve(); }
+                        );
+                    });
+                    submitBtn.textContent = 'posting...';
                     imageUrl = await getDownloadURL(storageRef);
                 }
 
                 // Build final link with affiliate code if eBay
-                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+                if (!isLinkTab) submitBtn.textContent = 'posting...';
+                const fsTimeout = (p, ms, label) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(label + ' timed out — try again')), ms))]);
+                const userDoc = await fsTimeout(getDoc(doc(db, 'users', auth.currentUser.uid)), 15000, 'posting');
                 const campaignId = userDoc.data()?.ebayAffiliateCode || null;
                 let finalLink = isLinkTab
                     ? document.getElementById('productUrlInput').value.trim()
@@ -6333,7 +6358,7 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
                 }
 
                 // Save to Firestore
-                const docRef = await addDoc(collection(db, 'images'), {
+                const docRef = await fsTimeout(addDoc(collection(db, 'images'), {
                     imageUrl: imageUrl,
                     link: finalLink,
                     userId: auth.currentUser.uid,
@@ -6341,7 +6366,7 @@ document.getElementById('imageInput').addEventListener('change', function(e) {
                     tags: aiTags,
                     aiTags: aiTags,
                     source: isLinkTab ? 'link' : 'upload'
-                });
+                }), 15000, 'posting');
 
                 // AI tag in background — scheduled AFTER the doc exists, works for both paths
                 backgroundTagImage(docRef.id, imageUrl, aiTags);
