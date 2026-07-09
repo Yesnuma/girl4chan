@@ -18,30 +18,13 @@ function proxiedUrl(targetUrl) {
            '&premium=true&country_code=us';
 }
 
-// Domains that ALWAYS block datacenter IPs — skip the doomed direct attempt
-// and go straight to the proxy, saving several seconds per request.
-const PROXY_FIRST = ['grailed.com', 'grailed.app.link', 'depop.com', 'depop.app.link', 'etsy.com'];
+// The proxy is reserved for Etsy — the one site where it's reliably fast.
+const PROXY_ALLOWED = ['etsy.com'];
 
-// Fetch directly; if blocked and a proxy key exists, retry through ScraperAPI.
+// Fetch directly; if blocked and the domain is proxy-allowed, retry via ScraperAPI.
 // Returns { status, html, finalUrl, viaProxy }. html is null on hard failure.
 async function smartFetch(targetUrl, timeout = 5000) {
     let status = 'ERR';
-
-    // proxy-first shortcut for known-blocked hosts
-    if (SCRAPER_API_KEY && PROXY_FIRST.some(d => targetUrl.includes(d))) {
-        console.log('Known-blocked host — going straight to ScraperAPI:', targetUrl);
-        try {
-            const pRes = await fetch(proxiedUrl(targetUrl), { signal: AbortSignal.timeout(9000) });
-            console.log('ScraperAPI status:', pRes.status);
-            if (pRes.ok) {
-                return { status: pRes.status, html: await pRes.text(), finalUrl: targetUrl, viaProxy: true };
-            }
-            return { status: pRes.status, html: null, finalUrl: targetUrl, viaProxy: true };
-        } catch (e) {
-            console.error('ScraperAPI fetch error:', e.message);
-            return { status: 'PROXY_ERR', html: null, finalUrl: targetUrl, viaProxy: true };
-        }
-    }
 
     try {
         const res = await fetch(targetUrl, {
@@ -61,8 +44,8 @@ async function smartFetch(targetUrl, timeout = 5000) {
         console.error('Direct fetch error for', targetUrl, '-', e.message);
     }
 
-    // Blocked/errored — try proxy if we have a key
-    if (SCRAPER_API_KEY && (status === 403 || status === 401 || status === 429 || status === 'ERR')) {
+    // Blocked/errored — proxy retry, Etsy only
+    if (SCRAPER_API_KEY && PROXY_ALLOWED.some(d => targetUrl.includes(d)) && (status === 403 || status === 401 || status === 429 || status === 'ERR')) {
         console.log('Direct fetch got', status, '— retrying via ScraperAPI:', targetUrl);
         try {
             const pRes = await fetch(proxiedUrl(targetUrl), { signal: AbortSignal.timeout(8000) });
@@ -166,29 +149,85 @@ exports.handler = async (event) => {
     }
 
     // Branch deep links (Depop, Grailed, and other app share links)
-    // -> dig the real product URL out of the interstitial page.
+    // Strategy: the interstitial page itself carries the listing image + real URL,
+    // so ONE direct fetch (with browser disguises) is the whole job. No proxy,
+    // no second scrape of the (hard-blocked) store site.
     if (isBranchLink) {
         try {
-            const r = await smartFetch(url, 5000);
-            console.log('Branch fetch:', url, '-> status', r.status, r.viaProxy ? '(via proxy)' : '(direct)');
-            const html = r.html || '';
+            const UA_DISGUISES = [
+                { // iPhone Safari — what Branch expects from a shared link tap
+                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9'
+                },
+                { // desktop Chrome fallback
+                    'User-Agent': DESKTOP_UA,
+                    'Accept': 'text/html,application/xhtml+xml',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Referer': 'https://www.google.com/'
+                }
+            ];
+            let html = '';
+            for (const headers of UA_DISGUISES) {
+                try {
+                    const res = await fetch(url, {
+                        method: 'GET', redirect: 'follow', headers,
+                        signal: AbortSignal.timeout(4500)
+                    });
+                    console.log('Branch direct fetch:', url, '-> status', res.status);
+                    if (res.ok) { html = await res.text(); break; }
+                } catch (e) {
+                    console.error('Branch direct attempt failed:', e.message);
+                }
+            }
+
+            // pull the listing IMAGE straight off the interstitial
+            if (html) {
+                const branchImage =
+                    html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
+                    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1] ||
+                    html.replace(/\\//g, '/').match(/https?:\/\/media-assets\.grailed\.com\/[^"'\s<>]+/i)?.[0] ||
+                    html.replace(/\\//g, '/').match(/https?:\/\/media-photos\.depop\.com\/[^"'\s<>]+/i)?.[0];
+                if (branchImage) {
+                    // resolve the real listing URL for the shop link when findable
+                    const un = html.replace(/\\//g, '/');
+                    let dest =
+                        un.match(/https?:\/\/(?:www\.)?grailed\.com\/listings\/\d+/i)?.[0] ||
+                        un.match(/https?:\/\/(?:www\.)?depop\.com\/products\/[^?"\s'&<]+/i)?.[0] ||
+                        null;
+                    if (dest) dest = dest.replace(/([?&])_branch_match_id=[^&]*/, '').replace(/[?&]$/, '');
+                    console.log('Branch image found directly. Link:', dest || url);
+                    return {
+                        statusCode: 200,
+                        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+                        body: JSON.stringify({
+                            image: branchImage.replace(/&amp;/g, '&'),
+                            title: null, price: null, description: null,
+                            _resolved: dest || url, _viaProxy: false
+                        })
+                    };
+                }
+                console.warn('Branch page fetched but no image found. HTML length:', html.length);
+            }
+
             const unescaped = html.replace(/\\\//g, '/');
+            const unescaped2 = html.replace(/\\\//g, '/');
 
             let destination = null;
 
             // Depop patterns
-            const slugMatch = unescaped.match(/depop\.app\.link\/(?:null)?products?\/([^?"\s'&<]+)/i);
+            const slugMatch = unescaped2.match(/depop\.app\.link\/(?:null)?products?\/([^?"\s'&<]+)/i);
             if (slugMatch && slugMatch[1]) {
                 destination = `https://www.depop.com/products/${slugMatch[1]}/`;
             }
             if (!destination) {
-                const direct = unescaped.match(/https?:\/\/(?:www\.)?depop\.com\/products\/[^?"\s'&<]+/i)?.[0];
+                const direct = unescaped2.match(/https?:\/\/(?:www\.)?depop\.com\/products\/[^?"\s'&<]+/i)?.[0];
                 if (direct) destination = direct;
             }
 
             // Grailed pattern: the interstitial embeds the listing URL
             if (!destination) {
-                const grailed = unescaped.match(/https?:\/\/(?:www\.)?grailed\.com\/listings\/(\d+)/i);
+                const grailed = unescaped2.match(/https?:\/\/(?:www\.)?grailed\.com\/listings\/(\d+)/i);
                 if (grailed && grailed[1]) {
                     destination = `https://www.grailed.com/listings/${grailed[1]}`;
                 }
@@ -196,8 +235,8 @@ exports.handler = async (event) => {
 
             // Generic Branch fallbacks: $desktop_url / $canonical_url / al:web:url
             if (!destination) {
-                const desktop = unescaped.match(/\$desktop_url["']?\s*[:=]\s*["']([^"']+)["']/i)?.[1] ||
-                                unescaped.match(/\$canonical_url["']?\s*[:=]\s*["']([^"']+)["']/i)?.[1];
+                const desktop = unescaped2.match(/\$desktop_url["']?\s*[:=]\s*["']([^"']+)["']/i)?.[1] ||
+                                unescaped2.match(/\$canonical_url["']?\s*[:=]\s*["']([^"']+)["']/i)?.[1];
                 if (desktop && !desktop.includes('app.link')) destination = desktop;
             }
             if (!destination) {
