@@ -18,8 +18,8 @@ function proxiedUrl(targetUrl) {
            '&premium=true&country_code=us';
 }
 
-// The proxy is reserved for Etsy — the one site where it's reliably fast.
-const PROXY_ALLOWED = ['etsy.com'];
+// The proxy is reserved for the sites where it's proven reliable.
+const PROXY_ALLOWED = ['etsy.com', 'vestiairecollective'];
 
 // Fetch directly; if blocked and the domain is proxy-allowed, retry via ScraperAPI.
 // Returns { status, html, finalUrl, viaProxy }. html is null on hard failure.
