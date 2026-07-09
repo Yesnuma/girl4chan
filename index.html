@@ -6503,7 +6503,7 @@ let extractedImageUrl = null; // store for submit handler
 let currentUploadTab = 'link';
 
 // Sites that block server fetches — skip straight to manual, no waiting
-const BLOCKED_SITES = ['depop', 'therealreal', 'realreal', 'mercari'];
+const BLOCKED_SITES = ['depop', 'grailed', 'therealreal', 'realreal', 'mercari'];
 
 window.extractLink = async function() {
     const urlInput = document.getElementById('productUrlInput');
@@ -6522,8 +6522,10 @@ window.extractLink = async function() {
         return;
     }
 
-    // Known-blocked site → go straight to manual upload, don't wait
-    if (BLOCKED_SITES.some(s => url.toLowerCase().includes(s))) {
+    // Known-blocked site → go straight to manual upload, don't wait.
+    // EXCEPTION: app share links (*.app.link) — those we CAN read directly.
+    const isAppLink = url.toLowerCase().includes('app.link');
+    if (!isAppLink && BLOCKED_SITES.some(s => url.toLowerCase().includes(s))) {
         const site = BLOCKED_SITES.find(s => url.toLowerCase().includes(s));
         goToManualUpload(url, site);
         return;
