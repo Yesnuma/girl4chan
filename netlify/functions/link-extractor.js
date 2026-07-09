@@ -144,8 +144,8 @@ exports.handler = async (event) => {
         }
     }
 
-    // Branch deep links (Depop share links) -> find the real product URL.
-    // Uses smartFetch because Depop now 403s the interstitial from server IPs.
+    // Branch deep links (Depop, Grailed, and other app share links)
+    // -> dig the real product URL out of the interstitial page.
     if (isBranchLink) {
         try {
             const r = await smartFetch(url, 5000);
@@ -155,6 +155,7 @@ exports.handler = async (event) => {
 
             let destination = null;
 
+            // Depop patterns
             const slugMatch = unescaped.match(/depop\.app\.link\/(?:null)?products?\/([^?"\s'&<]+)/i);
             if (slugMatch && slugMatch[1]) {
                 destination = `https://www.depop.com/products/${slugMatch[1]}/`;
@@ -163,12 +164,29 @@ exports.handler = async (event) => {
                 const direct = unescaped.match(/https?:\/\/(?:www\.)?depop\.com\/products\/[^?"\s'&<]+/i)?.[0];
                 if (direct) destination = direct;
             }
+
+            // Grailed pattern: the interstitial embeds the listing URL
+            if (!destination) {
+                const grailed = unescaped.match(/https?:\/\/(?:www\.)?grailed\.com\/listings\/(\d+)/i);
+                if (grailed && grailed[1]) {
+                    destination = `https://www.grailed.com/listings/${grailed[1]}`;
+                }
+            }
+
+            // Generic Branch fallbacks: $desktop_url / $canonical_url / al:web:url
+            if (!destination) {
+                const desktop = unescaped.match(/\$desktop_url["']?\s*[:=]\s*["']([^"']+)["']/i)?.[1] ||
+                                unescaped.match(/\$canonical_url["']?\s*[:=]\s*["']([^"']+)["']/i)?.[1];
+                if (desktop && !desktop.includes('app.link')) destination = desktop;
+            }
             if (!destination) {
                 const meta = html.match(/<meta[^>]+property=["']al:web:url["'][^>]+content=["']([^"']+)["']/i)?.[1];
-                if (meta && meta.includes('/products/')) destination = meta;
+                if (meta && !meta.includes('app.link')) destination = meta;
             }
 
             if (destination && !destination.includes('app.link')) {
+                // strip branch tracking params
+                destination = destination.replace(/([?&])_branch_match_id=[^&]*/,'$1').replace(/([?&])_branch_referrer=[^&]*/,'$1').replace(/[?&]$/, '');
                 finalUrl = destination;
                 console.log('Branch link resolved to:', finalUrl);
             } else {
