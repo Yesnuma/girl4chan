@@ -282,10 +282,21 @@
             font-size: 14px;
         }
         .cabinet-tab .cab-count {
-            font-size: 9px;
-            color: #0600ff;
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: #0600ff;
+            color: #F9FF00;
+            font-size: 8px;
             font-weight: bold;
             font-family: 'Courier New', Courier, monospace;
+            min-width: 13px;
+            height: 13px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 2px;
         }
         .cabinet-tab .cab-count:empty { display: none; }
 
@@ -1226,12 +1237,16 @@
         </div>
         <div class="sidebar-content">
             <div class="sidebar-section">
+                <h3>PROFILE</h3>
+                <a href="#" onclick="loadMyProfile()">/ my profile</a>
+                <a href="#" onclick="loadMyOutfits()">/ my outfits</a>
+            </div>
+            <div class="sidebar-section">
                 <h3>MAIN</h3>
                 <a href="#" onclick="loadPage('today')">/ today</a>
                 <a href="#" onclick="loadPage('everything')">/ everything</a>
                 <a href="#" onclick="loadPage('outfits')">/ outfits</a>
                 <a href="/outfit.html">/ outfit generator</a>
-                <a href="#" onclick="loadMyProfile()">/ my profile</a>
             </div>
             <div class="sidebar-section">
     <h3>PREMIUM</h3>
@@ -2270,6 +2285,8 @@ function goBack() {
             loadTodayPage(false);
         } else if (previousPage.type === 'outfits') {
             loadOutfitsBoard(false);
+        } else if (previousPage.type === 'myOutfits') {
+            loadOutfitsBoard(false, true);
         } else if (previousPage.type === 'everything') {
             loadEverythingFeed(false);
         } else if (previousPage.type === 'profile') {
@@ -3302,8 +3319,8 @@ async function deleteCollection(collectionId, collectionName) {
                 shuffleBtn.style.cssText = 'display:inline-block; background:#fff; border:1px solid #0600ff; color:#0600ff; font-family:Courier New,monospace; font-size:11px; padding:5px 12px; text-decoration:none; cursor:pointer;';
                 btnRow.appendChild(shuffleBtn);
                 const shareBtn = document.createElement('button');
-                shareBtn.textContent = 'share to story ✦';
-                shareBtn.style.cssText = 'background:#ff007a; border:1px solid #ff007a; color:#fff; font-family:Courier New,monospace; font-size:11px; padding:5px 12px; cursor:pointer;';
+                shareBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0600ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="3"></rect><circle cx="12" cy="13" r="4"></circle><circle cx="18" cy="9" r="0.6" fill="#0600ff"></circle><path d="M8 6l1.5-2h5L16 6"></path></svg><span style="font-size:8px; color:#0600ff; font-weight:bold; display:block;">story</span>';
+                shareBtn.style.cssText = 'background:none; border:none; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:1px; padding:2px 6px;';
                 shareBtn.onclick = () => generateStoryCard(userId, username, profData.profilePhoto || '');
                 btnRow.appendChild(shareBtn);
                 header.appendChild(btnRow);
@@ -3655,10 +3672,10 @@ window.loadMyProfile = async function(addToHistory = true) {
                 nameEl.textContent = (userData.username || 'user') + '.finds';
                 profileHeader.appendChild(nameEl);
 
-                // share to story
+                // share to story (camera glyph)
                 const myShareBtn = document.createElement('button');
-                myShareBtn.textContent = 'share to story ✦';
-                myShareBtn.style.cssText = 'background:#ff007a; border:1px solid #ff007a; color:#fff; font-family:Courier New,monospace; font-size:10px; padding:4px 10px; cursor:pointer; margin-bottom:6px;';
+                myShareBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0600ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="3"></rect><circle cx="12" cy="13" r="4"></circle><circle cx="18" cy="9" r="0.6" fill="#0600ff"></circle><path d="M8 6l1.5-2h5L16 6"></path></svg><span style="font-size:8px; color:#0600ff; font-weight:bold; display:block;">story</span>';
+                myShareBtn.style.cssText = 'background:none; border:none; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:1px; padding:2px 6px; margin-bottom:4px;';
                 myShareBtn.onclick = () => generateStoryCard(auth.currentUser.uid, userData.username || 'user', userData.profilePhoto || '');
                 profileHeader.appendChild(myShareBtn);
                 
@@ -4591,18 +4608,22 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
         // ── /OUTFITS: community board of saved generator outfits ──
         // Saved as data (pieces + % positions), rendered as live mini-collages —
         // every piece stays tappable and shoppable.
-        async function loadOutfitsBoard(addToHistory = true) {
+        async function loadOutfitsBoard(addToHistory = true, mineOnly = false) {
+            if (mineOnly && !requireAuth()) return;
             closeSidebar();
-            if (addToHistory && currentContext.type !== 'outfits') {
+            const ctxType = mineOnly ? 'myOutfits' : 'outfits';
+            if (addToHistory && currentContext.type !== ctxType) {
                 navigationHistory.push({ ...currentContext });
             }
             activeTagFilters = [];
             const existingFilterControls = document.querySelector('.tag-filter-controls');
             if (existingFilterControls) existingFilterControls.remove();
 
-            currentContext = { type: 'outfits', id: null };
-            document.getElementById('pageTitle').innerHTML = '/ outfits <span style="font-size:10px; color:#888; font-weight:normal;">shuffled &amp; saved</span>';
-            localStorage.setItem('currentPage', JSON.stringify({ type: 'outfits' }));
+            currentContext = { type: ctxType, id: null };
+            document.getElementById('pageTitle').innerHTML = mineOnly
+                ? '/ my outfits'
+                : '/ outfits <span style="font-size:10px; color:#888; font-weight:normal;">shuffled &amp; saved</span>';
+            localStorage.setItem('currentPage', JSON.stringify({ type: ctxType }));
 
             const grid = document.getElementById('imageGrid');
             grid.innerHTML = '';
@@ -4613,16 +4634,11 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
 
             try {
                 const snap = await getDocs(query(collection(db, 'outfits'), orderBy('createdAt', 'desc')));
-                if (snap.empty) {
-                    const empty = document.createElement('div');
-                    empty.style.cssText = 'grid-column:1 / -1; padding:20px; text-align:center; color:#666; font-family:Courier New,monospace; font-size:12px; line-height:1.8;';
-                    empty.innerHTML = 'no outfits saved yet —<br><a href="/outfit.html" style="color:#0600ff;">go shuffle one ✦</a>';
-                    grid.appendChild(empty);
-                    return;
-                }
-
+                let shown = 0;
                 snap.forEach((d) => {
                     const o = d.data();
+                    if (mineOnly && (!auth.currentUser || o.userId !== auth.currentUser.uid)) return;
+                    shown++;
                     const card = document.createElement('div');
                     card.style.cssText = 'grid-column:1 / -1; padding:6px 0 16px; border-bottom:1px dashed #c9b8ac; margin-bottom:12px; display:flex; flex-direction:column; align-items:center;';
 
@@ -4676,10 +4692,19 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
 
                     grid.appendChild(card);
                 });
+
+                if (shown === 0) {
+                    const empty = document.createElement('div');
+                    empty.style.cssText = 'grid-column:1 / -1; padding:20px; text-align:center; color:#666; font-family:Courier New,monospace; font-size:12px; line-height:1.8;';
+                    empty.innerHTML = (mineOnly ? 'you haven\'t saved any outfits yet —' : 'no outfits saved yet —') + '<br><a href="/outfit.html" style="color:#0600ff;">go shuffle one ✦</a>';
+                    grid.appendChild(empty);
+                }
             } catch (error) {
                 console.error('Error loading outfits board:', error);
             }
         }
+
+        window.loadMyOutfits = function() { loadOutfitsBoard(true, true); };
 
         // ── /TODAY: self-generating homepage (v2) ──
         // Sections are girlchan-first: a random tag combo (sampled from a real
@@ -4687,12 +4712,13 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
         // community items, plus a few eBay finds woven in as doors to explore.
         // Nothing hard-links off-site: girlchan items open the normal modal,
         // eBay items open an explore-style modal (shop / explore / add).
-        // Cached in Firestore (homepageAuto/current); 🎲 re-rolls one section.
+        // Cached in Firestore (homepageAuto/current); ↻ re-rolls the whole page.
         const TODAY_CACHE_MS = 6 * 60 * 60 * 1000; // 6 hours
         const TODAY_AUTO_SECTIONS = 3;
-        const TODAY_CACHE_VERSION = 2;
+        const TODAY_CACHE_VERSION = 4;
         const TODAY_GC_PER_SECTION = 9;
         const TODAY_EBAY_PER_SECTION = 3;
+        const TODAY_SLIDER_EBAY_COUNT = 10;
 
         function usableTags(tags) {
             return (tags || []).filter(t => t && !String(t).toLowerCase().startsWith('size-'));
@@ -4719,17 +4745,18 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
         function pickTagCombo(pool, excludeKey) {
             const tagged = pool.filter(p => usableTags(p.data.tags).length > 0);
             if (tagged.length === 0) return null;
-            for (let attempt = 0; attempt < 12; attempt++) {
+            for (let attempt = 0; attempt < 14; attempt++) {
                 const seed = tagged[Math.floor(Math.random() * tagged.length)];
                 const tags = usableTags(seed.data.tags).sort(() => Math.random() - 0.5);
                 const candidates = [];
+                if (tags.length >= 3 && Math.random() < 0.4) candidates.push([tags[0], tags[1], tags[2]]);
                 if (tags.length >= 2) candidates.push([tags[0], tags[1]]);
                 if (tags.length >= 1) candidates.push([tags[0]]);
                 for (const combo of candidates) {
                     const key = combo.slice().sort().join('+');
                     if (key === excludeKey) continue;
                     const matches = gcMatchesForTags(pool, combo);
-                    const minMatches = combo.length === 2 ? 4 : 5;
+                    const minMatches = combo.length === 3 ? 3 : (combo.length === 2 ? 4 : 5);
                     if (matches.length >= minMatches) {
                         return { tags: combo, seed: seed, matches: matches };
                     }
@@ -4760,7 +4787,11 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 id: id, imageUrl: data.imageUrl, link: data.link || '', tags: data.tags || []
             }));
 
-            // a few eBay finds, seeded off the first girlchan item, as doors to explore
+            // section format: girlchan grid with eBay woven in, or an eBay slider row
+            const sectionType = Math.random() < 0.5 ? 'slider' : 'grid';
+            const ebayWanted = sectionType === 'slider' ? TODAY_SLIDER_EBAY_COUNT : TODAY_EBAY_PER_SECTION;
+
+            // eBay finds, seeded off the first girlchan item
             let ebay = [];
             const seedImageUrl = gc.length > 0 ? gc[0].imageUrl : (finalCombo.seed ? finalCombo.seed.data.imageUrl : null);
             if (seedImageUrl) {
@@ -4768,11 +4799,11 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     const res = await fetch('/.netlify/functions/searchByImage', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ imageUrl: seedImageUrl, limit: 10 })
+                        body: JSON.stringify({ imageUrl: seedImageUrl, limit: sectionType === 'slider' ? 15 : 10 })
                     });
                     const data = await res.json();
                     for (const it of (data.itemSummaries || [])) {
-                        if (ebay.length >= TODAY_EBAY_PER_SECTION) break;
+                        if (ebay.length >= ebayWanted) break;
                         let img = '';
                         if (it.image && it.image.imageUrl) img = it.image.imageUrl;
                         else if (it.thumbnailImages && it.thumbnailImages[0]) img = it.thumbnailImages[0].imageUrl;
@@ -4789,20 +4820,71 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 } catch (e) { console.error('Auto-section search failed:', e); }
             }
 
-            return { tags: finalCombo.tags, seedImageUrl: seedImageUrl, gc: gc, ebay: ebay };
+            return { type: sectionType, tags: finalCombo.tags, seedImageUrl: seedImageUrl, gc: gc, ebay: ebay };
         }
 
         async function generateTodaySections() {
             const pool = await fetchTodayPool();
             if (pool.length === 0) return [];
+
+            // gather collection + outfit candidates for the section deck
+            let colCandidates = [];
+            try {
+                const colSnap = await getDocs(collection(db, 'collections'));
+                colSnap.forEach(d => {
+                    const data = d.data();
+                    if ((data.images || []).length >= 4) colCandidates.push({ id: d.id, name: data.name, images: data.images });
+                });
+            } catch (e) {}
+            let outfitCandidates = [];
+            try {
+                const oSnap = await getDocs(query(collection(db, 'outfits'), orderBy('createdAt', 'desc')));
+                oSnap.forEach(d => outfitCandidates.push({ id: d.id, data: d.data() }));
+            } catch (e) {}
+
             const excludeKeys = new Set();
+            const usedCols = new Set();
+            const usedOutfits = new Set();
             const sections = [];
+
             for (let i = 0; i < TODAY_AUTO_SECTIONS; i++) {
-                const s = await buildAutoSection(pool, excludeKeys);
+                const roll = Math.random();
+                let s = null;
+                if (roll < 0.2 && colCandidates.some(c => !usedCols.has(c.id))) {
+                    // collection section
+                    const avail = colCandidates.filter(c => !usedCols.has(c.id));
+                    const col = avail[Math.floor(Math.random() * avail.length)];
+                    usedCols.add(col.id);
+                    const items = [];
+                    for (const imageId of col.images.slice(0, 9)) {
+                        const found = pool.find(p => p.id === imageId);
+                        if (found) items.push({ id: found.id, imageUrl: found.data.imageUrl, link: found.data.link || '', tags: found.data.tags || [] });
+                    }
+                    if (items.length >= 3) s = { type: 'collection', colId: col.id, name: col.name, gc: items };
+                } else if (roll < 0.4 && outfitCandidates.some(o => !usedOutfits.has(o.id))) {
+                    // outfit section
+                    const avail = outfitCandidates.filter(o => !usedOutfits.has(o.id));
+                    const o = avail[Math.floor(Math.random() * avail.length)];
+                    usedOutfits.add(o.id);
+                    s = { type: 'outfit', outfitId: o.id, username: o.data.username || 'someone', userId: o.data.userId || '', canvasW: o.data.canvasW || 340, canvasH: o.data.canvasH || 425, pieces: o.data.pieces || [] };
+                }
+                if (!s) s = await buildAutoSection(pool, excludeKeys);
                 if (s) sections.push(s);
             }
             return sections;
         }
+
+        // page-level re-roll: regenerate everything fresh
+        window.rerollToday = async function(btn) {
+            if (btn) { btn.disabled = true; btn.textContent = 'digging... ✿'; }
+            try {
+                const sections = await generateTodaySections();
+                if (sections.length > 0) {
+                    await setDoc(doc(db, 'homepageAuto', 'current'), { v: TODAY_CACHE_VERSION, generatedAt: Date.now(), sections: sections });
+                }
+            } catch (e) { console.error('reroll failed:', e); }
+            loadTodayPage(false);
+        };
 
         async function getTodayAutoSections() {
             try {
@@ -4912,89 +4994,110 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             sec.dataset.autoIndex = sectionIndex;
             sec.style.cssText = 'grid-column:1 / -1; padding:4px 0 14px; border-bottom:1px dashed #c9b8ac; margin-bottom:10px;';
 
-            const titleRow = document.createElement('div');
-            titleRow.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:0 2px; margin-bottom:8px;';
-
             const titleEl = document.createElement('div');
-            titleEl.style.cssText = 'font-family:Courier New,monospace; font-size:12px; color:#0600ff; font-weight:bold;';
-            titleEl.textContent = section.tags && section.tags.length > 0
-                ? '━ ' + section.tags.map(t => '#' + t).join(' + ') + ' ━'
-                : '━ random rabbit hole ━';
-            titleRow.appendChild(titleEl);
+            titleEl.style.cssText = 'font-family:Courier New,monospace; font-size:12px; color:#0600ff; font-weight:bold; padding:0 2px; margin-bottom:8px;';
+            if (section.type === 'collection') {
+                titleEl.textContent = '━ / ' + section.name + ' ━';
+            } else if (section.type === 'outfit') {
+                titleEl.textContent = '━ an outfit by ' + section.username + '.finds ━';
+            } else {
+                titleEl.textContent = section.tags && section.tags.length > 0
+                    ? '━ ' + section.tags.map(t => '#' + t).join(' + ') + ' ━'
+                    : '━ random rabbit hole ━';
+            }
+            sec.appendChild(titleEl);
 
-            const dice = document.createElement('button');
-            dice.textContent = '🎲';
-            dice.title = 'new rabbit hole';
-            dice.style.cssText = 'background:none; border:1px solid #0600ff; padding:2px 8px; font-size:13px; cursor:pointer; line-height:1.4;';
-            dice.onclick = async () => {
-                dice.disabled = true;
-                dice.textContent = '…';
-                try {
-                    const pool = await fetchTodayPool();
-                    const fresh = await buildAutoSection(pool, new Set());
-                    if (fresh) {
-                        const replacement = renderAutoSection(fresh, sectionIndex);
-                        sec.replaceWith(replacement);
-                        try {
-                            const cacheDoc = await getDoc(doc(db, 'homepageAuto', 'current'));
-                            if (cacheDoc.exists()) {
-                                const c = cacheDoc.data();
-                                const sections = Array.isArray(c.sections) ? c.sections : [];
-                                sections[sectionIndex] = fresh;
-                                await setDoc(doc(db, 'homepageAuto', 'current'), { v: TODAY_CACHE_VERSION, generatedAt: c.generatedAt || Date.now(), sections: sections });
-                            }
-                        } catch (e) {}
-                    } else {
-                        dice.disabled = false;
-                        dice.textContent = '🎲';
-                    }
-                } catch (e) {
-                    dice.disabled = false;
-                    dice.textContent = '🎲';
+            if (section.type === 'outfit') {
+                // saved outfit as a live mini collage
+                const ratio = (section.canvasW && section.canvasH) ? (section.canvasW / section.canvasH) : 0.8;
+                const ocanvas = document.createElement('div');
+                const maxW = ratio >= 1 ? '100%' : '260px';
+                ocanvas.style.cssText = 'position:relative; overflow:hidden; background:#fff; border:2px solid #0600ff; box-shadow:4px 4px 0 #0600ff; width:' + maxW + '; max-width:100%; aspect-ratio:' + ratio + '; margin:0 auto;';
+                (section.pieces || []).forEach(p => {
+                    const tile = document.createElement('div');
+                    tile.style.cssText = 'position:absolute; left:' + p.l + '%; top:' + p.t + '%; width:' + p.w + '%; height:' + p.h + '%; z-index:' + (p.z || 1) + '; cursor:pointer;';
+                    const img = document.createElement('img');
+                    img.src = p.imageUrl;
+                    img.alt = '';
+                    img.draggable = false;
+                    img.style.cssText = 'width:100%; height:100%; object-fit:contain; display:block; pointer-events:none;';
+                    tile.appendChild(img);
+                    tile.onclick = () => openImageDetail(p.imageId, p.imageUrl, p.link || '', p.tags || []);
+                    ocanvas.appendChild(tile);
+                });
+                sec.appendChild(ocanvas);
+            } else if (section.type === 'slider') {
+                // eBay slider row: girlchan seed leads, lookalikes scroll sideways
+                const rowEl = document.createElement('div');
+                rowEl.style.cssText = 'display:flex; gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px;';
+                sec.appendChild(rowEl);
+
+                const seedGc = (section.gc || [])[0];
+                if (seedGc) {
+                    const seedImg = document.createElement('img');
+                    seedImg.src = seedGc.imageUrl;
+                    seedImg.alt = '';
+                    seedImg.draggable = false;
+                    seedImg.style.cssText = 'flex:0 0 100px; width:100px; height:132px; object-fit:cover; display:block; cursor:pointer; background:#ddd; border-bottom:3px solid #0600ff;';
+                    seedImg.onclick = () => openImageDetail(seedGc.id, seedGc.imageUrl, seedGc.link || '', seedGc.tags || []);
+                    rowEl.appendChild(seedImg);
                 }
-            };
-            titleRow.appendChild(dice);
-            sec.appendChild(titleRow);
-
-            // everything-style 3-col grid, zero gaps, girlchan items with eBay woven in
-            const gridEl = document.createElement('div');
-            gridEl.style.cssText = 'display:grid; grid-template-columns:repeat(3,1fr); gap:0;';
-            sec.appendChild(gridEl);
-
-            // weave: eBay finds slot in at positions 2, 5, 8 among the girlchan items
-            const tiles = [];
-            (section.gc || []).forEach(g => tiles.push({ type: 'gc', item: g }));
-            const ebayPositions = [2, 5, 8];
-            (section.ebay || []).forEach((e, i) => {
-                const posn = ebayPositions[i] !== undefined ? ebayPositions[i] : tiles.length;
-                tiles.splice(Math.min(posn, tiles.length), 0, { type: 'ebay', item: e });
-            });
-
-            tiles.forEach(({ type, item }) => {
-                const img = document.createElement('img');
-                img.src = type === 'gc' ? item.imageUrl : item.img;
-                img.alt = '';
-                img.draggable = false;
-                if (type === 'gc') {
-                    img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
-                    img.onclick = () => openImageDetail(item.id, item.imageUrl, item.link || '', item.tags || []);
-                } else {
-                    img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; cursor:pointer; background:#ddd; border-bottom:3px solid #0600ff;';
+                (section.ebay || []).forEach(item => {
+                    const img = document.createElement('img');
+                    img.src = item.img;
+                    img.alt = '';
+                    img.draggable = false;
+                    img.style.cssText = 'flex:0 0 100px; width:100px; height:132px; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
                     img.onclick = () => openEbayDetail(item);
-                }
-                gridEl.appendChild(img);
-            });
+                    rowEl.appendChild(img);
+                });
+            } else {
+                // everything-style 3-col grid, zero gaps, girlchan items with eBay woven in
+                const gridEl = document.createElement('div');
+                gridEl.style.cssText = 'display:grid; grid-template-columns:repeat(3,1fr); gap:0;';
+                sec.appendChild(gridEl);
 
-            // rabbit hole → internal tag feed with these filters loaded
+                const tiles = [];
+                (section.gc || []).forEach(g => tiles.push({ type: 'gc', item: g }));
+                const ebayPositions = [2, 5, 8];
+                (section.ebay || []).forEach((e, i) => {
+                    const posn = ebayPositions[i] !== undefined ? ebayPositions[i] : tiles.length;
+                    tiles.splice(Math.min(posn, tiles.length), 0, { type: 'ebay', item: e });
+                });
+
+                tiles.forEach(({ type, item }) => {
+                    const img = document.createElement('img');
+                    img.src = type === 'gc' ? item.imageUrl : item.img;
+                    img.alt = '';
+                    img.draggable = false;
+                    if (type === 'gc') {
+                        img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
+                        img.onclick = () => openImageDetail(item.id, item.imageUrl, item.link || '', item.tags || []);
+                    } else {
+                        img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; cursor:pointer; background:#ddd; border-bottom:3px solid #0600ff;';
+                        img.onclick = () => openEbayDetail(item);
+                    }
+                    gridEl.appendChild(img);
+                });
+            }
+
+            // rabbit hole button, destination by section type
             const rh = document.createElement('a');
-            rh.textContent = 'go down this rabbit hole →';
             rh.style.cssText = 'display:inline-block; margin:8px 2px 0; background:#fff; border:1px solid #0600ff; color:#0600ff; font-family:Courier New,monospace; font-size:11px; padding:4px 10px; text-decoration:none; cursor:pointer;';
-            if (section.tags && section.tags.length > 0) {
+            if (section.type === 'collection') {
+                rh.textContent = 'go down this rabbit hole →';
+                rh.onclick = () => loadCollection(section.colId, section.name);
+            } else if (section.type === 'outfit') {
+                rh.textContent = 'see more outfits →';
+                rh.onclick = () => loadOutfitsBoard();
+            } else if (section.tags && section.tags.length > 0) {
+                rh.textContent = 'go down this rabbit hole →';
                 rh.onclick = () => {
                     activeTagFilters = [...section.tags];
                     loadTagFeed(section.tags[0], true, false);
                 };
             } else if (section.seedImageUrl) {
+                rh.textContent = 'go down this rabbit hole →';
                 rh.href = '/explore.html?img=' + encodeURIComponent(section.seedImageUrl);
             }
             sec.appendChild(rh);
@@ -5128,6 +5231,17 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 curatedEls.forEach(el => grid.appendChild(el));
                 autoSections.forEach((s, i) => grid.appendChild(renderAutoSection(s, i)));
 
+                if (autoSections.length > 0) {
+                    const rrWrap = document.createElement('div');
+                    rrWrap.style.cssText = 'grid-column:1 / -1; text-align:center; padding:4px 0 6px;';
+                    const rrBtn = document.createElement('button');
+                    rrBtn.textContent = '↻ re-roll the page';
+                    rrBtn.style.cssText = 'background:#F9FF00; border:2px solid #000; color:#000; font-family:Courier New,monospace; font-size:11px; font-weight:bold; padding:8px 18px; cursor:pointer; box-shadow:2px 2px 0 #000;';
+                    rrBtn.onclick = () => window.rerollToday(rrBtn);
+                    rrWrap.appendChild(rrBtn);
+                    grid.appendChild(rrWrap);
+                }
+
                 if (curatedEls.length === 0 && autoSections.length === 0) {
                     const empty = document.createElement('div');
                     empty.style.cssText = 'grid-column:1 / -1; padding:20px; text-align:center; color:#666; font-family:Courier New,monospace; font-size:12px;';
@@ -5247,7 +5361,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 const page = JSON.parse(savedPage);
 
                 // Logged-out users can't restore personal pages — fall back to today
-                if (!auth.currentUser && (page.type === 'profile' || page.type === 'likes' || page.type === 'accountSettings')) {
+                if (!auth.currentUser && (page.type === 'profile' || page.type === 'likes' || page.type === 'accountSettings' || page.type === 'myOutfits')) {
                     await loadTodayPage();
                     return;
                 }
@@ -5256,6 +5370,8 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     await loadTodayPage();
                 } else if (page.type === 'outfits') {
                     await loadOutfitsBoard();
+                } else if (page.type === 'myOutfits') {
+                    await loadOutfitsBoard(true, true);
                 } else if (page.type === 'profile') {
                     await loadMyProfile();
                 } else if (page.type === 'collection' && page.id && page.name) {
@@ -6479,16 +6595,13 @@ function loadPage(page) {
         <h2 style="font-size:18px; font-family:Courier New,monospace; margin-bottom:4px;">join the inner circle</h2>
         <p style="font-size:10px; color:#666; font-family:Courier New,monospace; margin-bottom:20px;">✦ founding member ✦</p>
         <div style="text-align:left; width:100%; font-family:Courier New,monospace; font-size:11px; color:#333; margin-bottom:20px;">
-           <p style="margin-bottom:8px;">♡ choose your profile photo (toy/figurine avatar)</p>
-        <p style="margin-bottom:8px;">♡ create personal collections</p>
+        <p style="margin-bottom:8px;">♡ claim toy photos for your profile — collect up to 3</p>
+        <p style="margin-bottom:8px;">♡ save your generated outfits to /outfits</p>
         <p style="margin-bottom:8px;">♡ like & save your favorite finds</p>
-            <p style="margin-bottom:8px;">♡ earn commissions from ebay</p>
         <p style="margin-bottom:8px;">♡ founding member badge</p>
-        <p style="margin-bottom:8px;">♡ outfit generator (coming soon)</p>
         <p style="margin-bottom:8px;">♡ custom profile colors (coming soon)</p>
-        <p style="margin-bottom:8px;">♡ outfit showcase page (coming soon)</p>
         </div>
-        <p style="font-size:10px; color:#666; font-family:Courier New,monospace; margin-bottom:20px; line-height:1.5;">become a founding member of the future of online thrifting. a place where your finds, curations, and taste actually earn you money.</p>
+        <p style="font-size:10px; color:#666; font-family:Courier New,monospace; margin-bottom:20px; line-height:1.5;">this whole site is handmade ♡ your $5 goes straight into making it weirder and better. founding members are the reason it exists.</p>
         <button id="premiumCheckoutBtn" onclick="startPremiumCheckout()" style="display:block; width:100%; padding:14px; font-family:Courier New,monospace; font-size:13px; font-weight:bold; border:2px solid #000; background:#0600ff; color:#fff; cursor:pointer; box-shadow:3px 3px 0 #000; margin-bottom:8px;">subscribe — $5/mo</button>
     </div>
 </div>
