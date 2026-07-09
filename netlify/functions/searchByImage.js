@@ -23,6 +23,7 @@ exports.handler = async (event) => {
 
     let imageUrl;
     let query;
+    let seller;
     let limit = 11;
     let offset = 0;
 
@@ -30,17 +31,24 @@ exports.handler = async (event) => {
         const body = JSON.parse(event.body);
         imageUrl = body.imageUrl;
         query = body.query;
+        seller = body.seller;
         if (body.limit) limit = body.limit;
         if (body.offset) offset = body.offset;
     } catch (e) {
         return { statusCode: 400, body: JSON.stringify({ error: 'Invalid request body' }) };
     }
 
-    if (!imageUrl && !query) {
-        return { statusCode: 400, body: JSON.stringify({ error: 'No imageUrl or query provided' }) };
+    if (!imageUrl && !query && !seller) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'No imageUrl, query, or seller provided' }) };
     }
 
-    const categoryFilter = encodeURIComponent('categoryIds:!{171146|2984|182025|182034|11462|11452|147192|260019}');
+    // filters: blocked categories always; seller filter when featuring a seller
+    const filterParts = ['categoryIds:!{171146|2984|182025|182034|11462|11452|147192|260019}'];
+    if (seller) {
+        filterParts.push('sellers:{' + seller + '}');
+    }
+    const filterParam = encodeURIComponent(filterParts.join(','));
+
     const ebayHeaders = {
         'Content-Type': 'application/json',
         'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
@@ -53,13 +61,19 @@ exports.handler = async (event) => {
 
         let ebayRes;
 
-        if (query) {
-            // KEYWORD SEARCH MODE
-            const url = 'https://api.ebay.com/buy/browse/v1/item_summary/search?q=' +
-                encodeURIComponent(query) +
-                '&limit=' + limit +
+        if (query || seller) {
+            // KEYWORD / SELLER SEARCH MODE
+            // Browse API needs q or category_ids: with no keyword, browse the
+            // seller's whole Clothing, Shoes & Accessories inventory (11450)
+            let url = 'https://api.ebay.com/buy/browse/v1/item_summary/search?' +
+                'limit=' + limit +
                 '&offset=' + offset +
-                '&filter=' + categoryFilter;
+                '&filter=' + filterParam;
+            if (query) {
+                url += '&q=' + encodeURIComponent(query);
+            } else {
+                url += '&category_ids=11450';
+            }
 
             ebayRes = await fetch(url, {
                 method: 'GET',
@@ -80,7 +94,7 @@ exports.handler = async (event) => {
             const base64Image = Buffer.from(imageBuffer).toString('base64');
 
             const url = 'https://api.ebay.com/buy/browse/v1/item_summary/search_by_image?limit=' +
-                limit + '&offset=' + offset + '&filter=' + categoryFilter;
+                limit + '&offset=' + offset + '&filter=' + filterParam;
 
             ebayRes = await fetch(url, {
                 method: 'POST',
