@@ -3,9 +3,15 @@
 // Restricted to known image hosts so it can't be abused as an open proxy.
 
 const ALLOWED_HOSTS = [
-  'i.ebayimg.com',
-  'thumbs.ebaystatic.com',
-  'firebasestorage.googleapis.com'
+  'ebayimg.com',
+  'ebaystatic.com',
+  'firebasestorage.googleapis.com',
+  'media-photos.depop.com',
+  'depop.com',
+  'cloudfront.net',          // poshmark image CDN
+  'media-assets.grailed.com',
+  'vinted.net',
+  'etsystatic.com'
 ];
 
 exports.handler = async (event) => {
