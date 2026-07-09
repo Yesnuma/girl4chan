@@ -3300,8 +3300,14 @@ async function deleteCollection(collectionId, collectionName) {
                 }
 
                 const nameEl = document.createElement('div');
-                nameEl.style.cssText = 'font-size:16px; font-weight:bold; font-family:Courier New,monospace; margin-bottom:2px;';
+                nameEl.style.cssText = 'font-size:16px; font-weight:bold; font-family:Courier New,monospace; margin-bottom:2px; display:flex; align-items:center; gap:5px;';
                 nameEl.textContent = username + '.finds';
+                if (profData.premium === true) {
+                    const badge = document.createElement('span');
+                    badge.innerHTML = '<svg width="24" height="22" viewBox="0 0 28 26" fill="none" style="vertical-align:middle;"><path d="M14 23 C7 17.5 2 13 2 8.2 C2 4.7 4.8 2 8.2 2 C10.6 2 12.8 3.3 14 5.4 C15.2 3.3 17.4 2 19.8 2 C23.2 2 26 4.7 26 8.2 C26 13 21 17.5 14 23 Z" fill="none" stroke="#ff007a" stroke-width="1.9" stroke-linejoin="round"></path><text x="14" y="13.4" text-anchor="middle" font-family="Courier New" font-size="7.5" font-weight="bold" fill="#ff007a">og</text></svg>';
+                    badge.title = 'founding member';
+                    nameEl.appendChild(badge);
+                }
                 header.appendChild(nameEl);
 
                 if (profData.bio) {
@@ -3324,6 +3330,22 @@ async function deleteCollection(collectionId, collectionName) {
                 shareBtn.onclick = () => generateStoryCard(userId, username, profData.profilePhoto || '');
                 btnRow.appendChild(shareBtn);
                 header.appendChild(btnRow);
+
+                // admin: comp premium for the inner circle
+                if (isAdmin() && auth.currentUser && auth.currentUser.uid !== userId) {
+                    const compBtn = document.createElement('button');
+                    const isPrem = profData.premium === true;
+                    compBtn.textContent = isPrem ? '⚡ revoke comp' : '⚡ comp premium';
+                    compBtn.style.cssText = 'background:none; border:1px dashed #999; color:#999; font-family:Courier New,monospace; font-size:10px; padding:3px 10px; cursor:pointer; margin-top:8px;';
+                    compBtn.onclick = async () => {
+                        if (!confirm(isPrem ? 'revoke ' + username + "'s premium?" : 'comp ' + username + ' premium?')) return;
+                        try {
+                            await setDoc(doc(db, 'users', userId), { premium: !isPrem }, { merge: true });
+                            loadUserProfile(userId, username, false);
+                        } catch (e) { alert('failed: ' + e.message); }
+                    };
+                    header.appendChild(compBtn);
+                }
 
                 grid.parentNode.insertBefore(header, grid);
             } catch (e) { console.error('profile header failed:', e); }
@@ -3666,11 +3688,24 @@ window.loadMyProfile = async function(addToHistory = true) {
                 photoEl.onclick = () => openProfilePhotoChooser();
                 profileHeader.appendChild(photoEl);
                 
-                // Username
+                // Username (+ og badge for founding members)
                 const nameEl = document.createElement('div');
-                nameEl.style.cssText = 'font-size:16px; font-weight:bold; font-family:Courier New,monospace; margin-bottom:2px;';
+                nameEl.style.cssText = 'font-size:16px; font-weight:bold; font-family:Courier New,monospace; margin-bottom:2px; display:flex; align-items:center; gap:5px;';
                 nameEl.textContent = (userData.username || 'user') + '.finds';
+                if (userData.premium === true) {
+                    const badge = document.createElement('span');
+                    badge.innerHTML = '<svg width="24" height="22" viewBox="0 0 28 26" fill="none" style="vertical-align:middle;"><path d="M14 23 C7 17.5 2 13 2 8.2 C2 4.7 4.8 2 8.2 2 C10.6 2 12.8 3.3 14 5.4 C15.2 3.3 17.4 2 19.8 2 C23.2 2 26 4.7 26 8.2 C26 13 21 17.5 14 23 Z" fill="none" stroke="#ff007a" stroke-width="1.9" stroke-linejoin="round"></path><text x="14" y="13.4" text-anchor="middle" font-family="Courier New" font-size="7.5" font-weight="bold" fill="#ff007a">og</text></svg>';
+                    badge.title = 'founding member';
+                    nameEl.appendChild(badge);
+                }
                 profileHeader.appendChild(nameEl);
+
+                // shuffle my closet
+                const myShuffle = document.createElement('a');
+                myShuffle.href = '/outfit.html';
+                myShuffle.textContent = '✦ shuffle my closet';
+                myShuffle.style.cssText = 'display:inline-block; background:#fff; border:1px solid #0600ff; color:#0600ff; font-family:Courier New,monospace; font-size:11px; padding:4px 12px; text-decoration:none; cursor:pointer; margin-bottom:6px;';
+                profileHeader.appendChild(myShuffle);
 
                 // share to story (camera glyph)
                 const myShareBtn = document.createElement('button');
@@ -4714,8 +4749,8 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
         // eBay items open an explore-style modal (shop / explore / add).
         // Cached in Firestore (homepageAuto/current); ↻ re-rolls the whole page.
         const TODAY_CACHE_MS = 6 * 60 * 60 * 1000; // 6 hours
-        const TODAY_AUTO_SECTIONS = 3;
-        const TODAY_CACHE_VERSION = 4;
+        const TODAY_CACHE_VERSION = 5;
+        function todayBatchSize() { return 6 + Math.floor(Math.random() * 3); } // 6-8
         const TODAY_GC_PER_SECTION = 9;
         const TODAY_EBAY_PER_SECTION = 3;
         const TODAY_SLIDER_EBAY_COUNT = 10;
@@ -4823,7 +4858,10 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             return { type: sectionType, tags: finalCombo.tags, seedImageUrl: seedImageUrl, gc: gc, ebay: ebay };
         }
 
-        async function generateTodaySections() {
+        // persistent state so infinite scrolling never repeats combos in one visit
+        const todayState = { excludeKeys: new Set(), usedCols: new Set(), usedOutfits: new Set(), loadingMore: false, sectionCount: 0 };
+
+        async function generateTodaySections(count) {
             const pool = await fetchTodayPool();
             if (pool.length === 0) return [];
 
@@ -4842,43 +4880,73 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 oSnap.forEach(d => outfitCandidates.push({ id: d.id, data: d.data() }));
             } catch (e) {}
 
-            const excludeKeys = new Set();
-            const usedCols = new Set();
-            const usedOutfits = new Set();
             const sections = [];
+            // at most ONE collection and ONE outfit per batch, each only sometimes
+            const colSlot = Math.random() < 0.35 ? Math.floor(Math.random() * count) : -1;
+            const outfitSlot = Math.random() < 0.35 ? Math.floor(Math.random() * count) : -1;
 
-            for (let i = 0; i < TODAY_AUTO_SECTIONS; i++) {
-                const roll = Math.random();
+            for (let i = 0; i < count; i++) {
                 let s = null;
-                if (roll < 0.2 && colCandidates.some(c => !usedCols.has(c.id))) {
-                    // collection section
-                    const avail = colCandidates.filter(c => !usedCols.has(c.id));
+                if (i === colSlot && colCandidates.some(c => !todayState.usedCols.has(c.id))) {
+                    const avail = colCandidates.filter(c => !todayState.usedCols.has(c.id));
                     const col = avail[Math.floor(Math.random() * avail.length)];
-                    usedCols.add(col.id);
+                    todayState.usedCols.add(col.id);
                     const items = [];
                     for (const imageId of col.images.slice(0, 9)) {
                         const found = pool.find(p => p.id === imageId);
                         if (found) items.push({ id: found.id, imageUrl: found.data.imageUrl, link: found.data.link || '', tags: found.data.tags || [] });
                     }
                     if (items.length >= 3) s = { type: 'collection', colId: col.id, name: col.name, gc: items };
-                } else if (roll < 0.4 && outfitCandidates.some(o => !usedOutfits.has(o.id))) {
-                    // outfit section
-                    const avail = outfitCandidates.filter(o => !usedOutfits.has(o.id));
+                } else if (i === outfitSlot && i !== colSlot && outfitCandidates.some(o => !todayState.usedOutfits.has(o.id))) {
+                    const avail = outfitCandidates.filter(o => !todayState.usedOutfits.has(o.id));
                     const o = avail[Math.floor(Math.random() * avail.length)];
-                    usedOutfits.add(o.id);
+                    todayState.usedOutfits.add(o.id);
                     s = { type: 'outfit', outfitId: o.id, username: o.data.username || 'someone', userId: o.data.userId || '', canvasW: o.data.canvasW || 340, canvasH: o.data.canvasH || 425, pieces: o.data.pieces || [] };
                 }
-                if (!s) s = await buildAutoSection(pool, excludeKeys);
+                if (!s) s = await buildAutoSection(pool, todayState.excludeKeys);
                 if (s) sections.push(s);
             }
             return sections;
         }
 
-        // page-level re-roll: regenerate everything fresh
+        // infinite scroll: nearing the bottom of /today deals another batch
+        async function loadMoreToday() {
+            if (todayState.loadingMore) return;
+            todayState.loadingMore = true;
+            const grid = document.getElementById('imageGrid');
+            const moreEl = document.createElement('div');
+            moreEl.style.cssText = 'grid-column:1 / -1; padding:14px; text-align:center; color:#666; font-family:Courier New,monospace; font-size:12px;';
+            moreEl.textContent = 'digging more rabbit holes... ✿';
+            grid.appendChild(moreEl);
+            try {
+                const more = await generateTodaySections(todayBatchSize());
+                moreEl.remove();
+                more.forEach((s) => {
+                    grid.appendChild(renderAutoSection(s, todayState.sectionCount));
+                    todayState.sectionCount++;
+                });
+            } catch (e) {
+                console.error('load more failed:', e);
+                moreEl.remove();
+            }
+            todayState.loadingMore = false;
+        }
+
+        window.addEventListener('scroll', () => {
+            if (currentContext.type !== 'today') return;
+            if (todayState.sectionCount === 0) return;
+            const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 900;
+            if (nearBottom) loadMoreToday();
+        });
+
+        // page-level re-roll: reset state, regenerate everything fresh
         window.rerollToday = async function(btn) {
             if (btn) { btn.disabled = true; btn.textContent = 'digging... ✿'; }
+            todayState.excludeKeys = new Set();
+            todayState.usedCols = new Set();
+            todayState.usedOutfits = new Set();
             try {
-                const sections = await generateTodaySections();
+                const sections = await generateTodaySections(todayBatchSize());
                 if (sections.length > 0) {
                     await setDoc(doc(db, 'homepageAuto', 'current'), { v: TODAY_CACHE_VERSION, generatedAt: Date.now(), sections: sections });
                 }
@@ -4897,7 +4965,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     }
                 }
             } catch (e) {}
-            const sections = await generateTodaySections();
+            const sections = await generateTodaySections(todayBatchSize());
             if (sections.length > 0) {
                 try {
                     await setDoc(doc(db, 'homepageAuto', 'current'), { v: TODAY_CACHE_VERSION, generatedAt: Date.now(), sections: sections });
@@ -5229,7 +5297,19 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
 
                 loadingEl.remove();
                 curatedEls.forEach(el => grid.appendChild(el));
-                autoSections.forEach((s, i) => grid.appendChild(renderAutoSection(s, i)));
+
+                // seed the no-repeat state from what's being shown
+                todayState.excludeKeys = new Set();
+                todayState.usedCols = new Set();
+                todayState.usedOutfits = new Set();
+                todayState.sectionCount = 0;
+                autoSections.forEach((s) => {
+                    if (s.tags) todayState.excludeKeys.add(s.tags.slice().sort().join('+'));
+                    if (s.type === 'collection' && s.colId) todayState.usedCols.add(s.colId);
+                    if (s.type === 'outfit' && s.outfitId) todayState.usedOutfits.add(s.outfitId);
+                    grid.appendChild(renderAutoSection(s, todayState.sectionCount));
+                    todayState.sectionCount++;
+                });
 
                 if (autoSections.length > 0) {
                     const rrWrap = document.createElement('div');
