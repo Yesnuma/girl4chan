@@ -18,10 +18,31 @@ function proxiedUrl(targetUrl) {
            '&premium=true&country_code=us';
 }
 
+// Domains that ALWAYS block datacenter IPs — skip the doomed direct attempt
+// and go straight to the proxy, saving several seconds per request.
+const PROXY_FIRST = ['grailed.com', 'grailed.app.link', 'depop.com', 'depop.app.link', 'etsy.com'];
+
 // Fetch directly; if blocked and a proxy key exists, retry through ScraperAPI.
 // Returns { status, html, finalUrl, viaProxy }. html is null on hard failure.
 async function smartFetch(targetUrl, timeout = 5000) {
     let status = 'ERR';
+
+    // proxy-first shortcut for known-blocked hosts
+    if (SCRAPER_API_KEY && PROXY_FIRST.some(d => targetUrl.includes(d))) {
+        console.log('Known-blocked host — going straight to ScraperAPI:', targetUrl);
+        try {
+            const pRes = await fetch(proxiedUrl(targetUrl), { signal: AbortSignal.timeout(9000) });
+            console.log('ScraperAPI status:', pRes.status);
+            if (pRes.ok) {
+                return { status: pRes.status, html: await pRes.text(), finalUrl: targetUrl, viaProxy: true };
+            }
+            return { status: pRes.status, html: null, finalUrl: targetUrl, viaProxy: true };
+        } catch (e) {
+            console.error('ScraperAPI fetch error:', e.message);
+            return { status: 'PROXY_ERR', html: null, finalUrl: targetUrl, viaProxy: true };
+        }
+    }
+
     try {
         const res = await fetch(targetUrl, {
             method: 'GET', redirect: 'follow',
