@@ -982,14 +982,9 @@ function mineTopWords(items) {
 }
 
 function renderChips(words) {
-  var row = document.getElementById('chipRow');
-  if (!words || words.length === 0) { row.innerHTML = ''; return; }
-  var html = '';
-  for (var i = 0; i < words.length; i++) {
-    var w = words[i].replace(/'/g, '&#39;');
-    html += '<button class="chip" onclick="toggleChipFilter(\'' + w + '\')">' + words[i] + '</button>';
-  }
-  row.innerHTML = html;
+  // suggested-word chips retired — title-word tapping covers this.
+  // (brand chips render separately into #brandChipRow)
+  document.getElementById('chipRow').innerHTML = '';
 }
 
 function renderFilterPills() {
