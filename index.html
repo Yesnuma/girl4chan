@@ -1574,8 +1574,9 @@
 </div>
 
     <!-- Login Modal -->
-    <div class="modal" id="loginModal">
-        <div class="modal-content">
+    <div class="modal" id="loginModal" onclick="if(event.target.id==='loginModal') closeLoginModal()">
+        <div class="modal-content" style="position:relative;">
+            <button onclick="closeLoginModal()" style="position:absolute; top:6px; right:12px; background:none; border:none; font-size:22px; cursor:pointer; color:#0600ff; font-family:'Courier New',monospace; line-height:1;">×</button>
             <h2 id="authTitle">girlchan</h2>
             <div class="modal-tagline">// your secret thrift sanctuary //</div>
             <div class="decorative-line"></div>
@@ -1744,6 +1745,7 @@ window.toggleVisitorView = function() {
                 // Check premium status
                 const userDoc = await getDoc(doc(db, 'users', user.uid));
                 window.isPremium = userDoc.exists() && userDoc.data().premium === true;
+                window.canTheme = userDoc.exists() && userDoc.data().canTheme === true;
 
                 document.getElementById('logoutBtn').style.display = 'block';
                 document.getElementById('accountLink').style.display = 'inline';
@@ -1753,6 +1755,7 @@ window.toggleVisitorView = function() {
             } else {
                 currentUser = null;
                 window.isPremium = false;
+                window.canTheme = false;
 
                 document.getElementById('logoutBtn').style.display = 'none';
                 document.getElementById('accountLink').style.display = 'none';
@@ -1760,6 +1763,7 @@ window.toggleVisitorView = function() {
             }
 
             // Always load public content regardless of auth state
+            applySiteTheme();
             await loadCollections();
 
             // /u/username inbound links land on that profile
@@ -2759,6 +2763,14 @@ function showAllTagsModal(categorizedTags) {
         retagLink.onclick = (e) => { e.preventDefault(); window.retagUntagged(); };
         collectionsList.appendChild(retagLink);
     }
+    if (isAdmin() || window.canTheme === true) {
+        const decoLink = document.createElement('a');
+        decoLink.href = '#';
+        decoLink.textContent = '🎨 decorate girlchan';
+        decoLink.style.cssText = 'color: #ff007a; font-style: italic; font-size: 12px;';
+        decoLink.onclick = (e) => { e.preventDefault(); window.openDecorate(); };
+        collectionsList.appendChild(decoLink);
+    }
     
     collectionsSnapshot.forEach((doc) => {
         const data = doc.data();
@@ -2964,6 +2976,9 @@ async function deleteCollection(collectionId, collectionName) {
         // Open login modal directly (used by header login button)
         window.openLoginModal = function() {
             document.getElementById('loginModal').style.display = 'flex';
+        };
+        window.closeLoginModal = function() {
+            document.getElementById('loginModal').style.display = 'none';
         };
 
         // Logout function
@@ -3340,6 +3355,46 @@ async function deleteCollection(collectionId, collectionName) {
                 btnRow.appendChild(shareBtn);
                 header.appendChild(btnRow);
 
+                // subscribe button (curator shop on) — knows if you're already in
+                if (profData.subEnabled === true && profData.premium === true && (!auth.currentUser || auth.currentUser.uid !== userId)) {
+                    const price = [2,3,5,8,10].includes(profData.subPrice) ? profData.subPrice : 3;
+                    const isOnce = profData.subModel === 'once';
+                    const subBtn = document.createElement('button');
+                    subBtn.style.cssText = 'display:block; margin:8px auto 0; background:#0600ff; border:2px solid #0600ff; color:#fff; font-family:Courier New,monospace; font-size:11px; font-weight:bold; padding:6px 16px; cursor:pointer;';
+                    subBtn.textContent = isOnce ? ('unlock ' + username + ' ♡ $' + price) : ('subscribe ♡ $' + price + '/mo');
+                    header.appendChild(subBtn);
+
+                    if (auth.currentUser) {
+                        getDoc(doc(db, 'curatorSubs', auth.currentUser.uid + '_' + userId)).then(s => {
+                            if (s.exists() && s.data().active === true) {
+                                subBtn.textContent = 'subscribed ♡';
+                                subBtn.disabled = true;
+                                subBtn.style.opacity = '0.6';
+                                subBtn.style.cursor = 'default';
+                            }
+                        }).catch(() => {});
+                    }
+
+                    subBtn.onclick = async () => {
+                        if (!requireAuth()) return;
+                        subBtn.textContent = 'one sec...';
+                        try {
+                            const res = await fetch('/.netlify/functions/create-checkout', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    userId: auth.currentUser.uid,
+                                    email: auth.currentUser.email,
+                                    curatorId: userId
+                                })
+                            });
+                            const data = await res.json();
+                            if (data.url) window.location.href = data.url;
+                            else { alert('checkout failed'); subBtn.textContent = isOnce ? ('unlock ' + username + ' ♡ $' + price) : ('subscribe ♡ $' + price + '/mo'); }
+                        } catch (e) { alert('checkout failed'); }
+                    };
+                }
+
                 // tip jar button (if they set one)
                 const profTipUrl = tipUrl(profData.tipPlatform, profData.tipHandle);
                 if (profTipUrl) {
@@ -3350,6 +3405,42 @@ async function deleteCollection(collectionId, collectionName) {
                     tipBtn.textContent = 'tip me on ' + (profData.tipPlatform === 'kofi' ? 'ko-fi' : profData.tipPlatform) + ' ♡';
                     tipBtn.style.cssText = 'display:inline-block; background:#fff; border:1px solid #ff007a; color:#ff007a; font-family:Courier New,monospace; font-size:11px; padding:4px 12px; text-decoration:none; cursor:pointer; margin-top:8px;';
                     header.appendChild(tipBtn);
+                }
+
+                // admin: comp a subscription (mark this viewer choice manually)
+                if (isAdmin() && auth.currentUser && auth.currentUser.uid !== userId) {
+                    const compSubBtn = document.createElement('button');
+                    compSubBtn.textContent = '⚡ comp me as their subscriber';
+                    compSubBtn.title = 'marks YOUR account as subscribed to this curator (for testing/comps use their fans via console)';
+                    compSubBtn.style.cssText = 'display:block; margin:8px auto 0; background:none; border:1px dashed #999; color:#999; font-family:Courier New,monospace; font-size:10px; padding:3px 10px; cursor:pointer;';
+                    compSubBtn.onclick = async () => {
+                        try {
+                            const key = auth.currentUser.uid + '_' + userId;
+                            const cur = await getDoc(doc(db, 'curatorSubs', key));
+                            const nowActive = !(cur.exists() && cur.data().active === true);
+                            await setDoc(doc(db, 'curatorSubs', key), {
+                                buyerId: auth.currentUser.uid, curatorId: userId,
+                                model: 'comp', active: nowActive, since: new Date().toISOString()
+                            }, { merge: true });
+                            loadUserProfile(userId, username, false);
+                        } catch (e) { alert('failed: ' + e.message); }
+                    };
+                    header.appendChild(compSubBtn);
+                }
+
+                // admin: decorating permission
+                if (isAdmin()) {
+                    const canT = profData.canTheme === true;
+                    const themeBtn = document.createElement('button');
+                    themeBtn.textContent = canT ? '🎨 revoke decorating' : '🎨 allow decorating';
+                    themeBtn.style.cssText = 'display:block; margin:8px auto 0; background:none; border:1px dashed #999; color:#999; font-family:Courier New,monospace; font-size:10px; padding:3px 10px; cursor:pointer;';
+                    themeBtn.onclick = async () => {
+                        try {
+                            await setDoc(doc(db, 'users', userId), { canTheme: !canT }, { merge: true });
+                            loadUserProfile(userId, username, false);
+                        } catch (e) { alert('failed: ' + e.message); }
+                    };
+                    header.appendChild(themeBtn);
                 }
 
                 // admin: feature this curator
@@ -3391,6 +3482,25 @@ async function deleteCollection(collectionId, collectionName) {
                 }
 
                 grid.parentNode.insertBefore(header, grid);
+                const logVis = profData.brandLogVisibility || (profData.brandLogPublic === true ? 'public' : 'private');
+                if (logVis === 'public') {
+                    renderUserBrandLogSection(header, userId, false, logVis);
+                } else if (logVis === 'subs' && auth.currentUser) {
+                    if (isAdmin() || auth.currentUser.uid === userId) {
+                        renderUserBrandLogSection(header, userId, false, logVis);
+                    } else {
+                        getDoc(doc(db, 'curatorSubs', auth.currentUser.uid + '_' + userId)).then(s => {
+                            if (s.exists() && s.data().active === true) {
+                                renderUserBrandLogSection(header, userId, false, logVis);
+                            } else {
+                                const teaser = document.createElement('div');
+                                teaser.style.cssText = 'width:100%; margin-top:12px; padding-top:10px; border-top:1px solid #d4c5b0; font-family:Courier New,monospace; font-size:10px; color:#999; text-align:center;';
+                                teaser.textContent = '♡ their brand log is for subscribers';
+                                header.appendChild(teaser);
+                            }
+                        }).catch(() => {});
+                    }
+                }
             } catch (e) { console.error('profile header failed:', e); }
             
             try {
@@ -3575,6 +3685,40 @@ async function deleteCollection(collectionId, collectionName) {
             `;
             grid.appendChild(tipBox);
 
+            // Subscription shop (premium curators only)
+            if (window.isPremium === true || isAdmin()) {
+                const shopBox = document.createElement('div');
+                shopBox.style.cssText = 'background: #fff; padding: 20px; border: 2px solid #0600ff; margin-bottom: 20px;';
+                shopBox.innerHTML = `
+                    <h3 style="font-size: 16px; margin-bottom: 12px; color: #0600ff;">my subscription shop ✦</h3>
+                    <p style="font-size: 12px; color: #666; margin-bottom: 12px; line-height: 1.6;">
+                        let people subscribe to you — they get access to your subscriber-only stuff (like your brand log). money goes through girlchan's stripe and gets paid out to you.
+                    </p>
+                    <label style="font-size:11px; color:#333; display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                        <input type="checkbox" id="subEnabledCheck" style="width:18px; height:18px;"> subscriptions on
+                    </label>
+                    <div style="display:flex; gap:8px; margin-bottom:12px;">
+                        <select id="subModelSelect" style="flex:1; padding: 12px; border: 2px solid #0600ff; font-family: 'Courier New', Courier, monospace; font-size: 12px; background:#fff;">
+                            <option value="monthly">monthly sub</option>
+                            <option value="once">one-time unlock</option>
+                        </select>
+                        <select id="subPriceSelect" style="width:80px; padding: 12px; border: 2px solid #0600ff; font-family: 'Courier New', Courier, monospace; font-size: 12px; background:#fff;">
+                            <option value="2">$2</option>
+                            <option value="3" selected>$3</option>
+                            <option value="5">$5</option>
+                            <option value="8">$8</option>
+                            <option value="10">$10</option>
+                        </select>
+                    </div>
+                    <button onclick="saveSubShop()"
+                        style="width: 100%; padding: 12px; background: #0600ff; color: white; border: 2px solid #0600ff; font-family: 'Courier New', Courier, monospace; cursor: pointer; font-size: 13px;">
+                        save shop
+                    </button>
+                    <div id="subShopStatus" style="font-size: 12px; text-align: center; margin-top: 10px;"></div>
+                `;
+                grid.appendChild(shopBox);
+            }
+
             grid.appendChild(settingsContainer);
             
             // Load existing Campaign ID if they have one
@@ -3593,8 +3737,31 @@ async function deleteCollection(collectionId, collectionName) {
                 const tipInp = document.getElementById('tipHandleInput');
                 if (tipSel) tipSel.value = tipP;
                 if (tipInp) tipInp.value = tipH;
+                const subEn = document.getElementById('subEnabledCheck');
+                const subMo = document.getElementById('subModelSelect');
+                const subPr = document.getElementById('subPriceSelect');
+                if (subEn) subEn.checked = userDoc.data()?.subEnabled === true;
+                if (subMo) subMo.value = userDoc.data()?.subModel || 'monthly';
+                if (subPr) subPr.value = String(userDoc.data()?.subPrice || 3);
             } catch (error) {
                 console.error('Error loading campaign ID:', error);
+            }
+        };
+
+        window.saveSubShop = async function() {
+            if (!requireAuth()) return;
+            const status = document.getElementById('subShopStatus');
+            try {
+                await setDoc(doc(db, 'users', auth.currentUser.uid), {
+                    subEnabled: document.getElementById('subEnabledCheck').checked,
+                    subModel: document.getElementById('subModelSelect').value,
+                    subPrice: parseInt(document.getElementById('subPriceSelect').value, 10)
+                }, { merge: true });
+                status.textContent = 'saved ✓';
+                status.style.color = '#00a86b';
+            } catch (e) {
+                status.textContent = 'failed: ' + e.message;
+                status.style.color = '#c00';
             }
         };
 
@@ -3887,6 +4054,10 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 }
                 
                 grid.parentNode.insertBefore(profileHeader, grid);
+                if (window.isPremium === true || isAdmin()) {
+                    const vis = userData.brandLogVisibility || (userData.brandLogPublic === true ? 'public' : 'private');
+                    renderUserBrandLogSection(profileHeader, auth.currentUser.uid, true, vis);
+                }
                 
             
                 // Collect all tags from user images
@@ -4838,7 +5009,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
         // Nothing hard-links off-site: girlchan items open the normal modal,
         // eBay items open an explore-style modal (shop / explore / add).
         // Cached in Firestore (homepageAuto/current); ↻ re-rolls the whole page.
-        const TODAY_CACHE_MS = 6 * 60 * 60 * 1000; // 6 hours
+        const TODAY_CACHE_MS = 24 * 60 * 60 * 1000; // daily — refreshed by admin or age
         const TODAY_CACHE_VERSION = 5;
         function todayBatchSize() { return 6 + Math.floor(Math.random() * 3); } // 6-8
         const TODAY_GC_PER_SECTION = 9;
@@ -5005,8 +5176,14 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             todayState.loadingMore = true;
             const grid = document.getElementById('imageGrid');
             const moreEl = document.createElement('div');
-            moreEl.style.cssText = 'grid-column:1 / -1; padding:14px; text-align:center; color:#666; font-family:Courier New,monospace; font-size:12px;';
+            moreEl.style.cssText = 'grid-column:1 / -1; margin:8px 0; padding:16px; text-align:center; color:#000; font-family:Courier New,monospace; font-size:12px; font-weight:bold; background:#F9FF00; border:2px solid #000; box-shadow:2px 2px 0 #000;';
             moreEl.textContent = 'digging more rabbit holes... ✿';
+            let dots = 0;
+            const pulse = setInterval(() => {
+                if (!moreEl.isConnected) { clearInterval(pulse); return; }
+                dots = (dots + 1) % 4;
+                moreEl.textContent = 'digging more rabbit holes' + '.'.repeat(dots) + ' ✿';
+            }, 400);
             grid.appendChild(moreEl);
             try {
                 const more = await generateTodaySections(todayBatchSize());
@@ -5147,6 +5324,110 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             }
         };
 
+        // ── WALLPAPER TAKEOVER: featured curators can decorate the site ──
+        async function applySiteTheme() {
+            try {
+                const t = await getDoc(doc(db, 'siteTheme', 'current'));
+                let layer = document.getElementById('siteWallpaper');
+                if (!t.exists() || !t.data().wallpaperUrl) {
+                    if (layer) layer.remove();
+                    return;
+                }
+                const d = t.data();
+                if (!layer) {
+                    layer = document.createElement('div');
+                    layer.id = 'siteWallpaper';
+                    layer.style.cssText = 'position:fixed; inset:0; background-size:cover; background-position:center; pointer-events:none; z-index:0;';
+                    document.body.prepend(layer);
+                    // keep actual content above the wallpaper
+                    const container = document.querySelector('.container');
+                    if (container) { container.style.position = 'relative'; container.style.zIndex = '1'; }
+                    const headerEl = document.querySelector('.header');
+                    if (headerEl) { headerEl.style.position = 'relative'; headerEl.style.zIndex = '2'; }
+                }
+                layer.style.backgroundImage = 'url(' + d.wallpaperUrl + ')';
+                layer.style.opacity = String(typeof d.opacity === 'number' ? d.opacity : 0.2);
+            } catch (e) { console.error('theme load failed:', e); }
+        }
+
+        window.openDecorate = async function() {
+            if (!(isAdmin() || window.canTheme === true)) return;
+            closeSidebar();
+            let modal = document.getElementById('decorateModal');
+            if (modal) { modal.style.display = 'flex'; return; }
+            modal = document.createElement('div');
+            modal.id = 'decorateModal';
+            modal.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10001; align-items:center; justify-content:center; padding:20px;';
+            modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+            const box = document.createElement('div');
+            box.style.cssText = 'background:#fff; border:3px solid #0600ff; box-shadow:8px 8px 0 #0600ff; padding:24px 20px; width:100%; max-width:360px; font-family:Courier New,monospace; position:relative;';
+            box.innerHTML = `
+                <button onclick="document.getElementById('decorateModal').style.display='none'" style="position:absolute; top:6px; right:12px; background:none; border:none; font-size:22px; cursor:pointer; color:#0600ff;">×</button>
+                <h3 style="color:#0600ff; font-size:16px; margin-bottom:6px;">🎨 decorate girlchan</h3>
+                <p style="font-size:10px; color:#666; margin-bottom:14px; line-height:1.5;">your wallpaper shows behind the whole site, for everyone. make it yours.</p>
+                <input type="file" id="wallpaperFile" accept="image/*" style="width:100%; font-size:11px; margin-bottom:12px;">
+                <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">opacity: <span id="wallOpVal">20</span>%</label>
+                <input type="range" id="wallOpacity" min="5" max="60" value="20" style="width:100%; margin-bottom:14px;" oninput="document.getElementById('wallOpVal').textContent=this.value; var l=document.getElementById('siteWallpaper'); if(l) l.style.opacity=this.value/100;">
+                <button id="wallSaveBtn" onclick="saveWallpaper()" style="width:100%; padding:12px; background:#0600ff; color:#fff; border:2px solid #0600ff; font-family:Courier New,monospace; font-size:12px; cursor:pointer; margin-bottom:8px;">put it up ✿</button>
+                <button onclick="clearWallpaper()" style="width:100%; padding:10px; background:#f5f5f5; color:#000; border:2px solid #ccc; font-family:Courier New,monospace; font-size:11px; cursor:pointer;">take wallpaper down</button>
+                <div id="wallStatus" style="font-size:11px; text-align:center; margin-top:10px;"></div>
+            `;
+            modal.appendChild(box);
+            document.body.appendChild(modal);
+            // preload current opacity
+            try {
+                const t = await getDoc(doc(db, 'siteTheme', 'current'));
+                if (t.exists() && typeof t.data().opacity === 'number') {
+                    const v = Math.round(t.data().opacity * 100);
+                    document.getElementById('wallOpacity').value = v;
+                    document.getElementById('wallOpVal').textContent = v;
+                }
+            } catch (e) {}
+        };
+
+        window.saveWallpaper = async function() {
+            const status = document.getElementById('wallStatus');
+            const fileInput = document.getElementById('wallpaperFile');
+            const opacity = parseInt(document.getElementById('wallOpacity').value, 10) / 100;
+            try {
+                let wallpaperUrl = null;
+                if (fileInput.files && fileInput.files[0]) {
+                    status.textContent = 'uploading...';
+                    const compressed = await compressImage(fileInput.files[0], 1920, 0.85);
+                    const wref = ref(storage, 'wallpapers/' + Date.now() + '.jpg');
+                    await uploadBytes(wref, compressed);
+                    wallpaperUrl = await getDownloadURL(wref);
+                } else {
+                    const t = await getDoc(doc(db, 'siteTheme', 'current'));
+                    wallpaperUrl = (t.exists() && t.data().wallpaperUrl) || null;
+                    if (!wallpaperUrl) { status.textContent = 'pick an image first'; return; }
+                }
+                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+                await setDoc(doc(db, 'siteTheme', 'current'), {
+                    wallpaperUrl: wallpaperUrl,
+                    opacity: opacity,
+                    setBy: auth.currentUser.uid,
+                    setByName: userDoc.data()?.username || '',
+                    updatedAt: new Date()
+                });
+                await applySiteTheme();
+                status.textContent = 'it\'s up ✿';
+                status.style.color = '#00a86b';
+            } catch (e) {
+                status.textContent = 'failed: ' + e.message;
+                status.style.color = '#c00';
+            }
+        };
+
+        window.clearWallpaper = async function() {
+            try {
+                await setDoc(doc(db, 'siteTheme', 'current'), { wallpaperUrl: null, opacity: 0.2, updatedAt: new Date() });
+                await applySiteTheme();
+                const status = document.getElementById('wallStatus');
+                if (status) { status.textContent = 'taken down'; status.style.color = '#666'; }
+            } catch (e) {}
+        };
+
         // ── BRAND LOG: community-curated index of eBay searches ──
         function tipUrl(platform, handle) {
             const h = (handle || '').replace(/^[@$]/, '').trim();
@@ -5265,7 +5546,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             titleRow.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:0 2px;';
             const titleEl = document.createElement('div');
             titleEl.style.cssText = 'font-family:Courier New,monospace; font-size:13px; color:#0600ff; font-weight:bold;';
-            titleEl.textContent = d.name;
+            titleEl.textContent = (d.name || '').toUpperCase();
             titleRow.appendChild(titleEl);
 
             const ctrl = document.createElement('span');
@@ -5410,6 +5691,137 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             }
             alert('updated ' + done + ' brands ✓');
             loadBrandLog(false);
+        };
+
+        // ── PERSONAL BRAND LOGS (premium perk) ──
+        function renderUserBrandEntry(entry, isOwner) {
+            const d = entry.data;
+            const sec = document.createElement('div');
+            sec.style.cssText = 'width:100%; padding:6px 0 10px; border-bottom:1px dashed #c9b8ac;';
+
+            const titleRow = document.createElement('div');
+            titleRow.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:0 2px;';
+            const titleEl = document.createElement('div');
+            titleEl.style.cssText = 'font-family:Courier New,monospace; font-size:12px; color:#0600ff; font-weight:bold;';
+            titleEl.textContent = (d.name || '').toUpperCase();
+            titleRow.appendChild(titleEl);
+            if (isOwner) {
+                const rm = document.createElement('span');
+                rm.textContent = '×';
+                rm.style.cssText = 'cursor:pointer; color:#999; font-size:15px; padding:0 4px;';
+                rm.onclick = async () => {
+                    if (!confirm('remove "' + d.name + '" from your log?')) return;
+                    try { await deleteDoc(doc(db, 'userBrandLogs', entry.id)); sec.remove(); } catch (e) { alert('failed: ' + e.message); }
+                };
+                titleRow.appendChild(rm);
+            }
+            sec.appendChild(titleRow);
+
+            const rowEl = document.createElement('div');
+            rowEl.style.cssText = 'display:flex; gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding:6px 0 2px;';
+            (d.items || []).forEach(item => {
+                const img = document.createElement('img');
+                img.src = item.img;
+                img.alt = '';
+                img.draggable = false;
+                img.style.cssText = 'flex:0 0 84px; width:84px; height:110px; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
+                img.onclick = () => openEbayDetail(item);
+                rowEl.appendChild(img);
+            });
+            sec.appendChild(rowEl);
+
+            const more = document.createElement('a');
+            more.href = '/explore.html?q=' + encodeURIComponent(d.name);
+            more.textContent = 'see more →';
+            more.style.cssText = 'display:inline-block; margin-top:6px; background:#fff; border:1px solid #0600ff; color:#0600ff; font-family:Courier New,monospace; font-size:10px; padding:3px 8px; text-decoration:none; cursor:pointer;';
+            sec.appendChild(more);
+            return sec;
+        }
+
+        async function renderUserBrandLogSection(container, ownerId, isOwner, isPublicSetting) {
+            try {
+                const snap = await getDocs(collection(db, 'userBrandLogs'));
+                const entries = [];
+                snap.forEach(d => { if (d.data().ownerId === ownerId) entries.push({ id: d.id, data: d.data() }); });
+                entries.sort((a, b) => (a.data.nameLower || '').localeCompare(b.data.nameLower || ''));
+
+                if (!isOwner && entries.length === 0) return;
+
+                const wrap = document.createElement('div');
+                wrap.style.cssText = 'width:100%; margin-top:12px; padding-top:10px; border-top:1px solid #d4c5b0; text-align:left;';
+
+                const head = document.createElement('div');
+                head.style.cssText = 'display:flex; align-items:center; justify-content:space-between; font-family:Courier New,monospace; margin-bottom:4px;';
+                const label = document.createElement('span');
+                label.style.cssText = 'font-size:11px; color:#0600ff; font-weight:bold;';
+                label.textContent = isOwner ? '━ my brand log ━' : '━ their brand log ━';
+                head.appendChild(label);
+
+                if (isOwner) {
+                    const ctrl = document.createElement('span');
+                    ctrl.style.cssText = 'display:flex; gap:10px; align-items:center; font-size:9px;';
+                    const vis = document.createElement('a');
+                    vis.href = '#';
+                    const visLabels = { 'private': 'private ✓', 'public': 'public ✓', 'subs': 'subscribers ✓' };
+                    vis.textContent = visLabels[isPublicSetting] || 'private ✓';
+                    vis.title = 'tap to change who can see your log';
+                    vis.style.cssText = 'color:#999;';
+                    vis.onclick = async (e) => {
+                        e.preventDefault();
+                        const nextVis = { 'private': 'public', 'public': 'subs', 'subs': 'private' };
+                        try {
+                            await setDoc(doc(db, 'users', ownerId), { brandLogVisibility: nextVis[isPublicSetting] || 'public' }, { merge: true });
+                            loadMyProfile(false);
+                        } catch (err) {}
+                    };
+                    ctrl.appendChild(vis);
+                    const add = document.createElement('a');
+                    add.href = '#';
+                    add.textContent = '＋ add';
+                    add.style.cssText = 'color:#0600ff; font-weight:bold;';
+                    add.onclick = (e) => { e.preventDefault(); window.addToMyBrandLog(); };
+                    ctrl.appendChild(add);
+                    head.appendChild(ctrl);
+                }
+                wrap.appendChild(head);
+
+                if (entries.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.style.cssText = 'font-family:Courier New,monospace; font-size:10px; color:#999; padding:4px 0;';
+                    empty.textContent = 'nothing logged yet — ＋ add your first brand';
+                    wrap.appendChild(empty);
+                } else {
+                    entries.forEach(en => wrap.appendChild(renderUserBrandEntry(en, isOwner)));
+                }
+                container.appendChild(wrap);
+            } catch (e) { console.error('user brand log failed:', e); }
+        }
+
+        window.addToMyBrandLog = async function() {
+            if (!requireAuth()) return;
+            if (window.isPremium !== true && !isAdmin()) { alert('personal brand logs are a premium perk ✦'); return; }
+            const name = prompt('brand (or search words) for your log:');
+            if (!name || !name.trim()) return;
+            const clean = name.trim();
+            const lower = clean.toLowerCase();
+            try {
+                const snap = await getDocs(collection(db, 'userBrandLogs'));
+                let dupe = false;
+                snap.forEach(d => {
+                    if (d.data().ownerId === auth.currentUser.uid && (d.data().nameLower || '') === lower) dupe = true;
+                });
+                if (dupe) { alert('"' + clean + '" is already in your log ✓'); return; }
+                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+                const items = await fetchBrandItems(clean);
+                await addDoc(collection(db, 'userBrandLogs'), {
+                    ownerId: auth.currentUser.uid,
+                    ownerName: userDoc.data()?.username || '',
+                    name: clean, nameLower: lower,
+                    createdAt: new Date(), updatedAt: new Date(),
+                    items: items
+                });
+                loadMyProfile(false);
+            } catch (e) { alert('failed: ' + e.message); }
         };
 
         // ── FEATURED CURATOR page ──
@@ -5930,12 +6342,12 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     todayState.sectionCount++;
                 });
 
-                if (autoSections.length > 0) {
+                if (autoSections.length > 0 && isAdmin()) {
                     const rrWrap = document.createElement('div');
                     rrWrap.style.cssText = 'grid-column:1 / -1; text-align:center; padding:4px 0 6px;';
                     const rrBtn = document.createElement('button');
-                    rrBtn.textContent = '↻ re-roll the page';
-                    rrBtn.style.cssText = 'background:#F9FF00; border:2px solid #000; color:#000; font-family:Courier New,monospace; font-size:11px; font-weight:bold; padding:8px 18px; cursor:pointer; box-shadow:2px 2px 0 #000;';
+                    rrBtn.textContent = '↻ re-deal today (admin)';
+                    rrBtn.style.cssText = 'background:none; border:1px dashed #999; color:#999; font-family:Courier New,monospace; font-size:10px; padding:4px 12px; cursor:pointer;';
                     rrBtn.onclick = () => window.rerollToday(rrBtn);
                     rrWrap.appendChild(rrBtn);
                     grid.appendChild(rrWrap);
