@@ -1881,14 +1881,7 @@ window.openImageDetail = async function(imageId, imageUrl, link, tags) {
         closeImageDetail();
         window.gcFileToCabinet({ gcId: imageId, img: imageUrl, shopUrl: link || '', tags: tags || [] });
     };
-    // album button: premium perk
-    const albumBtn = document.getElementById('albumBtn');
-    if (auth.currentUser && (window.isPremium === true || isAdmin())) {
-        albumBtn.style.display = 'block';
-        albumBtn.onclick = () => window.openAlbumPicker(imageId, imageUrl);
-    } else {
-        albumBtn.style.display = 'none';
-    }
+
     // Display tags
     const tagsContainer = document.getElementById('detailTags');
     tagsContainer.innerHTML = '';
@@ -2060,7 +2053,8 @@ window.openImageDetail = async function(imageId, imageUrl, link, tags) {
             const likeTxt = document.getElementById('likeTxt');
 
             function paintLike(liked) {
-                heartIcon.textContent = liked ? '♥' : '♡';
+                const p = document.getElementById('likeHeartPath');
+                if (p) p.setAttribute('fill', liked ? 'currentColor' : 'none');
                 likeTxt.textContent = liked ? 'liked' : 'like';
                 likeBtnRow.style.background = liked ? '#ff007a' : '#fff';
                 likeBtnRow.style.borderColor = liked ? '#ff007a' : '#0600ff';
@@ -6201,185 +6195,6 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             }
         }
 
-        // ── PERSONAL ALBUMS (premium): collect any finds, per-album visibility ──
-        window.openAlbumPicker = async function(imageId, imageUrl) {
-            if (!requireAuth()) return;
-            let modal = document.getElementById('albumPickerModal');
-            if (modal) modal.remove();
-            modal = document.createElement('div');
-            modal.id = 'albumPickerModal';
-            modal.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10002; align-items:center; justify-content:center; padding:20px;';
-            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-            const box = document.createElement('div');
-            box.style.cssText = 'background:#fff; border:3px solid #0600ff; box-shadow:8px 8px 0 #0600ff; padding:20px; width:100%; max-width:320px; font-family:Courier New,monospace; max-height:70vh; overflow-y:auto;';
-            box.innerHTML = '<h3 style="color:#0600ff; font-size:14px; margin-bottom:12px;">save to album</h3><div id="albumPickList" style="display:flex; flex-direction:column; gap:6px;"></div>';
-            modal.appendChild(box);
-            document.body.appendChild(modal);
-
-            const list = box.querySelector('#albumPickList');
-            const snap = await getDocs(collection(db, 'userAlbums'));
-            const mine = [];
-            snap.forEach(d => { if (d.data().ownerId === auth.currentUser.uid) mine.push({ id: d.id, data: d.data() }); });
-            mine.sort((a, b) => (a.data.nameLower || '').localeCompare(b.data.nameLower || ''));
-
-            mine.forEach(al => {
-                const row = document.createElement('button');
-                const isIn = (al.data.images || []).includes(imageId);
-                row.textContent = (isIn ? '✓ ' : '') + al.data.name;
-                row.style.cssText = 'width:100%; padding:10px; text-align:left; background:' + (isIn ? '#9ED2F5' : '#fff') + '; border:1.5px solid #0600ff; color:#000; font-family:Courier New,monospace; font-size:12px; cursor:pointer; margin:0;';
-                row.onclick = async () => {
-                    try {
-                        if (isIn) {
-                            await updateDoc(doc(db, 'userAlbums', al.id), { images: arrayRemove(imageId), updatedAt: new Date() });
-                        } else {
-                            const upd = { images: arrayUnion(imageId), updatedAt: new Date() };
-                            if (!al.data.coverUrl) upd.coverUrl = imageUrl;
-                            await updateDoc(doc(db, 'userAlbums', al.id), upd);
-                        }
-                        modal.remove();
-                        window.openAlbumPicker(imageId, imageUrl);
-                    } catch (e) { alert('failed: ' + e.message); }
-                };
-                list.appendChild(row);
-            });
-
-            const newBtn = document.createElement('button');
-            newBtn.textContent = '＋ new album';
-            newBtn.style.cssText = 'width:100%; padding:10px; background:#0600ff; border:1.5px solid #0600ff; color:#fff; font-family:Courier New,monospace; font-size:12px; cursor:pointer; margin:6px 0 0;';
-            newBtn.onclick = async () => {
-                const name = prompt('album name:');
-                if (!name || !name.trim()) return;
-                try {
-                    const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-                    await addDoc(collection(db, 'userAlbums'), {
-                        ownerId: auth.currentUser.uid,
-                        ownerName: userDoc.data()?.username || '',
-                        name: name.trim(), nameLower: name.trim().toLowerCase(),
-                        visibility: 'private',
-                        images: [imageId], coverUrl: imageUrl,
-                        createdAt: new Date(), updatedAt: new Date()
-                    });
-                    modal.remove();
-                    window.openAlbumPicker(imageId, imageUrl);
-                } catch (e) { alert('failed: ' + e.message); }
-            };
-            list.appendChild(newBtn);
-        };
-
-        async function loadAlbum(albumId, albumName, addToHistory = true) {
-            clearProfileWallpaper();
-            closeSidebar();
-            if (addToHistory) navigationHistory.push({ ...currentContext });
-            currentContext = { type: 'album', id: albumId };
-            document.getElementById('pageTitle').innerHTML = '/ ' + albumName;
-            const grid = document.getElementById('imageGrid');
-            grid.innerHTML = '<div style="grid-column:1 / -1; padding:20px; text-align:center; color:#666; font-family:Courier New,monospace; font-size:12px;">loading...</div>';
-            const oldHeader = document.getElementById('profileHeader'); if (oldHeader) oldHeader.remove();
-            const oldSortBar = document.getElementById('profileSortBar'); if (oldSortBar) oldSortBar.remove();
-            const tagRow = document.getElementById('recentTagsRow'); if (tagRow) tagRow.style.display = 'none';
-            try {
-                const alDoc = await getDoc(doc(db, 'userAlbums', albumId));
-                if (!alDoc.exists()) { grid.innerHTML = ''; return; }
-                const ids = alDoc.data().images || [];
-                const snap = await getDocs(query(collection(db, 'images'), orderBy('createdAt', 'desc')));
-                grid.innerHTML = '';
-                let shown = 0;
-                snap.forEach(d => {
-                    if (!ids.includes(d.id)) return;
-                    const data = d.data();
-                    const img = document.createElement('img');
-                    img.src = data.imageUrl;
-                    img.alt = '';
-                    img.draggable = false;
-                    img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
-                    img.onclick = () => openImageDetail(d.id, data.imageUrl, data.link || '', data.tags || []);
-                    grid.appendChild(img);
-                    shown++;
-                });
-                if (shown === 0) {
-                    grid.innerHTML = '<div style="grid-column:1 / -1; padding:20px; text-align:center; color:#666; font-family:Courier New,monospace; font-size:12px;">nothing in this album yet</div>';
-                }
-            } catch (e) { console.error('album load failed:', e); }
-        }
-        window.loadAlbum = loadAlbum;
-
-        async function renderAlbumsSection(container, ownerId, isOwner, viewerIsSub) {
-            try {
-                const snap = await getDocs(collection(db, 'userAlbums'));
-                const albums = [];
-                snap.forEach(d => { if (d.data().ownerId === ownerId) albums.push({ id: d.id, data: d.data() }); });
-                albums.sort((a, b) => (b.data.updatedAt?.seconds || 0) - (a.data.updatedAt?.seconds || 0));
-
-                const visible = albums.filter(al => {
-                    const v = al.data.visibility || 'private';
-                    if (isOwner || isAdmin()) return true;
-                    if (v === 'public') return true;
-                    if (v === 'subs' && viewerIsSub) return true;
-                    return false;
-                });
-                if (visible.length === 0 && !isOwner) return;
-
-                const wrap = document.createElement('div');
-                wrap.style.cssText = 'width:100%; margin-top:12px; padding-top:10px; border-top:1px solid #d4c5b0; text-align:left;';
-                const head = document.createElement('div');
-                head.style.cssText = 'font-family:Courier New,monospace; font-size:11px; color:#0600ff; font-weight:bold; margin-bottom:6px;';
-                head.textContent = isOwner ? '━ my albums ━' : '━ their albums ━';
-                wrap.appendChild(head);
-
-                if (visible.length === 0) {
-                    const empty = document.createElement('div');
-                    empty.style.cssText = 'font-family:Courier New,monospace; font-size:10px; color:#999;';
-                    empty.textContent = 'no albums yet — tap "album" on any find to start one';
-                    wrap.appendChild(empty);
-                } else {
-                    const row = document.createElement('div');
-                    row.style.cssText = 'display:flex; gap:10px; overflow-x:auto; padding-bottom:4px;';
-                    visible.forEach(al => {
-                        const card = document.createElement('div');
-                        card.style.cssText = 'flex:0 0 92px; font-family:Courier New,monospace;';
-                        const cov = document.createElement('div');
-                        cov.style.cssText = 'width:92px; height:92px; background:#ddd center/cover no-repeat; border:2px solid #0600ff; cursor:pointer;' + (al.data.coverUrl ? ' background-image:url(' + al.data.coverUrl + ');' : '');
-                        cov.onclick = () => loadAlbum(al.id, al.data.name);
-                        card.appendChild(cov);
-                        const nm = document.createElement('div');
-                        nm.style.cssText = 'font-size:9px; font-weight:bold; color:#000; margin-top:3px; word-break:break-word;';
-                        nm.textContent = al.data.name;
-                        card.appendChild(nm);
-                        if (isOwner) {
-                            const ctl = document.createElement('div');
-                            ctl.style.cssText = 'font-size:8px; display:flex; gap:6px; margin-top:1px;';
-                            const visLabels = { 'private': 'private ✓', 'public': 'public ✓', 'subs': 'subs ✓' };
-                            const v = al.data.visibility || 'private';
-                            const visA = document.createElement('a');
-                            visA.href = '#';
-                            visA.textContent = visLabels[v];
-                            visA.style.cssText = 'color:#999;';
-                            visA.onclick = async (e) => {
-                                e.preventDefault();
-                                const nextVis = { 'private': 'public', 'public': 'subs', 'subs': 'private' };
-                                try { await updateDoc(doc(db, 'userAlbums', al.id), { visibility: nextVis[v] }); loadMyProfile(false); } catch (err) {}
-                            };
-                            ctl.appendChild(visA);
-                            const del = document.createElement('a');
-                            del.href = '#';
-                            del.textContent = '×';
-                            del.style.cssText = 'color:#999;';
-                            del.onclick = async (e) => {
-                                e.preventDefault();
-                                if (!confirm('delete album "' + al.data.name + '"? (finds stay on girlchan)')) return;
-                                try { await deleteDoc(doc(db, 'userAlbums', al.id)); loadMyProfile(false); } catch (err) {}
-                            };
-                            ctl.appendChild(del);
-                            card.appendChild(ctl);
-                        }
-                        row.appendChild(card);
-                    });
-                    wrap.appendChild(row);
-                }
-                container.appendChild(wrap);
-            } catch (e) { console.error('albums section failed:', e); }
-        }
-
         // ── SHOWCASES: hand-curated grids on the storefront ──
         function renderShowcaseSection(sc, isOwner) {
             const d = sc.data;
@@ -6387,6 +6202,23 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             if (filled.length === 0 && !isOwner) return null;
             const wrap = document.createElement('div');
             wrap.style.cssText = 'width:100%; margin-top:12px; padding-top:10px; border-top:1px solid #d4c5b0; text-align:left;';
+
+            if (d.displayMode === 'cover') {
+                // compact cover card: tap opens the album as a page
+                const card = document.createElement('div');
+                card.style.cssText = 'display:flex; align-items:center; gap:10px; cursor:pointer; font-family:Courier New,monospace;';
+                card.onclick = () => loadShowcasePage(sc.id, d.name);
+                const cover = filled[0] ? filled[0].imageUrl : null;
+                const cov = document.createElement('div');
+                cov.style.cssText = 'width:72px; height:72px; flex:0 0 72px; background:#ddd center/cover no-repeat; border:2px solid #0600ff;' + (cover ? ' background-image:url(' + cover + ');' : '');
+                card.appendChild(cov);
+                const meta = document.createElement('div');
+                meta.innerHTML = '<div style="font-size:12px; font-weight:bold; color:#0600ff;">✦ ' + d.name + '</div><div style="font-size:9px; color:#999;">' + filled.length + ' finds — tap to open</div>';
+                card.appendChild(meta);
+                wrap.appendChild(card);
+                return wrap;
+            }
+
             const head = document.createElement('div');
             head.style.cssText = 'font-family:Courier New,monospace; font-size:11px; color:#0600ff; font-weight:bold; margin-bottom:6px;';
             head.textContent = '━ ' + d.name + ' ━';
@@ -6414,6 +6246,34 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             return wrap;
         }
 
+        // an album opened as its own page (from a cover card)
+        async function loadShowcasePage(scId, name, addToHistory = true) {
+            clearProfileWallpaper();
+            closeSidebar();
+            if (addToHistory) navigationHistory.push({ ...currentContext });
+            currentContext = { type: 'album', id: scId };
+            document.getElementById('pageTitle').innerHTML = '/ ' + name;
+            const grid = document.getElementById('imageGrid');
+            grid.innerHTML = '';
+            const oldHeader = document.getElementById('profileHeader'); if (oldHeader) oldHeader.remove();
+            const oldSortBar = document.getElementById('profileSortBar'); if (oldSortBar) oldSortBar.remove();
+            const tagRow = document.getElementById('recentTagsRow'); if (tagRow) tagRow.style.display = 'none';
+            try {
+                const scDoc = await getDoc(doc(db, 'showcases', scId));
+                if (!scDoc.exists()) return;
+                (scDoc.data().slots || []).filter(Boolean).forEach(slot => {
+                    const img = document.createElement('img');
+                    img.src = slot.imageUrl;
+                    img.alt = '';
+                    img.draggable = false;
+                    img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
+                    img.onclick = () => openImageDetail(slot.imageId, slot.imageUrl, slot.link || '', slot.tags || []);
+                    grid.appendChild(img);
+                });
+            } catch (e) { console.error('album page failed:', e); }
+        }
+        window.loadShowcasePage = loadShowcasePage;
+
         // effective layout: saved order+hidden, discovered showcases appended
         function buildEffectiveLayout(saved, showcases) {
             const layout = [];
@@ -6427,7 +6287,6 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 seen.add(item.id);
             });
             if (!seen.has('brandlog')) layout.push({ id: 'brandlog', hidden: false });
-            if (!seen.has('albums')) layout.push({ id: 'albums', hidden: false });
             showcases.forEach(s => {
                 if (!seen.has('showcase:' + s.id)) layout.push({ id: 'showcase:' + s.id, hidden: false });
             });
@@ -6462,13 +6321,15 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                             teaser.textContent = '♡ their brand log is for subscribers';
                             container.appendChild(teaser);
                         }
-                    } else if (item.id === 'albums') {
-                        await renderAlbumsSection(container, ownerId, isOwner, viewerIsSub);
                     } else if (item.id.startsWith('showcase:')) {
                         const sc = showcases.find(s => 'showcase:' + s.id === item.id);
                         if (sc) {
-                            const el = renderShowcaseSection(sc, isOwner);
-                            if (el) container.appendChild(el);
+                            const vis = sc.data.visibility || 'public';
+                            const canSee = isOwner || isAdmin() || vis === 'public' || (vis === 'subs' && viewerIsSub);
+                            if (canSee) {
+                                const el = renderShowcaseSection(sc, isOwner);
+                                if (el) container.appendChild(el);
+                            }
                         }
                     }
                 }
@@ -6535,7 +6396,6 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
 
             function sectionLabel(id) {
                 if (id === 'brandlog') return 'my brand log';
-                if (id === 'albums') return 'my albums';
                 if (id.startsWith('showcase:')) {
                     const sc = showcases.find(s => 'showcase:' + s.id === id);
                     return sc ? '✦ ' + sc.data.name : '(deleted showcase)';
@@ -6577,7 +6437,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             // ── showcases ──
             const scSec = document.createElement('div');
             scSec.style.cssText = 'background:#fff; border:2px solid #0600ff; padding:14px; margin-bottom:14px;';
-            scSec.innerHTML = '<div style="font-size:12px; color:#0600ff; font-weight:bold; margin-bottom:2px;">showcases</div><div style="font-size:9px; color:#999; margin-bottom:10px;">hand-picked grids. tap a slot to fill it with any find on girlchan — credit and commission stay with the finder.</div>';
+            scSec.innerHTML = '<div style="font-size:12px; color:#0600ff; font-weight:bold; margin-bottom:2px;">albums</div><div style="font-size:9px; color:#999; margin-bottom:10px;">hand-picked collections. show each as an open grid or a cover tile. credit + commission stay with the finder.</div>';
             const scList = document.createElement('div');
             scSec.appendChild(scList);
 
@@ -6588,7 +6448,14 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     box.style.cssText = 'margin-bottom:14px;';
                     const head = document.createElement('div');
                     head.style.cssText = 'display:flex; align-items:center; justify-content:space-between; margin-bottom:5px;';
-                    head.innerHTML = '<span style="font-size:11px; font-weight:bold;">✦ ' + sc.data.name + ' <span style="color:#999; font-weight:normal;">(' + sc.data.cols + '×' + sc.data.rows + ')</span></span>';
+                    const mode = sc.data.displayMode === 'cover' ? 'cover' : 'grid';
+                    const vis = sc.data.visibility || 'public';
+                    let headHtml = '<span style="font-size:11px; font-weight:bold;">✦ ' + sc.data.name + ' <span style="color:#999; font-weight:normal;">(' + sc.data.cols + '×' + sc.data.rows + ')</span>';
+                    if (sc.data.fillTag) headHtml += ' <a href="#" style="color:#0600ff; font-size:9px;" onclick="event.preventDefault(); window.refillShowcase(\'' + sc.id + '\', \'' + sc.data.fillTag + '\', ' + (sc.data.cols * sc.data.rows) + ')">↻ #' + sc.data.fillTag + '</a>';
+                    headHtml += '<br><a href="#" style="color:#999; font-size:9px; text-decoration:underline;" onclick="event.preventDefault(); window.toggleShowcaseMode(\'' + sc.id + '\', \'' + mode + '\')">' + (mode === 'grid' ? 'shown as grid ▦' : 'shown as cover ▢') + '</a>';
+                    headHtml += ' · <a href="#" style="color:#999; font-size:9px; text-decoration:underline;" onclick="event.preventDefault(); window.cycleShowcaseVis(\'' + sc.id + '\', \'' + vis + '\')">' + vis + ' ✓</a>';
+                    headHtml += '</span>';
+                    head.innerHTML = headHtml;
                     const del = document.createElement('a');
                     del.href = '#'; del.textContent = '×'; del.style.cssText = 'color:#999; font-size:15px; text-decoration:none;';
                     del.onclick = async (e) => {
@@ -6616,21 +6483,28 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             renderShowcaseEditors();
 
             const newSc = document.createElement('button');
-            newSc.textContent = '＋ new showcase';
+            newSc.textContent = '＋ new album';
             newSc.style.cssText = 'width:auto; margin:0; background:#0600ff; border:1px solid #0600ff; color:#fff; font-family:Courier New,monospace; font-size:11px; padding:6px 14px; cursor:pointer;';
             newSc.onclick = async () => {
-                const name = prompt('showcase name:');
+                const name = prompt('album name:');
                 if (!name || !name.trim()) return;
-                const size = prompt('grid size (like 3x3 or 4x3 — columns x rows):', '3x3');
+                const size = prompt('size — ACROSS x DOWN (3x3 = 3 wide, 3 tall):', '3x3');
                 if (!size) return;
                 const m = size.toLowerCase().match(/(\d+)\s*x\s*(\d+)/);
                 if (!m) { alert('use a format like 3x3'); return; }
-                const cols = Math.min(Math.max(parseInt(m[1], 10), 1), 6);
+                const cols = Math.min(Math.max(parseInt(m[1], 10), 1), 4);
                 const rows = Math.min(Math.max(parseInt(m[2], 10), 1), 8);
+                const fillTag = prompt('auto-fill from a tag? (like "pink" — leave blank to hand-pick)', '') || '';
+                let slots = new Array(cols * rows).fill(null);
+                if (fillTag.trim()) {
+                    slots = await fillSlotsFromTag(fillTag.trim().toLowerCase(), cols * rows);
+                }
                 await addDoc(collection(db, 'showcases'), {
                     ownerId: auth.currentUser.uid,
                     name: name.trim(), cols: cols, rows: rows,
-                    slots: new Array(cols * rows).fill(null),
+                    fillTag: fillTag.trim().toLowerCase(),
+                    displayMode: 'grid', visibility: 'public',
+                    slots: slots,
                     createdAt: new Date()
                 });
                 loadDecoratePage(false);
@@ -6647,7 +6521,48 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
         }
         window.loadDecoratePage = loadDecoratePage;
 
-        // slot picker: any find on girlchan fills the slot
+        // fill showcase slots from a tag: newest matching finds across girlchan
+        async function fillSlotsFromTag(tag, count, ownOnly = true) {
+            const snap = await getDocs(query(collection(db, 'images'), orderBy('createdAt', 'desc')));
+            const slots = [];
+            const userNames = {};
+            for (const d of snap.docs) {
+                if (slots.length >= count) break;
+                const data = d.data();
+                if (ownOnly && auth.currentUser && data.userId !== auth.currentUser.uid) continue;
+                const tags = (data.tags || []).map(t => String(t).toLowerCase());
+                if (!tags.includes(tag)) continue;
+                let byName = userNames[data.userId];
+                if (byName === undefined) {
+                    try {
+                        const u = await getDoc(doc(db, 'users', data.userId));
+                        byName = u.data()?.username || '';
+                    } catch (e) { byName = ''; }
+                    userNames[data.userId] = byName;
+                }
+                slots.push({ imageId: d.id, imageUrl: data.imageUrl, link: data.link || '', tags: data.tags || [], byName: byName });
+            }
+            while (slots.length < count) slots.push(null);
+            return slots;
+        }
+
+        window.toggleShowcaseMode = async function(scId, cur) {
+            await updateDoc(doc(db, 'showcases', scId), { displayMode: cur === 'grid' ? 'cover' : 'grid' });
+            loadDecoratePage(false);
+        };
+        window.cycleShowcaseVis = async function(scId, cur) {
+            const next = { 'public': 'subs', 'subs': 'private', 'private': 'public' };
+            await updateDoc(doc(db, 'showcases', scId), { visibility: next[cur] || 'public' });
+            loadDecoratePage(false);
+        };
+
+        window.refillShowcase = async function(showcaseId, tag, count) {
+            const slots = await fillSlotsFromTag(tag, count);
+            await updateDoc(doc(db, 'showcases', showcaseId), { slots: slots });
+            loadDecoratePage(false);
+        };
+
+        // slot picker: multi-pick, your finds by default, toggle for all girlchan
         window.openSlotPicker = async function(showcaseId, slotIndex) {
             let modal = document.getElementById('slotPickerModal');
             if (modal) modal.remove();
@@ -6656,11 +6571,18 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             modal.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10003; align-items:center; justify-content:center; padding:16px;';
             modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
             const box = document.createElement('div');
-            box.style.cssText = 'background:#fff; border:3px solid #0600ff; box-shadow:8px 8px 0 #0600ff; padding:16px; width:100%; max-width:380px; font-family:Courier New,monospace; max-height:80vh; overflow-y:auto;';
-            box.innerHTML = '<h3 style="color:#0600ff; font-size:13px; margin-bottom:10px;">pick a find for this slot</h3>';
+            box.style.cssText = 'background:#fff; border:3px solid #0600ff; box-shadow:8px 8px 0 #0600ff; padding:16px; width:100%; max-width:380px; font-family:Courier New,monospace; max-height:82vh; overflow-y:auto; position:relative;';
+            box.innerHTML = '<h3 style="color:#0600ff; font-size:13px; margin-bottom:8px;">fill slots — tap to select</h3>';
+
+            const rowCtl = document.createElement('div');
+            rowCtl.style.cssText = 'display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap;';
+            const scopeToggle = document.createElement('label');
+            scopeToggle.style.cssText = 'font-size:10px; color:#333; display:flex; align-items:center; gap:5px;';
+            scopeToggle.innerHTML = '<input type="checkbox" id="pickerScopeAll" style="width:15px; height:15px;"> all girlchan (not just mine)';
+            rowCtl.appendChild(scopeToggle);
             const clearBtn = document.createElement('button');
             clearBtn.textContent = 'empty this slot';
-            clearBtn.style.cssText = 'width:auto; margin:0 0 10px; background:#f5f5f5; border:1px solid #ccc; color:#000; font-family:Courier New,monospace; font-size:10px; padding:5px 10px; cursor:pointer;';
+            clearBtn.style.cssText = 'width:auto; margin:0; background:#f5f5f5; border:1px solid #ccc; color:#000; font-family:Courier New,monospace; font-size:10px; padding:4px 9px; cursor:pointer;';
             clearBtn.onclick = async () => {
                 const scDoc = await getDoc(doc(db, 'showcases', showcaseId));
                 const slots = scDoc.data().slots || [];
@@ -6669,9 +6591,17 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 modal.remove();
                 loadDecoratePage(false);
             };
-            box.appendChild(clearBtn);
+            rowCtl.appendChild(clearBtn);
+            box.appendChild(rowCtl);
+
+            const tagSearch = document.createElement('input');
+            tagSearch.type = 'text';
+            tagSearch.placeholder = 'filter by tag (like "pink")...';
+            tagSearch.style.cssText = 'width:100%; padding:9px; border:1.5px solid #0600ff; font-family:Courier New,monospace; font-size:11px; box-sizing:border-box; margin-bottom:8px;';
+            box.appendChild(tagSearch);
+
             const pickGrid = document.createElement('div');
-            pickGrid.style.cssText = 'display:grid; grid-template-columns:repeat(3,1fr); gap:2px;';
+            pickGrid.style.cssText = 'display:grid; grid-template-columns:repeat(3,1fr); gap:2px; padding-bottom:52px;';
             box.appendChild(pickGrid);
             modal.appendChild(box);
             document.body.appendChild(modal);
@@ -6679,39 +6609,100 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             const snap = await getDocs(query(collection(db, 'images'), orderBy('createdAt', 'desc')));
             const all = [];
             snap.forEach(d => all.push({ id: d.id, data: d.data() }));
+
+            const selected = []; // in tap order
+            let pool = [];
             let shown = 0;
             const BATCH = 60;
             const moreBtn = document.createElement('button');
+
+            function rebuildPool() {
+                const scopeAll = document.getElementById('pickerScopeAll').checked;
+                const f = tagSearch.value.trim().toLowerCase();
+                pool = all.filter(x => {
+                    if (!scopeAll && auth.currentUser && x.data.userId !== auth.currentUser.uid) return false;
+                    if (f && !(x.data.tags || []).some(t => String(t).toLowerCase().includes(f))) return false;
+                    return true;
+                });
+                shown = 0;
+                pickGrid.innerHTML = '';
+                showBatch();
+            }
+            tagSearch.oninput = rebuildPool;
+            box.querySelector('#pickerScopeAll').onchange = rebuildPool;
+
             function showBatch() {
-                const batch = all.slice(shown, shown + BATCH);
+                const batch = pool.slice(shown, shown + BATCH);
                 batch.forEach(({ id, data }) => {
+                    const cell = document.createElement('div');
+                    cell.style.cssText = 'position:relative; cursor:pointer;';
                     const img = document.createElement('img');
                     img.src = data.imageUrl;
                     img.loading = 'lazy';
-                    img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; cursor:pointer; background:#eee;';
-                    img.onclick = async () => {
-                        let byName = '';
-                        try {
-                            const u = await getDoc(doc(db, 'users', data.userId));
-                            byName = u.data()?.username || '';
-                        } catch (e) {}
-                        const scDoc = await getDoc(doc(db, 'showcases', showcaseId));
-                        const slots = scDoc.data().slots || [];
-                        slots[slotIndex] = { imageId: id, imageUrl: data.imageUrl, link: data.link || '', tags: data.tags || [], byName: byName };
-                        await updateDoc(doc(db, 'showcases', showcaseId), { slots: slots });
-                        modal.remove();
-                        loadDecoratePage(false);
+                    img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; background:#eee;';
+                    cell.appendChild(img);
+                    const check = document.createElement('div');
+                    check.style.cssText = 'position:absolute; top:3px; right:3px; width:18px; height:18px; border-radius:50%; background:#0600ff; color:#F9FF00; font-size:11px; display:none; align-items:center; justify-content:center; font-weight:bold;';
+                    check.textContent = '✓';
+                    cell.appendChild(check);
+                    cell.onclick = () => {
+                        const at = selected.findIndex(s => s.id === id);
+                        if (at !== -1) {
+                            selected.splice(at, 1);
+                            check.style.display = 'none';
+                            img.style.outline = 'none';
+                        } else {
+                            selected.push({ id: id, data: data });
+                            check.style.display = 'flex';
+                            img.style.outline = '3px solid #0600ff';
+                            img.style.outlineOffset = '-3px';
+                        }
+                        addBtn.textContent = selected.length > 0 ? ('add ' + selected.length + ' →') : 'tap finds to select';
+                        addBtn.disabled = selected.length === 0;
                     };
-                    pickGrid.appendChild(img);
+                    pickGrid.appendChild(cell);
                 });
                 shown += batch.length;
-                moreBtn.style.display = shown < all.length ? 'block' : 'none';
+                moreBtn.style.display = shown < pool.length ? 'block' : 'none';
             }
+
             moreBtn.textContent = 'more finds ↓';
-            moreBtn.style.cssText = 'width:100%; margin:10px 0 0; background:#0600ff; border:none; color:#F9FF00; font-family:Courier New,monospace; font-size:11px; padding:9px; cursor:pointer;';
+            moreBtn.style.cssText = 'width:100%; margin:8px 0 0; background:#fff; border:1.5px solid #0600ff; color:#0600ff; font-family:Courier New,monospace; font-size:11px; padding:8px; cursor:pointer;';
             moreBtn.onclick = showBatch;
             box.appendChild(moreBtn);
-            showBatch();
+
+            // sticky confirm bar: fills tapped slot then the following ones
+            const addBtn = document.createElement('button');
+            addBtn.textContent = 'tap finds to select';
+            addBtn.disabled = true;
+            addBtn.style.cssText = 'position:sticky; bottom:0; width:100%; margin:10px 0 0; background:#0600ff; border:none; color:#F9FF00; font-family:Courier New,monospace; font-size:12px; font-weight:bold; padding:12px; cursor:pointer;';
+            addBtn.onclick = async () => {
+                if (selected.length === 0) return;
+                addBtn.textContent = 'adding...';
+                const userNames = {};
+                const scDoc = await getDoc(doc(db, 'showcases', showcaseId));
+                const slots = scDoc.data().slots || [];
+                let target = slotIndex;
+                for (const pick of selected) {
+                    if (target >= slots.length) break;
+                    let byName = userNames[pick.data.userId];
+                    if (byName === undefined) {
+                        try {
+                            const u = await getDoc(doc(db, 'users', pick.data.userId));
+                            byName = u.data()?.username || '';
+                        } catch (e) { byName = ''; }
+                        userNames[pick.data.userId] = byName;
+                    }
+                    slots[target] = { imageId: pick.id, imageUrl: pick.data.imageUrl, link: pick.data.link || '', tags: pick.data.tags || [], byName: byName };
+                    target++;
+                }
+                await updateDoc(doc(db, 'showcases', showcaseId), { slots: slots });
+                modal.remove();
+                loadDecoratePage(false);
+            };
+            box.appendChild(addBtn);
+
+            rebuildPool();
         };
 
         // ── ADMIN: all users directory ──
@@ -8644,8 +8635,8 @@ function loadPage(page) {
         <div style="display: flex; gap: 8px; margin-bottom: 10px;">
             <button id="exploreBtn" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block; margin:0 auto 4px;"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>explore</button>
             <button id="fileBtn" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block; margin:0 auto 4px;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>file</button>
-            <button id="likeBtnRow" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer;"><span id="likeHeartIcon" style="font-size:18px; display:block; margin-bottom:4px; line-height:22px;">♡</span><span id="likeTxt">like</span></button>
-            <button id="albumBtn" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer; display:none;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block; margin:0 auto 4px;"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>album</button>
+            <button id="likeBtnRow" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer;"><span id="likeHeartIcon" style="display:block; margin:0 auto 4px; width:20px; height:20px;"><svg width="20" height="20" viewBox="0 0 28 26" fill="none"><path id="likeHeartPath" d="M14 23 C7 17.5 2 13 2 8.2 C2 4.7 4.8 2 8.2 2 C10.6 2 12.8 3.3 14 5.4 C15.2 3.3 17.4 2 19.8 2 C23.2 2 26 4.7 26 8.2 C26 13 21 17.5 14 23 Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"></path></svg></span><span id="likeTxt">like</span></button>
+
         </div>
         <button onclick="closeImageDetail()" style="width: 100%; padding: 12px; background: #ccc; color: #000; border: 2px solid #999;">close</button>
     </div>
