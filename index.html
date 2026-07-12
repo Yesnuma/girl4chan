@@ -6383,134 +6383,146 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             wallsSec.appendChild(wallsBtn);
             wrap.appendChild(wallsSec);
 
-            // ── arrange the store ──
+            // ── YOUR STORE: one list, everything edits in place ──
             const showcases = await fetchUserShowcases(auth.currentUser.uid);
             const layout = buildEffectiveLayout(userData.storeLayout, showcases);
 
-            const arrangeSec = document.createElement('div');
-            arrangeSec.style.cssText = 'background:#fff; border:2px solid #0600ff; padding:14px; margin-bottom:14px;';
-            arrangeSec.innerHTML = '<div style="font-size:12px; color:#0600ff; font-weight:bold; margin-bottom:2px;">arrange the store</div><div style="font-size:9px; color:#999; margin-bottom:10px;">top to bottom = how your page reads. everything-grid always anchors the bottom.</div>';
+            const storeSec = document.createElement('div');
+            storeSec.style.cssText = 'background:#fff; border:2px solid #0600ff; padding:14px; margin-bottom:14px;';
+            storeSec.innerHTML = '<div style="font-size:12px; color:#0600ff; font-weight:bold; margin-bottom:2px;">your store, top to bottom</div><div style="font-size:9px; color:#999; margin-bottom:10px;">this is the order visitors read your page. tap ▾ to edit an album right here.</div>';
             const listEl = document.createElement('div');
-            arrangeSec.appendChild(listEl);
-            wrap.appendChild(arrangeSec);
+            storeSec.appendChild(listEl);
+            wrap.appendChild(storeSec);
 
-            function sectionLabel(id) {
-                if (id === 'brandlog') return 'my brand log';
-                if (id.startsWith('showcase:')) {
-                    const sc = showcases.find(s => 'showcase:' + s.id === id);
-                    return sc ? '✦ ' + sc.data.name : '(deleted showcase)';
-                }
-                return id;
-            }
+            const expanded = new Set();
 
             async function saveLayout() {
                 await setDoc(doc(db, 'users', auth.currentUser.uid), { storeLayout: layout }, { merge: true });
             }
 
-            function renderArrange() {
+            function chipStyle(active) {
+                return 'display:inline-block; padding:4px 10px; margin:0 6px 6px 0; font-family:Courier New,monospace; font-size:10px; cursor:pointer; border:1.5px solid #0600ff; ' +
+                    (active ? 'background:#0600ff; color:#F9FF00;' : 'background:#fff; color:#0600ff;');
+            }
+
+            function renderStoreList() {
                 listEl.innerHTML = '';
                 layout.forEach((item, i) => {
+                    const isAlbum = item.id.startsWith('showcase:');
+                    const sc = isAlbum ? showcases.find(s => 'showcase:' + s.id === item.id) : null;
+                    if (isAlbum && !sc) return;
+
                     const row = document.createElement('div');
-                    row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:8px 6px; border-bottom:1px dashed #d4c5b0; font-size:12px;' + (item.hidden ? ' opacity:0.45;' : '');
+                    row.style.cssText = 'border-bottom:1px dashed #d4c5b0; padding:10px 4px;' + (item.hidden ? ' opacity:0.45;' : '');
+
+                    const topLine = document.createElement('div');
+                    topLine.style.cssText = 'display:flex; align-items:center; justify-content:space-between;';
                     const name = document.createElement('span');
-                    name.textContent = sectionLabel(item.id);
-                    row.appendChild(name);
+                    name.style.cssText = 'font-size:13px; font-weight:bold; cursor:' + (isAlbum ? 'pointer' : 'default') + ';';
+                    name.textContent = (isAlbum ? '✦ ' + sc.data.name + ' ' + (expanded.has(sc.id) ? '▴' : '▾') : 'my brand log');
+                    if (isAlbum) name.onclick = () => { expanded.has(sc.id) ? expanded.delete(sc.id) : expanded.add(sc.id); renderStoreList(); };
+                    topLine.appendChild(name);
+
                     const ctl = document.createElement('span');
-                    ctl.style.cssText = 'display:flex; gap:12px; font-size:14px;';
+                    ctl.style.cssText = 'display:flex; gap:12px; align-items:center; font-size:15px;';
                     const up = document.createElement('a'); up.href = '#'; up.textContent = '↑'; up.style.cssText = 'color:' + (i === 0 ? '#ddd' : '#0600ff') + '; text-decoration:none;';
-                    up.onclick = async (e) => { e.preventDefault(); if (i === 0) return; [layout[i-1], layout[i]] = [layout[i], layout[i-1]]; await saveLayout(); renderArrange(); };
+                    up.onclick = async (e) => { e.preventDefault(); if (i === 0) return; [layout[i-1], layout[i]] = [layout[i], layout[i-1]]; await saveLayout(); renderStoreList(); };
                     const down = document.createElement('a'); down.href = '#'; down.textContent = '↓'; down.style.cssText = 'color:' + (i === layout.length - 1 ? '#ddd' : '#0600ff') + '; text-decoration:none;';
-                    down.onclick = async (e) => { e.preventDefault(); if (i === layout.length - 1) return; [layout[i+1], layout[i]] = [layout[i], layout[i+1]]; await saveLayout(); renderArrange(); };
+                    down.onclick = async (e) => { e.preventDefault(); if (i === layout.length - 1) return; [layout[i+1], layout[i]] = [layout[i], layout[i+1]]; await saveLayout(); renderStoreList(); };
                     const hide = document.createElement('a'); hide.href = '#'; hide.textContent = item.hidden ? 'show' : 'hide'; hide.style.cssText = 'color:#999; font-size:10px; text-decoration:underline;';
-                    hide.onclick = async (e) => { e.preventDefault(); item.hidden = !item.hidden; await saveLayout(); renderArrange(); };
+                    hide.onclick = async (e) => { e.preventDefault(); item.hidden = !item.hidden; await saveLayout(); renderStoreList(); };
                     ctl.appendChild(up); ctl.appendChild(down); ctl.appendChild(hide);
-                    row.appendChild(ctl);
+                    topLine.appendChild(ctl);
+                    row.appendChild(topLine);
+
+                    if (!isAlbum) {
+                        const note = document.createElement('div');
+                        note.style.cssText = 'font-size:9px; color:#999; margin-top:2px;';
+                        note.textContent = 'add + edit entries on your profile';
+                        row.appendChild(note);
+                    }
+
+                    // expanded album editor, in place
+                    if (isAlbum && expanded.has(sc.id)) {
+                        const panel = document.createElement('div');
+                        panel.style.cssText = 'margin-top:10px; padding:10px; background:#f9f5f0; border:1px dashed #c9b8ac;';
+
+                        const mode = sc.data.displayMode === 'cover' ? 'cover' : 'grid';
+                        const vis = sc.data.visibility || 'public';
+
+                        const modeLabel = document.createElement('div');
+                        modeLabel.style.cssText = 'font-size:9px; color:#999; margin-bottom:4px;';
+                        modeLabel.textContent = 'how it shows on your page:';
+                        panel.appendChild(modeLabel);
+                        [['grid', 'open grid ▦'], ['cover', 'cover tile ▢']].forEach(([m, label]) => {
+                            const chip = document.createElement('span');
+                            chip.style.cssText = chipStyle(mode === m);
+                            chip.textContent = label;
+                            chip.onclick = async () => { await updateDoc(doc(db, 'showcases', sc.id), { displayMode: m }); sc.data.displayMode = m; renderStoreList(); };
+                            panel.appendChild(chip);
+                        });
+
+                        const visLabel = document.createElement('div');
+                        visLabel.style.cssText = 'font-size:9px; color:#999; margin:8px 0 4px;';
+                        visLabel.textContent = 'who can see it:';
+                        panel.appendChild(visLabel);
+                        [['public', 'everyone'], ['subs', 'subscribers'], ['private', 'just me']].forEach(([v, label]) => {
+                            const chip = document.createElement('span');
+                            chip.style.cssText = chipStyle(vis === v);
+                            chip.textContent = label;
+                            chip.onclick = async () => { await updateDoc(doc(db, 'showcases', sc.id), { visibility: v }); sc.data.visibility = v; renderStoreList(); };
+                            panel.appendChild(chip);
+                        });
+
+                        const slotsLabel = document.createElement('div');
+                        slotsLabel.style.cssText = 'font-size:9px; color:#999; margin:8px 0 4px;';
+                        slotsLabel.innerHTML = 'the finds (' + sc.data.cols + '×' + sc.data.rows + ') — tap a slot to fill' +
+                            (sc.data.fillTag ? ' · <a href="#" style="color:#0600ff;" onclick="event.preventDefault(); window.refillShowcase(\'' + sc.id + '\', \'' + sc.data.fillTag + '\', ' + (sc.data.cols * sc.data.rows) + ')">↻ refresh #' + sc.data.fillTag + '</a>' : '');
+                        panel.appendChild(slotsLabel);
+
+                        const g = document.createElement('div');
+                        g.style.cssText = 'display:grid; grid-template-columns:repeat(' + sc.data.cols + ',1fr); gap:2px;';
+                        (sc.data.slots || []).forEach((slot, si) => {
+                            const cell = document.createElement('div');
+                            cell.style.cssText = 'width:100%; aspect-ratio:3/4; background:' + (slot ? '#ddd center/cover no-repeat' : '#efe9e2') + '; border:1px dashed #bbb; cursor:pointer; box-sizing:border-box;' + (slot ? ' background-image:url(' + slot.imageUrl + ');' : '');
+                            cell.onclick = () => window.openSlotPicker(sc.id, si);
+                            g.appendChild(cell);
+                        });
+                        panel.appendChild(g);
+
+                        const del = document.createElement('a');
+                        del.href = '#';
+                        del.textContent = '× delete this album';
+                        del.style.cssText = 'display:inline-block; margin-top:8px; color:#999; font-size:10px; text-decoration:underline;';
+                        del.onclick = async (e) => {
+                            e.preventDefault();
+                            if (!confirm('delete album "' + sc.data.name + '"? (finds stay on girlchan)')) return;
+                            await deleteDoc(doc(db, 'showcases', sc.id));
+                            const li = layout.findIndex(x => x.id === 'showcase:' + sc.id);
+                            if (li !== -1) { layout.splice(li, 1); await saveLayout(); }
+                            loadDecoratePage(false);
+                        };
+                        panel.appendChild(del);
+
+                        row.appendChild(panel);
+                    }
+
                     listEl.appendChild(row);
                 });
+
                 const anchor = document.createElement('div');
-                anchor.style.cssText = 'padding:8px 6px; font-size:11px; color:#999;';
-                anchor.textContent = 'everything (all your finds) — anchored';
+                anchor.style.cssText = 'padding:10px 4px; font-size:11px; color:#999;';
+                anchor.textContent = 'everything (all your finds) — anchored at the bottom';
                 listEl.appendChild(anchor);
             }
-            renderArrange();
-
-            // ── showcases ──
-            const scSec = document.createElement('div');
-            scSec.style.cssText = 'background:#fff; border:2px solid #0600ff; padding:14px; margin-bottom:14px;';
-            scSec.innerHTML = '<div style="font-size:12px; color:#0600ff; font-weight:bold; margin-bottom:2px;">albums</div><div style="font-size:9px; color:#999; margin-bottom:10px;">hand-picked collections. show each as an open grid or a cover tile. credit + commission stay with the finder.</div>';
-            const scList = document.createElement('div');
-            scSec.appendChild(scList);
-
-            function renderShowcaseEditors() {
-                scList.innerHTML = '';
-                showcases.forEach(sc => {
-                    const box = document.createElement('div');
-                    box.style.cssText = 'margin-bottom:14px;';
-                    const head = document.createElement('div');
-                    head.style.cssText = 'display:flex; align-items:center; justify-content:space-between; margin-bottom:5px;';
-                    const mode = sc.data.displayMode === 'cover' ? 'cover' : 'grid';
-                    const vis = sc.data.visibility || 'public';
-                    let headHtml = '<span style="font-size:11px; font-weight:bold;">✦ ' + sc.data.name + ' <span style="color:#999; font-weight:normal;">(' + sc.data.cols + '×' + sc.data.rows + ')</span>';
-                    if (sc.data.fillTag) headHtml += ' <a href="#" style="color:#0600ff; font-size:9px;" onclick="event.preventDefault(); window.refillShowcase(\'' + sc.id + '\', \'' + sc.data.fillTag + '\', ' + (sc.data.cols * sc.data.rows) + ')">↻ #' + sc.data.fillTag + '</a>';
-                    headHtml += '<br><a href="#" style="color:#999; font-size:9px; text-decoration:underline;" onclick="event.preventDefault(); window.toggleShowcaseMode(\'' + sc.id + '\', \'' + mode + '\')">' + (mode === 'grid' ? 'shown as grid ▦' : 'shown as cover ▢') + '</a>';
-                    headHtml += ' · <a href="#" style="color:#999; font-size:9px; text-decoration:underline;" onclick="event.preventDefault(); window.cycleShowcaseVis(\'' + sc.id + '\', \'' + vis + '\')">' + vis + ' ✓</a>';
-                    headHtml += '</span>';
-                    head.innerHTML = headHtml;
-                    const del = document.createElement('a');
-                    del.href = '#'; del.textContent = '×'; del.style.cssText = 'color:#999; font-size:15px; text-decoration:none;';
-                    del.onclick = async (e) => {
-                        e.preventDefault();
-                        if (!confirm('delete showcase "' + sc.data.name + '"?')) return;
-                        await deleteDoc(doc(db, 'showcases', sc.id));
-                        const li = layout.findIndex(x => x.id === 'showcase:' + sc.id);
-                        if (li !== -1) { layout.splice(li, 1); await saveLayout(); }
-                        loadDecoratePage(false);
-                    };
-                    head.appendChild(del);
-                    box.appendChild(head);
-                    const g = document.createElement('div');
-                    g.style.cssText = 'display:grid; grid-template-columns:repeat(' + sc.data.cols + ',1fr); gap:2px;';
-                    (sc.data.slots || []).forEach((slot, si) => {
-                        const cell = document.createElement('div');
-                        cell.style.cssText = 'width:100%; aspect-ratio:3/4; background:' + (slot ? '#ddd center/cover no-repeat' : '#f5f5f5') + '; border:1px dashed #bbb; cursor:pointer; box-sizing:border-box;' + (slot ? ' background-image:url(' + slot.imageUrl + ');' : '');
-                        cell.onclick = () => window.openSlotPicker(sc.id, si);
-                        g.appendChild(cell);
-                    });
-                    box.appendChild(g);
-                    scList.appendChild(box);
-                });
-            }
-            renderShowcaseEditors();
+            renderStoreList();
 
             const newSc = document.createElement('button');
             newSc.textContent = '＋ new album';
-            newSc.style.cssText = 'width:auto; margin:0; background:#0600ff; border:1px solid #0600ff; color:#fff; font-family:Courier New,monospace; font-size:11px; padding:6px 14px; cursor:pointer;';
-            newSc.onclick = async () => {
-                const name = prompt('album name:');
-                if (!name || !name.trim()) return;
-                const size = prompt('size — ACROSS x DOWN (3x3 = 3 wide, 3 tall):', '3x3');
-                if (!size) return;
-                const m = size.toLowerCase().match(/(\d+)\s*x\s*(\d+)/);
-                if (!m) { alert('use a format like 3x3'); return; }
-                const cols = Math.min(Math.max(parseInt(m[1], 10), 1), 4);
-                const rows = Math.min(Math.max(parseInt(m[2], 10), 1), 8);
-                const fillTag = prompt('auto-fill from a tag? (like "pink" — leave blank to hand-pick)', '') || '';
-                let slots = new Array(cols * rows).fill(null);
-                if (fillTag.trim()) {
-                    slots = await fillSlotsFromTag(fillTag.trim().toLowerCase(), cols * rows);
-                }
-                await addDoc(collection(db, 'showcases'), {
-                    ownerId: auth.currentUser.uid,
-                    name: name.trim(), cols: cols, rows: rows,
-                    fillTag: fillTag.trim().toLowerCase(),
-                    displayMode: 'grid', visibility: 'public',
-                    slots: slots,
-                    createdAt: new Date()
-                });
-                loadDecoratePage(false);
-            };
-            scSec.appendChild(newSc);
-            wrap.appendChild(scSec);
+            newSc.style.cssText = 'width:auto; margin:0; background:#0600ff; border:1px solid #0600ff; color:#fff; font-family:Courier New,monospace; font-size:11px; padding:8px 16px; cursor:pointer;';
+            newSc.onclick = () => window.openAlbumCreator();
+            storeSec.appendChild(newSc);
+
 
             const peek = document.createElement('a');
             peek.href = '#';
@@ -6545,6 +6557,87 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             while (slots.length < count) slots.push(null);
             return slots;
         }
+
+        // creation modal: name, size, tag auto-fill with YOUR top tags as chips
+        window.openAlbumCreator = async function() {
+            let modal = document.getElementById('albumCreatorModal');
+            if (modal) modal.remove();
+            modal = document.createElement('div');
+            modal.id = 'albumCreatorModal';
+            modal.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10002; align-items:center; justify-content:center; padding:20px;';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            const box = document.createElement('div');
+            box.style.cssText = 'background:#fff; border:3px solid #0600ff; box-shadow:8px 8px 0 #0600ff; padding:20px; width:100%; max-width:340px; font-family:Courier New,monospace; max-height:80vh; overflow-y:auto;';
+            box.innerHTML = `
+                <h3 style="color:#0600ff; font-size:14px; margin-bottom:12px;">＋ new album</h3>
+                <label style="font-size:10px; color:#333; display:block; margin-bottom:4px;">name</label>
+                <input type="text" id="albName" placeholder="like: pink corner" style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; box-sizing:border-box; margin-bottom:12px;">
+                <label style="font-size:10px; color:#333; display:block; margin-bottom:4px;">size</label>
+                <select id="albSize" style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; background:#fff; margin-bottom:12px;">
+                    <option value="3x3">3 across × 3 down (9)</option>
+                    <option value="3x4">3 across × 4 down (12)</option>
+                    <option value="3x2">3 across × 2 down (6)</option>
+                    <option value="4x3">4 across × 3 down (12)</option>
+                </select>
+                <label style="font-size:10px; color:#333; display:block; margin-bottom:4px;">auto-fill from one of your tags (or leave blank to hand-pick)</label>
+                <input type="text" id="albTag" placeholder="type a tag..." style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; box-sizing:border-box; margin-bottom:6px;">
+                <div id="albTagChips" style="margin-bottom:12px;"></div>
+                <button id="albCreateBtn" style="width:100%; padding:12px; background:#0600ff; color:#fff; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; cursor:pointer;">create ✿</button>
+                <div id="albStatus" style="font-size:10px; text-align:center; margin-top:8px; color:#999;"></div>
+            `;
+            modal.appendChild(box);
+            document.body.appendChild(modal);
+
+            // your most-used tags as tappable chips
+            (async () => {
+                try {
+                    const snap = await getDocs(collection(db, 'images'));
+                    const counts = {};
+                    snap.forEach(d => {
+                        const data = d.data();
+                        if (data.userId !== auth.currentUser.uid) return;
+                        (data.tags || []).forEach(t => {
+                            const k = String(t).toLowerCase();
+                            counts[k] = (counts[k] || 0) + 1;
+                        });
+                    });
+                    const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 14);
+                    const chipsEl = document.getElementById('albTagChips');
+                    top.forEach(([tag, n]) => {
+                        const chip = document.createElement('span');
+                        chip.style.cssText = 'display:inline-block; padding:4px 9px; margin:0 5px 5px 0; font-size:10px; cursor:pointer; border:1.5px solid #0600ff; background:#fff; color:#0600ff;';
+                        chip.textContent = tag + ' (' + n + ')';
+                        chip.onclick = () => { document.getElementById('albTag').value = tag; };
+                        chipsEl.appendChild(chip);
+                    });
+                } catch (e) {}
+            })();
+
+            document.getElementById('albCreateBtn').onclick = async () => {
+                const name = document.getElementById('albName').value.trim();
+                if (!name) { document.getElementById('albStatus').textContent = 'give it a name ✿'; return; }
+                const [cols, rows] = document.getElementById('albSize').value.split('x').map(Number);
+                const fillTag = document.getElementById('albTag').value.trim().toLowerCase();
+                document.getElementById('albCreateBtn').textContent = 'making it...';
+                let slots = new Array(cols * rows).fill(null);
+                if (fillTag) {
+                    slots = await fillSlotsFromTag(fillTag, cols * rows);
+                    if (!slots.some(Boolean)) {
+                        document.getElementById('albStatus').textContent = 'none of your finds are tagged "' + fillTag + '" — made it empty to hand-pick';
+                    }
+                }
+                await addDoc(collection(db, 'showcases'), {
+                    ownerId: auth.currentUser.uid,
+                    name: name, cols: cols, rows: rows,
+                    fillTag: fillTag,
+                    displayMode: 'grid', visibility: 'public',
+                    slots: slots,
+                    createdAt: new Date()
+                });
+                modal.remove();
+                loadDecoratePage(false);
+            };
+        };
 
         window.toggleShowcaseMode = async function(scId, cur) {
             await updateDoc(doc(db, 'showcases', scId), { displayMode: cur === 'grid' ? 'cover' : 'grid' });
