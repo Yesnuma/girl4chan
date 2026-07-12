@@ -1880,6 +1880,14 @@ window.openImageDetail = async function(imageId, imageUrl, link, tags) {
         closeImageDetail();
         window.gcFileToCabinet({ gcId: imageId, img: imageUrl, shopUrl: link || '', tags: tags || [] });
     };
+    // album button: premium perk
+    const albumBtn = document.getElementById('albumBtn');
+    if (auth.currentUser && (window.isPremium === true || isAdmin())) {
+        albumBtn.style.display = 'block';
+        albumBtn.onclick = () => window.openAlbumPicker(imageId, imageUrl);
+    } else {
+        albumBtn.style.display = 'none';
+    }
     // Display tags
     const tagsContainer = document.getElementById('detailTags');
     tagsContainer.innerHTML = '';
@@ -2150,6 +2158,7 @@ async function removeTag(imageId, tagToRemove) {
 
 // Load images filtered by tag(s) - supports multi-tag filtering
 async function loadTagFeed(tag, addToHistory = true, resetFilters = true) {
+            clearProfileWallpaper();
     closeSidebar(); // Close sidebar if open
 
     // Save CURRENT page to history BEFORE navigating
@@ -2860,6 +2869,7 @@ async function deleteCollection(collectionId, collectionName) {
 
         // Load specific collection
         async function loadCollection(collectionId, collectionName, addToHistory = true) {
+            clearProfileWallpaper();
             closeSidebar();
 
             // Save CURRENT page to history BEFORE navigating
@@ -3331,6 +3341,8 @@ async function deleteCollection(collectionId, collectionName) {
                     header.appendChild(photoEl);
                 }
 
+                applyProfileWallpaper(profData);
+
                 const nameEl = document.createElement('div');
                 nameEl.style.cssText = 'font-size:16px; font-weight:bold; font-family:Courier New,monospace; margin-bottom:2px; display:flex; align-items:center; gap:5px;';
                 nameEl.textContent = username + '.finds';
@@ -3341,6 +3353,12 @@ async function deleteCollection(collectionId, collectionName) {
                     nameEl.appendChild(badge);
                 }
                 header.appendChild(nameEl);
+                if (profData.storeHeadline) {
+                    const hl = document.createElement('div');
+                    hl.style.cssText = 'font-size:11px; color:#ff007a; font-style:italic; font-family:Courier New,monospace; margin-bottom:4px;';
+                    hl.textContent = '✿ ' + profData.storeHeadline + ' ✿';
+                    header.appendChild(hl);
+                }
 
                 if (profData.bio) {
                     const bioEl = document.createElement('div');
@@ -3490,6 +3508,16 @@ async function deleteCollection(collectionId, collectionName) {
                 }
 
                 grid.parentNode.insertBefore(header, grid);
+                // albums (visibility filtered inside; sub check async)
+                if (auth.currentUser) {
+                    getDoc(doc(db, 'curatorSubs', auth.currentUser.uid + '_' + userId)).then(s => {
+                        const isSub = s.exists() && s.data().active === true;
+                        renderAlbumsSection(header, userId, false, isSub);
+                    }).catch(() => renderAlbumsSection(header, userId, false, false));
+                } else {
+                    renderAlbumsSection(header, userId, false, false);
+                }
+
                 const logVis = profData.brandLogVisibility || (profData.brandLogPublic === true ? 'public' : 'private');
                 if (logVis === 'public') {
                     renderUserBrandLogSection(header, userId, false, logVis);
@@ -3544,6 +3572,7 @@ async function deleteCollection(collectionId, collectionName) {
 
       // Load account settings page
         window.loadAccountSettings = async function() {
+            clearProfileWallpaper();
             if (!requireAuth()) return;
             closeSidebar();
             
@@ -3953,6 +3982,8 @@ window.loadMyProfile = async function(addToHistory = true) {
                 photoEl.onclick = () => openProfilePhotoChooser();
                 profileHeader.appendChild(photoEl);
                 
+                applyProfileWallpaper(userData);
+
                 // Username (+ og badge for founding members)
                 const nameEl = document.createElement('div');
                 nameEl.style.cssText = 'font-size:16px; font-weight:bold; font-family:Courier New,monospace; margin-bottom:2px; display:flex; align-items:center; gap:5px;';
@@ -3964,6 +3995,29 @@ window.loadMyProfile = async function(addToHistory = true) {
                     nameEl.appendChild(badge);
                 }
                 profileHeader.appendChild(nameEl);
+                if (userData.storeHeadline) {
+                    const hl = document.createElement('div');
+                    hl.style.cssText = 'font-size:11px; color:#ff007a; font-style:italic; font-family:Courier New,monospace; margin-bottom:4px;';
+                    hl.textContent = '✿ ' + userData.storeHeadline + ' ✿';
+                    profileHeader.appendChild(hl);
+                }
+
+                // storefront: premium + threshold unlock
+                if (window.isPremium === true || isAdmin()) {
+                    countUserFinds(auth.currentUser.uid).then(n => {
+                        const unlocked = isAdmin() || n >= STOREFRONT_THRESHOLD;
+                        const sf = document.createElement(unlocked ? 'button' : 'div');
+                        if (unlocked) {
+                            sf.textContent = '🏪 decorate my storefront';
+                            sf.style.cssText = 'display:block; margin:6px auto 0; background:#fff; border:1px solid #ff007a; color:#ff007a; font-family:Courier New,monospace; font-size:11px; padding:4px 12px; cursor:pointer;';
+                            sf.onclick = () => window.openStorefrontEditor();
+                        } else {
+                            sf.style.cssText = 'margin:6px auto 0; font-family:Courier New,monospace; font-size:9px; color:#999; text-align:center;';
+                            sf.textContent = '🏪 storefront unlocks at ' + STOREFRONT_THRESHOLD + ' finds — you\'re at ' + n + ' ✿';
+                        }
+                        profileHeader.appendChild(sf);
+                    });
+                }
 
                 // shuffle my closet
                 const myShuffle = document.createElement('a');
@@ -4065,6 +4119,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 if (window.isPremium === true || isAdmin()) {
                     const vis = userData.brandLogVisibility || (userData.brandLogPublic === true ? 'public' : 'private');
                     renderUserBrandLogSection(profileHeader, auth.currentUser.uid, true, vis);
+                    renderAlbumsSection(profileHeader, auth.currentUser.uid, true, false);
                 }
                 
             
@@ -4150,6 +4205,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
         };
     
         window.loadLikesFeed = async function() {
+            clearProfileWallpaper();
             const oldHeader = document.getElementById('profileHeader');
             if (oldHeader) oldHeader.remove();
             const oldSortBar = document.getElementById('profileSortBar');
@@ -4913,6 +4969,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
         // Saved as data (pieces + % positions), rendered as live mini-collages —
         // every piece stays tappable and shoppable.
         async function loadOutfitsBoard(addToHistory = true, mineOnly = false) {
+            clearProfileWallpaper();
             if (mineOnly && !requireAuth()) return;
             closeSidebar();
             const ctxType = mineOnly ? 'myOutfits' : 'outfits';
@@ -5332,6 +5389,155 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             }
         };
 
+        // ── STOREFRONT: profile-scoped wallpaper (their walls, their page) ──
+        const STOREFRONT_THRESHOLD = 100; // finds needed (plus premium) to unlock
+
+        function clearProfileWallpaper() {
+            const l = document.getElementById('profileWallpaper');
+            if (l) l.remove();
+        }
+
+        function applyProfileWallpaper(u) {
+            clearProfileWallpaper();
+            if (!u || !u.storeWallpaperUrl) return;
+            const layer = document.createElement('div');
+            layer.id = 'profileWallpaper';
+            layer.style.cssText = 'position:fixed; inset:0; pointer-events:none; z-index:0;';
+            layer.style.backgroundImage = 'url(' + u.storeWallpaperUrl + ')';
+            layer.style.opacity = String(typeof u.storeOpacity === 'number' ? u.storeOpacity : 0.2);
+            if (u.storeStyle === 'tile') {
+                layer.style.backgroundSize = (u.storeTileSize || 160) + 'px auto';
+                layer.style.backgroundRepeat = 'repeat';
+                layer.style.backgroundPosition = 'top left';
+            } else {
+                layer.style.backgroundSize = 'cover';
+                layer.style.backgroundRepeat = 'no-repeat';
+                layer.style.backgroundPosition = 'center';
+            }
+            document.body.prepend(layer);
+            const container = document.querySelector('.container');
+            if (container) { container.style.position = 'relative'; container.style.zIndex = '1'; }
+            const headerEl = document.querySelector('.header');
+            if (headerEl) { headerEl.style.position = 'relative'; headerEl.style.zIndex = '2'; }
+        }
+
+        async function countUserFinds(uid) {
+            try {
+                const snap = await getDocs(collection(db, 'images'));
+                let n = 0;
+                snap.forEach(d => { if (d.data().userId === uid) n++; });
+                return n;
+            } catch (e) { return 0; }
+        }
+
+        window.openStorefrontEditor = async function() {
+            if (!requireAuth()) return;
+            let modal = document.getElementById('storefrontModal');
+            if (modal) { modal.style.display = 'flex'; return; }
+            modal = document.createElement('div');
+            modal.id = 'storefrontModal';
+            modal.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10001; align-items:center; justify-content:center; padding:20px;';
+            modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+            const box = document.createElement('div');
+            box.style.cssText = 'background:#fff; border:3px solid #0600ff; box-shadow:8px 8px 0 #0600ff; padding:24px 20px; width:100%; max-width:360px; font-family:Courier New,monospace; position:relative; max-height:80vh; overflow-y:auto;';
+            box.innerHTML = `
+                <button onclick="document.getElementById('storefrontModal').style.display='none'" style="position:absolute; top:6px; right:10px; width:auto; margin:0; padding:4px 8px; background:none; border:none; font-size:20px; cursor:pointer; color:#0600ff;">×</button>
+                <h3 style="color:#0600ff; font-size:16px; margin-bottom:6px;">🏪 my storefront</h3>
+                <p style="font-size:10px; color:#666; margin-bottom:14px; line-height:1.5;">decorate your own page — visitors see your walls when they visit you.</p>
+                <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">headline (shows under your name)</label>
+                <input type="text" id="storeHeadline" maxlength="80" placeholder="say something..." style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; box-sizing:border-box; margin-bottom:12px;">
+                <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">wallpaper</label>
+                <input type="file" id="storeWallFile" accept="image/*" style="width:100%; font-size:11px; margin-bottom:12px;">
+                <select id="storeWallStyle" onchange="document.getElementById('storeTileWrap').style.display = this.value==='tile' ? 'block':'none'; previewStoreStyle();" style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; background:#fff; margin-bottom:12px;">
+                    <option value="fill">fill the screen (one big image)</option>
+                    <option value="tile">tile it (pattern / icon repeats)</option>
+                </select>
+                <div id="storeTileWrap" style="display:none; margin-bottom:12px;">
+                    <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">tile size: <span id="storeTileVal">160</span>px</label>
+                    <input type="range" id="storeTileSize" min="40" max="400" value="160" style="width:100%;" oninput="document.getElementById('storeTileVal').textContent=this.value; previewStoreStyle();">
+                </div>
+                <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">opacity: <span id="storeOpVal">20</span>%</label>
+                <input type="range" id="storeOpacity" min="5" max="60" value="20" style="width:100%; margin-bottom:14px;" oninput="document.getElementById('storeOpVal').textContent=this.value; var l=document.getElementById('profileWallpaper'); if(l) l.style.opacity=this.value/100;">
+                <button onclick="saveStorefront()" style="width:100%; padding:12px; background:#0600ff; color:#fff; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; cursor:pointer; margin-bottom:8px;">save my storefront ✿</button>
+                <button onclick="clearStorefront()" style="width:100%; padding:10px; background:#f5f5f5; color:#000; border:2px solid #ccc; font-family:'Courier New',monospace; font-size:11px; cursor:pointer;">strip the walls</button>
+                <div id="storeStatus" style="font-size:11px; text-align:center; margin-top:10px;"></div>
+            `;
+            modal.appendChild(box);
+            document.body.appendChild(modal);
+            try {
+                const u = (await getDoc(doc(db, 'users', auth.currentUser.uid))).data() || {};
+                if (u.storeHeadline) document.getElementById('storeHeadline').value = u.storeHeadline;
+                if (typeof u.storeOpacity === 'number') {
+                    const v = Math.round(u.storeOpacity * 100);
+                    document.getElementById('storeOpacity').value = v;
+                    document.getElementById('storeOpVal').textContent = v;
+                }
+                if (u.storeStyle === 'tile') {
+                    document.getElementById('storeWallStyle').value = 'tile';
+                    document.getElementById('storeTileWrap').style.display = 'block';
+                    const ts = u.storeTileSize || 160;
+                    document.getElementById('storeTileSize').value = ts;
+                    document.getElementById('storeTileVal').textContent = ts;
+                }
+            } catch (e) {}
+        };
+
+        window.previewStoreStyle = function() {
+            const l = document.getElementById('profileWallpaper');
+            if (!l) return;
+            const style = document.getElementById('storeWallStyle')?.value;
+            const size = document.getElementById('storeTileSize')?.value || 160;
+            if (style === 'tile') {
+                l.style.backgroundSize = size + 'px auto';
+                l.style.backgroundRepeat = 'repeat';
+                l.style.backgroundPosition = 'top left';
+            } else {
+                l.style.backgroundSize = 'cover';
+                l.style.backgroundRepeat = 'no-repeat';
+                l.style.backgroundPosition = 'center';
+            }
+        };
+
+        window.saveStorefront = async function() {
+            const status = document.getElementById('storeStatus');
+            try {
+                const fileInput = document.getElementById('storeWallFile');
+                let url = null;
+                if (fileInput.files && fileInput.files[0]) {
+                    status.textContent = 'uploading...';
+                    const compressed = await compressImage(fileInput.files[0], 1920, 0.85);
+                    const wref = ref(storage, 'storefronts/' + auth.currentUser.uid + '_' + Date.now() + '.jpg');
+                    await uploadBytes(wref, compressed);
+                    url = await getDownloadURL(wref);
+                } else {
+                    const u = (await getDoc(doc(db, 'users', auth.currentUser.uid))).data() || {};
+                    url = u.storeWallpaperUrl || null;
+                }
+                await setDoc(doc(db, 'users', auth.currentUser.uid), {
+                    storeHeadline: document.getElementById('storeHeadline').value.trim(),
+                    storeWallpaperUrl: url,
+                    storeOpacity: parseInt(document.getElementById('storeOpacity').value, 10) / 100,
+                    storeStyle: document.getElementById('storeWallStyle').value,
+                    storeTileSize: parseInt(document.getElementById('storeTileSize').value, 10)
+                }, { merge: true });
+                status.textContent = 'saved ✿';
+                status.style.color = '#00a86b';
+                loadMyProfile(false);
+            } catch (e) {
+                status.textContent = 'failed: ' + e.message;
+                status.style.color = '#c00';
+            }
+        };
+
+        window.clearStorefront = async function() {
+            try {
+                await setDoc(doc(db, 'users', auth.currentUser.uid), { storeWallpaperUrl: null }, { merge: true });
+                clearProfileWallpaper();
+                const status = document.getElementById('storeStatus');
+                if (status) { status.textContent = 'walls stripped'; status.style.color = '#666'; }
+            } catch (e) {}
+        };
+
         // ── WALLPAPER TAKEOVER: featured curators can decorate the site ──
         async function applySiteTheme() {
             try {
@@ -5355,6 +5561,15 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 }
                 layer.style.backgroundImage = 'url(' + d.wallpaperUrl + ')';
                 layer.style.opacity = String(typeof d.opacity === 'number' ? d.opacity : 0.2);
+                if (d.style === 'tile') {
+                    layer.style.backgroundSize = (d.tileSize || 160) + 'px auto';
+                    layer.style.backgroundRepeat = 'repeat';
+                    layer.style.backgroundPosition = 'top left';
+                } else {
+                    layer.style.backgroundSize = 'cover';
+                    layer.style.backgroundRepeat = 'no-repeat';
+                    layer.style.backgroundPosition = 'center';
+                }
             } catch (e) { console.error('theme load failed:', e); }
         }
 
@@ -5374,6 +5589,14 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 <h3 style="color:#0600ff; font-size:16px; margin-bottom:6px;">🎨 decorate girlchan</h3>
                 <p style="font-size:10px; color:#666; margin-bottom:14px; line-height:1.5;">your wallpaper shows behind the whole site, for everyone. make it yours.</p>
                 <input type="file" id="wallpaperFile" accept="image/*" style="width:100%; font-size:11px; margin-bottom:12px;">
+                <select id="wallStyle" onchange="document.getElementById('tileSizeWrap').style.display = this.value==='tile' ? 'block':'none'; previewWallStyle();" style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; background:#fff; margin-bottom:12px;">
+                    <option value="fill">fill the screen (one big image)</option>
+                    <option value="tile">tile it (pattern / icon repeats)</option>
+                </select>
+                <div id="tileSizeWrap" style="display:none; margin-bottom:12px;">
+                    <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">tile size: <span id="tileSizeVal">160</span>px</label>
+                    <input type="range" id="tileSize" min="40" max="400" value="160" style="width:100%;" oninput="document.getElementById('tileSizeVal').textContent=this.value; previewWallStyle();">
+                </div>
                 <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">opacity: <span id="wallOpVal">20</span>%</label>
                 <input type="range" id="wallOpacity" min="5" max="60" value="20" style="width:100%; margin-bottom:14px;" oninput="document.getElementById('wallOpVal').textContent=this.value; var l=document.getElementById('siteWallpaper'); if(l) l.style.opacity=this.value/100;">
                 <button id="wallSaveBtn" onclick="saveWallpaper()" style="width:100%; padding:12px; background:#0600ff; color:#fff; border:2px solid #0600ff; font-family:Courier New,monospace; font-size:12px; cursor:pointer; margin-bottom:8px;">put it up ✿</button>
@@ -5390,7 +5613,30 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     document.getElementById('wallOpacity').value = v;
                     document.getElementById('wallOpVal').textContent = v;
                 }
+                if (t.exists() && t.data().style === 'tile') {
+                    document.getElementById('wallStyle').value = 'tile';
+                    document.getElementById('tileSizeWrap').style.display = 'block';
+                    const ts = t.data().tileSize || 160;
+                    document.getElementById('tileSize').value = ts;
+                    document.getElementById('tileSizeVal').textContent = ts;
+                }
             } catch (e) {}
+        };
+
+        window.previewWallStyle = function() {
+            const l = document.getElementById('siteWallpaper');
+            if (!l) return;
+            const style = document.getElementById('wallStyle')?.value;
+            const size = document.getElementById('tileSize')?.value || 160;
+            if (style === 'tile') {
+                l.style.backgroundSize = size + 'px auto';
+                l.style.backgroundRepeat = 'repeat';
+                l.style.backgroundPosition = 'top left';
+            } else {
+                l.style.backgroundSize = 'cover';
+                l.style.backgroundRepeat = 'no-repeat';
+                l.style.backgroundPosition = 'center';
+            }
         };
 
         window.saveWallpaper = async function() {
@@ -5414,6 +5660,8 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 await setDoc(doc(db, 'siteTheme', 'current'), {
                     wallpaperUrl: wallpaperUrl,
                     opacity: opacity,
+                    style: document.getElementById('wallStyle').value,
+                    tileSize: parseInt(document.getElementById('tileSize').value, 10),
                     setBy: auth.currentUser.uid,
                     setByName: userDoc.data()?.username || '',
                     updatedAt: new Date()
@@ -5475,6 +5723,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
         let brandLogSort = 'az';
 
         async function loadBrandLog(addToHistory = true) {
+            clearProfileWallpaper();
             closeSidebar();
             if (addToHistory && currentContext.type !== 'brandlog') {
                 navigationHistory.push({ ...currentContext });
@@ -5834,6 +6083,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
 
         // ── FEATURED CURATOR page ──
         async function loadFeaturedCurator(addToHistory = true) {
+            clearProfileWallpaper();
             closeSidebar();
             if (addToHistory && currentContext.type !== 'featured') {
                 navigationHistory.push({ ...currentContext });
@@ -5985,8 +6235,188 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             }
         }
 
+        // ── PERSONAL ALBUMS (premium): collect any finds, per-album visibility ──
+        window.openAlbumPicker = async function(imageId, imageUrl) {
+            if (!requireAuth()) return;
+            let modal = document.getElementById('albumPickerModal');
+            if (modal) modal.remove();
+            modal = document.createElement('div');
+            modal.id = 'albumPickerModal';
+            modal.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10002; align-items:center; justify-content:center; padding:20px;';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            const box = document.createElement('div');
+            box.style.cssText = 'background:#fff; border:3px solid #0600ff; box-shadow:8px 8px 0 #0600ff; padding:20px; width:100%; max-width:320px; font-family:Courier New,monospace; max-height:70vh; overflow-y:auto;';
+            box.innerHTML = '<h3 style="color:#0600ff; font-size:14px; margin-bottom:12px;">save to album</h3><div id="albumPickList" style="display:flex; flex-direction:column; gap:6px;"></div>';
+            modal.appendChild(box);
+            document.body.appendChild(modal);
+
+            const list = box.querySelector('#albumPickList');
+            const snap = await getDocs(collection(db, 'userAlbums'));
+            const mine = [];
+            snap.forEach(d => { if (d.data().ownerId === auth.currentUser.uid) mine.push({ id: d.id, data: d.data() }); });
+            mine.sort((a, b) => (a.data.nameLower || '').localeCompare(b.data.nameLower || ''));
+
+            mine.forEach(al => {
+                const row = document.createElement('button');
+                const isIn = (al.data.images || []).includes(imageId);
+                row.textContent = (isIn ? '✓ ' : '') + al.data.name;
+                row.style.cssText = 'width:100%; padding:10px; text-align:left; background:' + (isIn ? '#9ED2F5' : '#fff') + '; border:1.5px solid #0600ff; color:#000; font-family:Courier New,monospace; font-size:12px; cursor:pointer; margin:0;';
+                row.onclick = async () => {
+                    try {
+                        if (isIn) {
+                            await updateDoc(doc(db, 'userAlbums', al.id), { images: arrayRemove(imageId), updatedAt: new Date() });
+                        } else {
+                            const upd = { images: arrayUnion(imageId), updatedAt: new Date() };
+                            if (!al.data.coverUrl) upd.coverUrl = imageUrl;
+                            await updateDoc(doc(db, 'userAlbums', al.id), upd);
+                        }
+                        modal.remove();
+                        window.openAlbumPicker(imageId, imageUrl);
+                    } catch (e) { alert('failed: ' + e.message); }
+                };
+                list.appendChild(row);
+            });
+
+            const newBtn = document.createElement('button');
+            newBtn.textContent = '＋ new album';
+            newBtn.style.cssText = 'width:100%; padding:10px; background:#0600ff; border:1.5px solid #0600ff; color:#fff; font-family:Courier New,monospace; font-size:12px; cursor:pointer; margin:6px 0 0;';
+            newBtn.onclick = async () => {
+                const name = prompt('album name:');
+                if (!name || !name.trim()) return;
+                try {
+                    const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+                    await addDoc(collection(db, 'userAlbums'), {
+                        ownerId: auth.currentUser.uid,
+                        ownerName: userDoc.data()?.username || '',
+                        name: name.trim(), nameLower: name.trim().toLowerCase(),
+                        visibility: 'private',
+                        images: [imageId], coverUrl: imageUrl,
+                        createdAt: new Date(), updatedAt: new Date()
+                    });
+                    modal.remove();
+                    window.openAlbumPicker(imageId, imageUrl);
+                } catch (e) { alert('failed: ' + e.message); }
+            };
+            list.appendChild(newBtn);
+        };
+
+        async function loadAlbum(albumId, albumName, addToHistory = true) {
+            clearProfileWallpaper();
+            closeSidebar();
+            if (addToHistory) navigationHistory.push({ ...currentContext });
+            currentContext = { type: 'album', id: albumId };
+            document.getElementById('pageTitle').innerHTML = '/ ' + albumName;
+            const grid = document.getElementById('imageGrid');
+            grid.innerHTML = '<div style="grid-column:1 / -1; padding:20px; text-align:center; color:#666; font-family:Courier New,monospace; font-size:12px;">loading...</div>';
+            const oldHeader = document.getElementById('profileHeader'); if (oldHeader) oldHeader.remove();
+            const oldSortBar = document.getElementById('profileSortBar'); if (oldSortBar) oldSortBar.remove();
+            const tagRow = document.getElementById('recentTagsRow'); if (tagRow) tagRow.style.display = 'none';
+            try {
+                const alDoc = await getDoc(doc(db, 'userAlbums', albumId));
+                if (!alDoc.exists()) { grid.innerHTML = ''; return; }
+                const ids = alDoc.data().images || [];
+                const snap = await getDocs(query(collection(db, 'images'), orderBy('createdAt', 'desc')));
+                grid.innerHTML = '';
+                let shown = 0;
+                snap.forEach(d => {
+                    if (!ids.includes(d.id)) return;
+                    const data = d.data();
+                    const img = document.createElement('img');
+                    img.src = data.imageUrl;
+                    img.alt = '';
+                    img.draggable = false;
+                    img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
+                    img.onclick = () => openImageDetail(d.id, data.imageUrl, data.link || '', data.tags || []);
+                    grid.appendChild(img);
+                    shown++;
+                });
+                if (shown === 0) {
+                    grid.innerHTML = '<div style="grid-column:1 / -1; padding:20px; text-align:center; color:#666; font-family:Courier New,monospace; font-size:12px;">nothing in this album yet</div>';
+                }
+            } catch (e) { console.error('album load failed:', e); }
+        }
+        window.loadAlbum = loadAlbum;
+
+        async function renderAlbumsSection(container, ownerId, isOwner, viewerIsSub) {
+            try {
+                const snap = await getDocs(collection(db, 'userAlbums'));
+                const albums = [];
+                snap.forEach(d => { if (d.data().ownerId === ownerId) albums.push({ id: d.id, data: d.data() }); });
+                albums.sort((a, b) => (b.data.updatedAt?.seconds || 0) - (a.data.updatedAt?.seconds || 0));
+
+                const visible = albums.filter(al => {
+                    const v = al.data.visibility || 'private';
+                    if (isOwner || isAdmin()) return true;
+                    if (v === 'public') return true;
+                    if (v === 'subs' && viewerIsSub) return true;
+                    return false;
+                });
+                if (visible.length === 0 && !isOwner) return;
+
+                const wrap = document.createElement('div');
+                wrap.style.cssText = 'width:100%; margin-top:12px; padding-top:10px; border-top:1px solid #d4c5b0; text-align:left;';
+                const head = document.createElement('div');
+                head.style.cssText = 'font-family:Courier New,monospace; font-size:11px; color:#0600ff; font-weight:bold; margin-bottom:6px;';
+                head.textContent = isOwner ? '━ my albums ━' : '━ their albums ━';
+                wrap.appendChild(head);
+
+                if (visible.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.style.cssText = 'font-family:Courier New,monospace; font-size:10px; color:#999;';
+                    empty.textContent = 'no albums yet — tap "album" on any find to start one';
+                    wrap.appendChild(empty);
+                } else {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex; gap:10px; overflow-x:auto; padding-bottom:4px;';
+                    visible.forEach(al => {
+                        const card = document.createElement('div');
+                        card.style.cssText = 'flex:0 0 92px; font-family:Courier New,monospace;';
+                        const cov = document.createElement('div');
+                        cov.style.cssText = 'width:92px; height:92px; background:#ddd center/cover no-repeat; border:2px solid #0600ff; cursor:pointer;' + (al.data.coverUrl ? ' background-image:url(' + al.data.coverUrl + ');' : '');
+                        cov.onclick = () => loadAlbum(al.id, al.data.name);
+                        card.appendChild(cov);
+                        const nm = document.createElement('div');
+                        nm.style.cssText = 'font-size:9px; font-weight:bold; color:#000; margin-top:3px; word-break:break-word;';
+                        nm.textContent = al.data.name;
+                        card.appendChild(nm);
+                        if (isOwner) {
+                            const ctl = document.createElement('div');
+                            ctl.style.cssText = 'font-size:8px; display:flex; gap:6px; margin-top:1px;';
+                            const visLabels = { 'private': 'private ✓', 'public': 'public ✓', 'subs': 'subs ✓' };
+                            const v = al.data.visibility || 'private';
+                            const visA = document.createElement('a');
+                            visA.href = '#';
+                            visA.textContent = visLabels[v];
+                            visA.style.cssText = 'color:#999;';
+                            visA.onclick = async (e) => {
+                                e.preventDefault();
+                                const nextVis = { 'private': 'public', 'public': 'subs', 'subs': 'private' };
+                                try { await updateDoc(doc(db, 'userAlbums', al.id), { visibility: nextVis[v] }); loadMyProfile(false); } catch (err) {}
+                            };
+                            ctl.appendChild(visA);
+                            const del = document.createElement('a');
+                            del.href = '#';
+                            del.textContent = '×';
+                            del.style.cssText = 'color:#999;';
+                            del.onclick = async (e) => {
+                                e.preventDefault();
+                                if (!confirm('delete album "' + al.data.name + '"? (finds stay on girlchan)')) return;
+                                try { await deleteDoc(doc(db, 'userAlbums', al.id)); loadMyProfile(false); } catch (err) {}
+                            };
+                            ctl.appendChild(del);
+                            card.appendChild(ctl);
+                        }
+                        row.appendChild(card);
+                    });
+                    wrap.appendChild(row);
+                }
+                container.appendChild(wrap);
+            } catch (e) { console.error('albums section failed:', e); }
+        }
+
         // ── ADMIN: all users directory ──
         async function loadAllUsers(addToHistory = true) {
+            clearProfileWallpaper();
             if (!isRealAdmin()) return;
             closeSidebar();
             if (addToHistory && currentContext.type !== 'allUsers') {
@@ -6287,6 +6717,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
         }
 
         async function loadTodayPage(addToHistory = true) {
+            clearProfileWallpaper();
             closeSidebar();
             if (addToHistory && currentContext.type !== 'today') {
                 navigationHistory.push({ ...currentContext });
@@ -6491,6 +6922,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
 
         // Load everything feed
         async function loadEverythingFeed(addToHistory = true) {
+            clearProfileWallpaper();
             // Save CURRENT page to history BEFORE navigating
             if (addToHistory && currentContext.type !== 'everything') {
                 navigationHistory.push({ ...currentContext });
@@ -7911,6 +8343,7 @@ function loadPage(page) {
             <button id="exploreBtn" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block; margin:0 auto 4px;"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>explore</button>
             <button id="fileBtn" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block; margin:0 auto 4px;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>file</button>
             <button id="likeBtnRow" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer;"><span id="likeHeartIcon" style="font-size:18px; display:block; margin-bottom:4px; line-height:22px;">♡</span><span id="likeTxt">like</span></button>
+            <button id="albumBtn" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer; display:none;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block; margin:0 auto 4px;"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>album</button>
         </div>
         <button onclick="closeImageDetail()" style="width: 100%; padding: 12px; background: #ccc; color: #000; border: 2px solid #999;">close</button>
     </div>
