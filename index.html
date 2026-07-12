@@ -2763,6 +2763,14 @@ function showAllTagsModal(categorizedTags) {
         retagLink.onclick = (e) => { e.preventDefault(); window.retagUntagged(); };
         collectionsList.appendChild(retagLink);
     }
+    if (isAdmin()) {
+        const usersLink = document.createElement('a');
+        usersLink.href = '#';
+        usersLink.textContent = '⚙ all users';
+        usersLink.style.cssText = 'color: #999; font-style: italic; font-size: 12px;';
+        usersLink.onclick = (e) => { e.preventDefault(); window.loadAllUsers(); };
+        collectionsList.appendChild(usersLink);
+    }
     if (isAdmin() || window.canTheme === true) {
         const decoLink = document.createElement('a');
         decoLink.href = '#';
@@ -5976,6 +5984,113 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 console.error('featured curator failed:', e);
             }
         }
+
+        // ── ADMIN: all users directory ──
+        async function loadAllUsers(addToHistory = true) {
+            if (!isRealAdmin()) return;
+            closeSidebar();
+            if (addToHistory && currentContext.type !== 'allUsers') {
+                navigationHistory.push({ ...currentContext });
+            }
+            activeTagFilters = [];
+            const existingFilterControls = document.querySelector('.tag-filter-controls');
+            if (existingFilterControls) existingFilterControls.remove();
+
+            currentContext = { type: 'allUsers', id: null };
+            document.getElementById('pageTitle').innerHTML = '⚙ all users <span style="font-size:10px; color:#888; font-weight:normal;">admin only</span>';
+
+            const grid = document.getElementById('imageGrid');
+            grid.innerHTML = '';
+            const oldHeader = document.getElementById('profileHeader'); if (oldHeader) oldHeader.remove();
+            const oldSortBar = document.getElementById('profileSortBar'); if (oldSortBar) oldSortBar.remove();
+            const oldTagFilters = document.getElementById('profileTagFilters'); if (oldTagFilters) oldTagFilters.remove();
+            const tagRow = document.getElementById('recentTagsRow'); if (tagRow) tagRow.style.display = 'none';
+
+            // search box
+            const searchWrap = document.createElement('div');
+            searchWrap.style.cssText = 'grid-column:1 / -1; padding:0 2px 10px;';
+            const searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.placeholder = 'search usernames...';
+            searchInput.style.cssText = 'width:100%; padding:10px; border:1.5px solid #0600ff; font-family:Courier New,monospace; font-size:12px; box-sizing:border-box;';
+            searchWrap.appendChild(searchInput);
+            grid.appendChild(searchWrap);
+
+            const listWrap = document.createElement('div');
+            listWrap.style.cssText = 'grid-column:1 / -1;';
+            grid.appendChild(listWrap);
+
+            try {
+                const snap = await getDocs(collection(db, 'users'));
+                const users = [];
+                snap.forEach(d => users.push({ id: d.id, data: d.data() }));
+                users.sort((a, b) => {
+                    const ap = a.data.premium === true ? 1 : 0;
+                    const bp = b.data.premium === true ? 1 : 0;
+                    if (ap !== bp) return bp - ap; // premium first
+                    const at = a.data.createdAt?.seconds || 0;
+                    const bt = b.data.createdAt?.seconds || 0;
+                    return bt - at; // newest first
+                });
+
+                function renderList(filter) {
+                    listWrap.innerHTML = '';
+                    const f = (filter || '').toLowerCase();
+                    let premCount = 0, rest = 0, headerDone = { prem: false, rest: false };
+                    users.forEach(u => {
+                        const uname = u.data.username || '(no username)';
+                        if (f && uname.toLowerCase().indexOf(f) === -1) return;
+                        const isPrem = u.data.premium === true;
+                        if (isPrem && !headerDone.prem) {
+                            const h = document.createElement('div');
+                            h.style.cssText = 'font-family:Courier New,monospace; font-size:11px; color:#0600ff; font-weight:bold; padding:6px 2px;';
+                            h.textContent = '━ premium (can have subscribers) ━';
+                            listWrap.appendChild(h);
+                            headerDone.prem = true;
+                        }
+                        if (!isPrem && !headerDone.rest) {
+                            const h = document.createElement('div');
+                            h.style.cssText = 'font-family:Courier New,monospace; font-size:11px; color:#999; font-weight:bold; padding:12px 2px 6px;';
+                            h.textContent = '━ everyone else ━';
+                            listWrap.appendChild(h);
+                            headerDone.rest = true;
+                        }
+                        if (isPrem) premCount++; else rest++;
+
+                        const row = document.createElement('div');
+                        row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:8px 6px; border-bottom:1px dashed #d4c5b0; cursor:pointer; font-family:Courier New,monospace;';
+                        row.onclick = () => loadUserProfile(u.id, uname);
+                        const left = document.createElement('span');
+                        left.style.cssText = 'font-size:12px; font-weight:bold; color:#000; display:flex; align-items:center; gap:5px;';
+                        left.textContent = uname + '.finds';
+                        if (isPrem) {
+                            const heart = document.createElement('span');
+                            heart.innerHTML = '<svg width="17" height="16" viewBox="0 0 28 26" fill="none" style="vertical-align:middle;"><path d="M14 23 C7 17.5 2 13 2 8.2 C2 4.7 4.8 2 8.2 2 C10.6 2 12.8 3.3 14 5.4 C15.2 3.3 17.4 2 19.8 2 C23.2 2 26 4.7 26 8.2 C26 13 21 17.5 14 23 Z" fill="none" stroke="#ff007a" stroke-width="1.9" stroke-linejoin="round"></path><text x="14" y="13.4" text-anchor="middle" font-family="Courier New" font-size="7.5" font-weight="bold" fill="#ff007a">og</text></svg>';
+                            left.appendChild(heart);
+                        }
+                        row.appendChild(left);
+                        const right = document.createElement('span');
+                        right.style.cssText = 'font-size:9px; color:#999; display:flex; gap:6px;';
+                        const flags = [];
+                        if (u.data.subEnabled === true) flags.push('shop on ✦');
+                        if (u.data.featured === true) flags.push('★');
+                        if (u.data.canTheme === true) flags.push('🎨');
+                        right.textContent = flags.join(' · ');
+                        row.appendChild(right);
+                        listWrap.appendChild(row);
+                    });
+                    if (!headerDone.prem && !headerDone.rest) {
+                        listWrap.innerHTML = '<div style="font-family:Courier New,monospace; font-size:11px; color:#999; padding:12px 2px;">no matches</div>';
+                    }
+                }
+
+                renderList('');
+                searchInput.oninput = () => renderList(searchInput.value);
+            } catch (e) {
+                console.error('all users failed:', e);
+            }
+        }
+        window.loadAllUsers = loadAllUsers;
 
         window.loadBrandLog = loadBrandLog;
         window.loadFeaturedCurator = loadFeaturedCurator;
