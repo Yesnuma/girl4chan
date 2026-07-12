@@ -6279,9 +6279,12 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             const layout = [];
             const seen = new Set();
             (saved || []).forEach(item => {
+                // only known section types survive (drops retired ids like 'albums')
                 if (item.id.startsWith('showcase:')) {
                     const scId = item.id.slice(9);
                     if (!showcases.some(s => s.id === scId)) return; // deleted showcase
+                } else if (item.id !== 'brandlog') {
+                    return;
                 }
                 layout.push({ id: item.id, hidden: item.hidden === true });
                 seen.add(item.id);
@@ -6476,8 +6479,9 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
 
                         const slotsLabel = document.createElement('div');
                         slotsLabel.style.cssText = 'font-size:9px; color:#999; margin:8px 0 4px;';
+                        const tagLabel = (sc.data.fillTag || '').split(/\s+/).filter(Boolean).map(t => '#' + t).join(' ');
                         slotsLabel.innerHTML = 'the finds (' + sc.data.cols + '×' + sc.data.rows + ') — tap a slot to fill' +
-                            (sc.data.fillTag ? ' · <a href="#" style="color:#0600ff;" onclick="event.preventDefault(); window.refillShowcase(\'' + sc.id + '\', \'' + sc.data.fillTag + '\', ' + (sc.data.cols * sc.data.rows) + ')">↻ refresh #' + sc.data.fillTag + '</a>' : '');
+                            (sc.data.fillTag ? ' · <a href="#" style="color:#0600ff;" onclick="event.preventDefault(); window.refillShowcase(\'' + sc.id + '\', \'' + sc.data.fillTag.replace(/'/g, '') + '\', ' + (sc.data.cols * sc.data.rows) + ')">↻ refresh ' + tagLabel + '</a>' : '');
                         panel.appendChild(slotsLabel);
 
                         const g = document.createElement('div');
@@ -6534,7 +6538,8 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
         window.loadDecoratePage = loadDecoratePage;
 
         // fill showcase slots from a tag: newest matching finds across girlchan
-        async function fillSlotsFromTag(tag, count, ownOnly = true) {
+        async function fillSlotsFromTag(tagStr, count, ownOnly = true) {
+            const wanted = String(tagStr).toLowerCase().split(/\s+/).filter(Boolean);
             const snap = await getDocs(query(collection(db, 'images'), orderBy('createdAt', 'desc')));
             const slots = [];
             const userNames = {};
@@ -6543,7 +6548,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 const data = d.data();
                 if (ownOnly && auth.currentUser && data.userId !== auth.currentUser.uid) continue;
                 const tags = (data.tags || []).map(t => String(t).toLowerCase());
-                if (!tags.includes(tag)) continue;
+                if (!wanted.every(w => tags.includes(w))) continue;
                 let byName = userNames[data.userId];
                 if (byName === undefined) {
                     try {
@@ -6579,7 +6584,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     <option value="3x2">3 across × 2 down (6)</option>
                     <option value="4x3">4 across × 3 down (12)</option>
                 </select>
-                <label style="font-size:10px; color:#333; display:block; margin-bottom:4px;">auto-fill from one of your tags (or leave blank to hand-pick)</label>
+                <label style="font-size:10px; color:#333; display:block; margin-bottom:4px;">auto-fill from your tags — stack a few, finds must match ALL (blank = hand-pick)</label>
                 <input type="text" id="albTag" placeholder="type a tag..." style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; box-sizing:border-box; margin-bottom:6px;">
                 <div id="albTagChips" style="margin-bottom:12px;"></div>
                 <button id="albCreateBtn" style="width:100%; padding:12px; background:#0600ff; color:#fff; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; cursor:pointer;">create ✿</button>
@@ -6588,7 +6593,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             modal.appendChild(box);
             document.body.appendChild(modal);
 
-            // your most-used tags as tappable chips
+            // your tags as live chips: filter while typing, tap to STACK
             (async () => {
                 try {
                     const snap = await getDocs(collection(db, 'images'));
@@ -6601,15 +6606,37 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                             counts[k] = (counts[k] || 0) + 1;
                         });
                     });
-                    const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 14);
+                    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
                     const chipsEl = document.getElementById('albTagChips');
-                    top.forEach(([tag, n]) => {
-                        const chip = document.createElement('span');
-                        chip.style.cssText = 'display:inline-block; padding:4px 9px; margin:0 5px 5px 0; font-size:10px; cursor:pointer; border:1.5px solid #0600ff; background:#fff; color:#0600ff;';
-                        chip.textContent = tag + ' (' + n + ')';
-                        chip.onclick = () => { document.getElementById('albTag').value = tag; };
-                        chipsEl.appendChild(chip);
-                    });
+                    const tagInput = document.getElementById('albTag');
+
+                    function renderTagChips() {
+                        chipsEl.innerHTML = '';
+                        const tokens = tagInput.value.toLowerCase().split(/\s+/).filter(Boolean);
+                        const lastTyping = tagInput.value.endsWith(' ') ? '' : (tokens[tokens.length - 1] || '');
+                        const chosen = tagInput.value.endsWith(' ') ? tokens : tokens.slice(0, -1);
+                        const matches = sorted.filter(([tag]) => {
+                            if (chosen.includes(tag)) return false;
+                            return lastTyping ? tag.includes(lastTyping) : true;
+                        }).slice(0, 16);
+                        if (matches.length === 0 && lastTyping) {
+                            chipsEl.innerHTML = '<span style="font-size:9px; color:#999;">no tag of yours matches "' + lastTyping + '"</span>';
+                            return;
+                        }
+                        matches.forEach(([tag, n]) => {
+                            const chip = document.createElement('span');
+                            chip.style.cssText = 'display:inline-block; padding:4px 9px; margin:0 5px 5px 0; font-size:10px; cursor:pointer; border:1.5px solid #0600ff; background:#fff; color:#0600ff;';
+                            chip.textContent = tag + ' (' + n + ')';
+                            chip.onclick = () => {
+                                const base = chosen.join(' ');
+                                tagInput.value = (base ? base + ' ' : '') + tag + ' ';
+                                renderTagChips();
+                            };
+                            chipsEl.appendChild(chip);
+                        });
+                    }
+                    tagInput.oninput = renderTagChips;
+                    renderTagChips();
                 } catch (e) {}
             })();
 
@@ -6623,7 +6650,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 if (fillTag) {
                     slots = await fillSlotsFromTag(fillTag, cols * rows);
                     if (!slots.some(Boolean)) {
-                        document.getElementById('albStatus').textContent = 'none of your finds are tagged "' + fillTag + '" — made it empty to hand-pick';
+                        document.getElementById('albStatus').textContent = 'no finds of yours match "' + fillTag + '" — made it empty to hand-pick';
                     }
                 }
                 await addDoc(collection(db, 'showcases'), {
