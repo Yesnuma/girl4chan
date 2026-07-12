@@ -1240,6 +1240,7 @@
                 <h3>PROFILE</h3>
                 <a href="#" onclick="loadMyProfile()">/ my profile</a>
                 <a href="#" onclick="loadMyOutfits()">/ my outfits</a>
+                <a href="#" onclick="loadDecoratePage()">/ decorate</a>
             </div>
             <div class="sidebar-section">
                 <h3>MAIN</h3>
@@ -2305,6 +2306,8 @@ function goBack() {
             loadOutfitsBoard(false);
         } else if (previousPage.type === 'myOutfits') {
             loadOutfitsBoard(false, true);
+        } else if (previousPage.type === 'decorate') {
+            loadDecoratePage(false);
         } else if (previousPage.type === 'brandlog') {
             loadBrandLog(false);
         } else if (previousPage.type === 'featured') {
@@ -3508,34 +3511,16 @@ async function deleteCollection(collectionId, collectionName) {
                 }
 
                 grid.parentNode.insertBefore(header, grid);
-                // albums (visibility filtered inside; sub check async)
-                if (auth.currentUser) {
+                // storefront sections in the owner's chosen order (sub check first)
+                if (auth.currentUser && auth.currentUser.uid !== userId) {
                     getDoc(doc(db, 'curatorSubs', auth.currentUser.uid + '_' + userId)).then(s => {
                         const isSub = s.exists() && s.data().active === true;
-                        renderAlbumsSection(header, userId, false, isSub);
-                    }).catch(() => renderAlbumsSection(header, userId, false, false));
+                        renderStoreSections(header, userId, false, isSub, profData);
+                    }).catch(() => renderStoreSections(header, userId, false, false, profData));
+                } else if (auth.currentUser && auth.currentUser.uid === userId) {
+                    renderStoreSections(header, userId, true, false, profData);
                 } else {
-                    renderAlbumsSection(header, userId, false, false);
-                }
-
-                const logVis = profData.brandLogVisibility || (profData.brandLogPublic === true ? 'public' : 'private');
-                if (logVis === 'public') {
-                    renderUserBrandLogSection(header, userId, false, logVis);
-                } else if (logVis === 'subs' && auth.currentUser) {
-                    if (isAdmin() || auth.currentUser.uid === userId) {
-                        renderUserBrandLogSection(header, userId, false, logVis);
-                    } else {
-                        getDoc(doc(db, 'curatorSubs', auth.currentUser.uid + '_' + userId)).then(s => {
-                            if (s.exists() && s.data().active === true) {
-                                renderUserBrandLogSection(header, userId, false, logVis);
-                            } else {
-                                const teaser = document.createElement('div');
-                                teaser.style.cssText = 'width:100%; margin-top:12px; padding-top:10px; border-top:1px solid #d4c5b0; font-family:Courier New,monospace; font-size:10px; color:#999; text-align:center;';
-                                teaser.textContent = '♡ their brand log is for subscribers';
-                                header.appendChild(teaser);
-                            }
-                        }).catch(() => {});
-                    }
+                    renderStoreSections(header, userId, false, false, profData);
                 }
             } catch (e) { console.error('profile header failed:', e); }
             
@@ -4002,23 +3987,6 @@ window.loadMyProfile = async function(addToHistory = true) {
                     profileHeader.appendChild(hl);
                 }
 
-                // storefront: premium + threshold unlock
-                if (window.isPremium === true || isAdmin()) {
-                    countUserFinds(auth.currentUser.uid).then(n => {
-                        const unlocked = isAdmin() || n >= STOREFRONT_THRESHOLD;
-                        const sf = document.createElement(unlocked ? 'button' : 'div');
-                        if (unlocked) {
-                            sf.textContent = '🏪 decorate my storefront';
-                            sf.style.cssText = 'display:block; margin:6px auto 0; background:#fff; border:1px solid #ff007a; color:#ff007a; font-family:Courier New,monospace; font-size:11px; padding:4px 12px; cursor:pointer;';
-                            sf.onclick = () => window.openStorefrontEditor();
-                        } else {
-                            sf.style.cssText = 'margin:6px auto 0; font-family:Courier New,monospace; font-size:9px; color:#999; text-align:center;';
-                            sf.textContent = '🏪 storefront unlocks at ' + STOREFRONT_THRESHOLD + ' finds — you\'re at ' + n + ' ✿';
-                        }
-                        profileHeader.appendChild(sf);
-                    });
-                }
-
                 // shuffle my closet
                 const myShuffle = document.createElement('a');
                 myShuffle.href = '/outfit.html';
@@ -4117,9 +4085,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 
                 grid.parentNode.insertBefore(profileHeader, grid);
                 if (window.isPremium === true || isAdmin()) {
-                    const vis = userData.brandLogVisibility || (userData.brandLogPublic === true ? 'public' : 'private');
-                    renderUserBrandLogSection(profileHeader, auth.currentUser.uid, true, vis);
-                    renderAlbumsSection(profileHeader, auth.currentUser.uid, true, false);
+                    renderStoreSections(profileHeader, auth.currentUser.uid, true, false, userData);
                 }
                 
             
@@ -6414,6 +6380,340 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             } catch (e) { console.error('albums section failed:', e); }
         }
 
+        // ── SHOWCASES: hand-curated grids on the storefront ──
+        function renderShowcaseSection(sc, isOwner) {
+            const d = sc.data;
+            const filled = (d.slots || []).filter(Boolean);
+            if (filled.length === 0 && !isOwner) return null;
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'width:100%; margin-top:12px; padding-top:10px; border-top:1px solid #d4c5b0; text-align:left;';
+            const head = document.createElement('div');
+            head.style.cssText = 'font-family:Courier New,monospace; font-size:11px; color:#0600ff; font-weight:bold; margin-bottom:6px;';
+            head.textContent = '━ ' + d.name + ' ━';
+            wrap.appendChild(head);
+            const gridEl = document.createElement('div');
+            gridEl.style.cssText = 'display:grid; grid-template-columns:repeat(' + (d.cols || 3) + ',1fr); gap:0;';
+            (d.slots || []).forEach(slot => {
+                if (!slot) {
+                    if (isOwner) {
+                        const ph = document.createElement('div');
+                        ph.style.cssText = 'width:100%; aspect-ratio:3/4; background:#eee; border:1px dashed #ccc; box-sizing:border-box;';
+                        gridEl.appendChild(ph);
+                    }
+                    return;
+                }
+                const img = document.createElement('img');
+                img.src = slot.imageUrl;
+                img.alt = '';
+                img.draggable = false;
+                img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
+                img.onclick = () => openImageDetail(slot.imageId, slot.imageUrl, slot.link || '', slot.tags || []);
+                gridEl.appendChild(img);
+            });
+            wrap.appendChild(gridEl);
+            return wrap;
+        }
+
+        // effective layout: saved order+hidden, discovered showcases appended
+        function buildEffectiveLayout(saved, showcases) {
+            const layout = [];
+            const seen = new Set();
+            (saved || []).forEach(item => {
+                if (item.id.startsWith('showcase:')) {
+                    const scId = item.id.slice(9);
+                    if (!showcases.some(s => s.id === scId)) return; // deleted showcase
+                }
+                layout.push({ id: item.id, hidden: item.hidden === true });
+                seen.add(item.id);
+            });
+            if (!seen.has('brandlog')) layout.push({ id: 'brandlog', hidden: false });
+            if (!seen.has('albums')) layout.push({ id: 'albums', hidden: false });
+            showcases.forEach(s => {
+                if (!seen.has('showcase:' + s.id)) layout.push({ id: 'showcase:' + s.id, hidden: false });
+            });
+            return layout;
+        }
+
+        async function fetchUserShowcases(ownerId) {
+            const snap = await getDocs(collection(db, 'showcases'));
+            const out = [];
+            snap.forEach(d => { if (d.data().ownerId === ownerId) out.push({ id: d.id, data: d.data() }); });
+            out.sort((a, b) => (a.data.createdAt?.seconds || 0) - (b.data.createdAt?.seconds || 0));
+            return out;
+        }
+
+        // renders storefront sections in the owner's chosen order
+        async function renderStoreSections(container, ownerId, isOwner, viewerIsSub, ownerData) {
+            try {
+                const showcases = await fetchUserShowcases(ownerId);
+                const layout = buildEffectiveLayout(ownerData.storeLayout, showcases);
+                const logVis = ownerData.brandLogVisibility || (ownerData.brandLogPublic === true ? 'public' : 'private');
+
+                for (const item of layout) {
+                    if (item.hidden) continue;
+                    if (item.id === 'brandlog') {
+                        if (isOwner) {
+                            await renderUserBrandLogSection(container, ownerId, true, logVis);
+                        } else if (logVis === 'public' || (logVis === 'subs' && (viewerIsSub || isAdmin()))) {
+                            await renderUserBrandLogSection(container, ownerId, false, logVis);
+                        } else if (logVis === 'subs') {
+                            const teaser = document.createElement('div');
+                            teaser.style.cssText = 'width:100%; margin-top:12px; padding-top:10px; border-top:1px solid #d4c5b0; font-family:Courier New,monospace; font-size:10px; color:#999; text-align:center;';
+                            teaser.textContent = '♡ their brand log is for subscribers';
+                            container.appendChild(teaser);
+                        }
+                    } else if (item.id === 'albums') {
+                        await renderAlbumsSection(container, ownerId, isOwner, viewerIsSub);
+                    } else if (item.id.startsWith('showcase:')) {
+                        const sc = showcases.find(s => 'showcase:' + s.id === item.id);
+                        if (sc) {
+                            const el = renderShowcaseSection(sc, isOwner);
+                            if (el) container.appendChild(el);
+                        }
+                    }
+                }
+            } catch (e) { console.error('store sections failed:', e); }
+        }
+
+        // ── THE WORKSHOP: /decorate ──
+        async function loadDecoratePage(addToHistory = true) {
+            clearProfileWallpaper();
+            if (!requireAuth()) return;
+            closeSidebar();
+            if (addToHistory && currentContext.type !== 'decorate') {
+                navigationHistory.push({ ...currentContext });
+            }
+            currentContext = { type: 'decorate', id: null };
+            document.getElementById('pageTitle').innerHTML = '/ decorate';
+            localStorage.setItem('currentPage', JSON.stringify({ type: 'decorate' }));
+
+            const grid = document.getElementById('imageGrid');
+            grid.innerHTML = '';
+            const oldHeader = document.getElementById('profileHeader'); if (oldHeader) oldHeader.remove();
+            const oldSortBar = document.getElementById('profileSortBar'); if (oldSortBar) oldSortBar.remove();
+            const oldTagFilters = document.getElementById('profileTagFilters'); if (oldTagFilters) oldTagFilters.remove();
+            const tagRow = document.getElementById('recentTagsRow'); if (tagRow) tagRow.style.display = 'none';
+
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'grid-column:1 / -1; font-family:Courier New,monospace;';
+            grid.appendChild(wrap);
+
+            if (window.isPremium !== true && !isAdmin()) {
+                wrap.innerHTML = '<div style="padding:20px; text-align:center; color:#666; font-size:12px;">storefront decorating is a premium perk ✦</div>';
+                return;
+            }
+            const findCount = await countUserFinds(auth.currentUser.uid);
+            if (!isAdmin() && findCount < STOREFRONT_THRESHOLD) {
+                wrap.innerHTML = '<div style="padding:20px; text-align:center; color:#666; font-size:12px; line-height:1.8;">🏪 your storefront unlocks at ' + STOREFRONT_THRESHOLD + ' finds<br>you\'re at <strong style="color:#0600ff;">' + findCount + '</strong> ✿ keep finding</div>';
+                return;
+            }
+
+            const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+            const userData = userDoc.data() || {};
+
+            // ── walls & headline ──
+            const wallsSec = document.createElement('div');
+            wallsSec.style.cssText = 'background:#fff; border:2px solid #0600ff; padding:14px; margin-bottom:14px;';
+            wallsSec.innerHTML = '<div style="font-size:12px; color:#0600ff; font-weight:bold; margin-bottom:8px;">walls &amp; headline</div>';
+            const wallsBtn = document.createElement('button');
+            wallsBtn.textContent = '🏪 open the wall editor';
+            wallsBtn.style.cssText = 'width:auto; margin:0; background:#fff; border:1px solid #ff007a; color:#ff007a; font-family:Courier New,monospace; font-size:11px; padding:6px 14px; cursor:pointer;';
+            wallsBtn.onclick = () => window.openStorefrontEditor();
+            wallsSec.appendChild(wallsBtn);
+            wrap.appendChild(wallsSec);
+
+            // ── arrange the store ──
+            const showcases = await fetchUserShowcases(auth.currentUser.uid);
+            const layout = buildEffectiveLayout(userData.storeLayout, showcases);
+
+            const arrangeSec = document.createElement('div');
+            arrangeSec.style.cssText = 'background:#fff; border:2px solid #0600ff; padding:14px; margin-bottom:14px;';
+            arrangeSec.innerHTML = '<div style="font-size:12px; color:#0600ff; font-weight:bold; margin-bottom:2px;">arrange the store</div><div style="font-size:9px; color:#999; margin-bottom:10px;">top to bottom = how your page reads. everything-grid always anchors the bottom.</div>';
+            const listEl = document.createElement('div');
+            arrangeSec.appendChild(listEl);
+            wrap.appendChild(arrangeSec);
+
+            function sectionLabel(id) {
+                if (id === 'brandlog') return 'my brand log';
+                if (id === 'albums') return 'my albums';
+                if (id.startsWith('showcase:')) {
+                    const sc = showcases.find(s => 'showcase:' + s.id === id);
+                    return sc ? '✦ ' + sc.data.name : '(deleted showcase)';
+                }
+                return id;
+            }
+
+            async function saveLayout() {
+                await setDoc(doc(db, 'users', auth.currentUser.uid), { storeLayout: layout }, { merge: true });
+            }
+
+            function renderArrange() {
+                listEl.innerHTML = '';
+                layout.forEach((item, i) => {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:8px 6px; border-bottom:1px dashed #d4c5b0; font-size:12px;' + (item.hidden ? ' opacity:0.45;' : '');
+                    const name = document.createElement('span');
+                    name.textContent = sectionLabel(item.id);
+                    row.appendChild(name);
+                    const ctl = document.createElement('span');
+                    ctl.style.cssText = 'display:flex; gap:12px; font-size:14px;';
+                    const up = document.createElement('a'); up.href = '#'; up.textContent = '↑'; up.style.cssText = 'color:' + (i === 0 ? '#ddd' : '#0600ff') + '; text-decoration:none;';
+                    up.onclick = async (e) => { e.preventDefault(); if (i === 0) return; [layout[i-1], layout[i]] = [layout[i], layout[i-1]]; await saveLayout(); renderArrange(); };
+                    const down = document.createElement('a'); down.href = '#'; down.textContent = '↓'; down.style.cssText = 'color:' + (i === layout.length - 1 ? '#ddd' : '#0600ff') + '; text-decoration:none;';
+                    down.onclick = async (e) => { e.preventDefault(); if (i === layout.length - 1) return; [layout[i+1], layout[i]] = [layout[i], layout[i+1]]; await saveLayout(); renderArrange(); };
+                    const hide = document.createElement('a'); hide.href = '#'; hide.textContent = item.hidden ? 'show' : 'hide'; hide.style.cssText = 'color:#999; font-size:10px; text-decoration:underline;';
+                    hide.onclick = async (e) => { e.preventDefault(); item.hidden = !item.hidden; await saveLayout(); renderArrange(); };
+                    ctl.appendChild(up); ctl.appendChild(down); ctl.appendChild(hide);
+                    row.appendChild(ctl);
+                    listEl.appendChild(row);
+                });
+                const anchor = document.createElement('div');
+                anchor.style.cssText = 'padding:8px 6px; font-size:11px; color:#999;';
+                anchor.textContent = 'everything (all your finds) — anchored';
+                listEl.appendChild(anchor);
+            }
+            renderArrange();
+
+            // ── showcases ──
+            const scSec = document.createElement('div');
+            scSec.style.cssText = 'background:#fff; border:2px solid #0600ff; padding:14px; margin-bottom:14px;';
+            scSec.innerHTML = '<div style="font-size:12px; color:#0600ff; font-weight:bold; margin-bottom:2px;">showcases</div><div style="font-size:9px; color:#999; margin-bottom:10px;">hand-picked grids. tap a slot to fill it with any find on girlchan — credit and commission stay with the finder.</div>';
+            const scList = document.createElement('div');
+            scSec.appendChild(scList);
+
+            function renderShowcaseEditors() {
+                scList.innerHTML = '';
+                showcases.forEach(sc => {
+                    const box = document.createElement('div');
+                    box.style.cssText = 'margin-bottom:14px;';
+                    const head = document.createElement('div');
+                    head.style.cssText = 'display:flex; align-items:center; justify-content:space-between; margin-bottom:5px;';
+                    head.innerHTML = '<span style="font-size:11px; font-weight:bold;">✦ ' + sc.data.name + ' <span style="color:#999; font-weight:normal;">(' + sc.data.cols + '×' + sc.data.rows + ')</span></span>';
+                    const del = document.createElement('a');
+                    del.href = '#'; del.textContent = '×'; del.style.cssText = 'color:#999; font-size:15px; text-decoration:none;';
+                    del.onclick = async (e) => {
+                        e.preventDefault();
+                        if (!confirm('delete showcase "' + sc.data.name + '"?')) return;
+                        await deleteDoc(doc(db, 'showcases', sc.id));
+                        const li = layout.findIndex(x => x.id === 'showcase:' + sc.id);
+                        if (li !== -1) { layout.splice(li, 1); await saveLayout(); }
+                        loadDecoratePage(false);
+                    };
+                    head.appendChild(del);
+                    box.appendChild(head);
+                    const g = document.createElement('div');
+                    g.style.cssText = 'display:grid; grid-template-columns:repeat(' + sc.data.cols + ',1fr); gap:2px;';
+                    (sc.data.slots || []).forEach((slot, si) => {
+                        const cell = document.createElement('div');
+                        cell.style.cssText = 'width:100%; aspect-ratio:3/4; background:' + (slot ? '#ddd center/cover no-repeat' : '#f5f5f5') + '; border:1px dashed #bbb; cursor:pointer; box-sizing:border-box;' + (slot ? ' background-image:url(' + slot.imageUrl + ');' : '');
+                        cell.onclick = () => window.openSlotPicker(sc.id, si);
+                        g.appendChild(cell);
+                    });
+                    box.appendChild(g);
+                    scList.appendChild(box);
+                });
+            }
+            renderShowcaseEditors();
+
+            const newSc = document.createElement('button');
+            newSc.textContent = '＋ new showcase';
+            newSc.style.cssText = 'width:auto; margin:0; background:#0600ff; border:1px solid #0600ff; color:#fff; font-family:Courier New,monospace; font-size:11px; padding:6px 14px; cursor:pointer;';
+            newSc.onclick = async () => {
+                const name = prompt('showcase name:');
+                if (!name || !name.trim()) return;
+                const size = prompt('grid size (like 3x3 or 4x3 — columns x rows):', '3x3');
+                if (!size) return;
+                const m = size.toLowerCase().match(/(\d+)\s*x\s*(\d+)/);
+                if (!m) { alert('use a format like 3x3'); return; }
+                const cols = Math.min(Math.max(parseInt(m[1], 10), 1), 6);
+                const rows = Math.min(Math.max(parseInt(m[2], 10), 1), 8);
+                await addDoc(collection(db, 'showcases'), {
+                    ownerId: auth.currentUser.uid,
+                    name: name.trim(), cols: cols, rows: rows,
+                    slots: new Array(cols * rows).fill(null),
+                    createdAt: new Date()
+                });
+                loadDecoratePage(false);
+            };
+            scSec.appendChild(newSc);
+            wrap.appendChild(scSec);
+
+            const peek = document.createElement('a');
+            peek.href = '#';
+            peek.textContent = '→ see my storefront live';
+            peek.style.cssText = 'display:inline-block; font-size:11px; color:#0600ff;';
+            peek.onclick = (e) => { e.preventDefault(); loadMyProfile(); };
+            wrap.appendChild(peek);
+        }
+        window.loadDecoratePage = loadDecoratePage;
+
+        // slot picker: any find on girlchan fills the slot
+        window.openSlotPicker = async function(showcaseId, slotIndex) {
+            let modal = document.getElementById('slotPickerModal');
+            if (modal) modal.remove();
+            modal = document.createElement('div');
+            modal.id = 'slotPickerModal';
+            modal.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10003; align-items:center; justify-content:center; padding:16px;';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            const box = document.createElement('div');
+            box.style.cssText = 'background:#fff; border:3px solid #0600ff; box-shadow:8px 8px 0 #0600ff; padding:16px; width:100%; max-width:380px; font-family:Courier New,monospace; max-height:80vh; overflow-y:auto;';
+            box.innerHTML = '<h3 style="color:#0600ff; font-size:13px; margin-bottom:10px;">pick a find for this slot</h3>';
+            const clearBtn = document.createElement('button');
+            clearBtn.textContent = 'empty this slot';
+            clearBtn.style.cssText = 'width:auto; margin:0 0 10px; background:#f5f5f5; border:1px solid #ccc; color:#000; font-family:Courier New,monospace; font-size:10px; padding:5px 10px; cursor:pointer;';
+            clearBtn.onclick = async () => {
+                const scDoc = await getDoc(doc(db, 'showcases', showcaseId));
+                const slots = scDoc.data().slots || [];
+                slots[slotIndex] = null;
+                await updateDoc(doc(db, 'showcases', showcaseId), { slots: slots });
+                modal.remove();
+                loadDecoratePage(false);
+            };
+            box.appendChild(clearBtn);
+            const pickGrid = document.createElement('div');
+            pickGrid.style.cssText = 'display:grid; grid-template-columns:repeat(3,1fr); gap:2px;';
+            box.appendChild(pickGrid);
+            modal.appendChild(box);
+            document.body.appendChild(modal);
+
+            const snap = await getDocs(query(collection(db, 'images'), orderBy('createdAt', 'desc')));
+            const all = [];
+            snap.forEach(d => all.push({ id: d.id, data: d.data() }));
+            let shown = 0;
+            const BATCH = 60;
+            const moreBtn = document.createElement('button');
+            function showBatch() {
+                const batch = all.slice(shown, shown + BATCH);
+                batch.forEach(({ id, data }) => {
+                    const img = document.createElement('img');
+                    img.src = data.imageUrl;
+                    img.loading = 'lazy';
+                    img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; cursor:pointer; background:#eee;';
+                    img.onclick = async () => {
+                        let byName = '';
+                        try {
+                            const u = await getDoc(doc(db, 'users', data.userId));
+                            byName = u.data()?.username || '';
+                        } catch (e) {}
+                        const scDoc = await getDoc(doc(db, 'showcases', showcaseId));
+                        const slots = scDoc.data().slots || [];
+                        slots[slotIndex] = { imageId: id, imageUrl: data.imageUrl, link: data.link || '', tags: data.tags || [], byName: byName };
+                        await updateDoc(doc(db, 'showcases', showcaseId), { slots: slots });
+                        modal.remove();
+                        loadDecoratePage(false);
+                    };
+                    pickGrid.appendChild(img);
+                });
+                shown += batch.length;
+                moreBtn.style.display = shown < all.length ? 'block' : 'none';
+            }
+            moreBtn.textContent = 'more finds ↓';
+            moreBtn.style.cssText = 'width:100%; margin:10px 0 0; background:#0600ff; border:none; color:#F9FF00; font-family:Courier New,monospace; font-size:11px; padding:9px; cursor:pointer;';
+            moreBtn.onclick = showBatch;
+            box.appendChild(moreBtn);
+            showBatch();
+        };
+
         // ── ADMIN: all users directory ──
         async function loadAllUsers(addToHistory = true) {
             clearProfileWallpaper();
@@ -7019,7 +7319,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 const page = JSON.parse(savedPage);
 
                 // Logged-out users can't restore personal pages — fall back to today
-                if (!auth.currentUser && (page.type === 'profile' || page.type === 'likes' || page.type === 'accountSettings' || page.type === 'myOutfits')) {
+                if (!auth.currentUser && (page.type === 'profile' || page.type === 'likes' || page.type === 'accountSettings' || page.type === 'myOutfits' || page.type === 'decorate')) {
                     await loadTodayPage();
                     return;
                 }
@@ -7030,6 +7330,8 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     await loadOutfitsBoard();
                 } else if (page.type === 'myOutfits') {
                     await loadOutfitsBoard(true, true);
+                } else if (page.type === 'decorate') {
+                    await loadDecoratePage();
                 } else if (page.type === 'brandlog') {
                     await loadBrandLog();
                 } else if (page.type === 'featured') {
