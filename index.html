@@ -6283,7 +6283,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 if (item.id.startsWith('showcase:')) {
                     const scId = item.id.slice(9);
                     if (!showcases.some(s => s.id === scId)) return; // deleted showcase
-                } else if (item.id !== 'brandlog') {
+                } else if (item.id !== 'brandlog' && item.id !== 'everything') {
                     return;
                 }
                 layout.push({ id: item.id, hidden: item.hidden === true });
@@ -6293,6 +6293,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             showcases.forEach(s => {
                 if (!seen.has('showcase:' + s.id)) layout.push({ id: 'showcase:' + s.id, hidden: false });
             });
+            if (!seen.has('everything')) layout.push({ id: 'everything', hidden: false });
             return layout;
         }
 
@@ -6304,25 +6305,54 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             return out;
         }
 
-        // renders storefront sections in the owner's chosen order
+        // renders storefront sections in the owner's chosen order.
+        // sections placed after 'everything' land in a footer below the uploads grid.
         async function renderStoreSections(container, ownerId, isOwner, viewerIsSub, ownerData) {
             try {
                 const showcases = await fetchUserShowcases(ownerId);
                 const layout = buildEffectiveLayout(ownerData.storeLayout, showcases);
                 const logVis = ownerData.brandLogVisibility || (ownerData.brandLogPublic === true ? 'public' : 'private');
 
+                const gridEl = document.getElementById('imageGrid');
+                let footer = document.getElementById('storeFooter');
+                if (footer) footer.remove();
+                footer = document.createElement('div');
+                footer.id = 'storeFooter';
+                footer.style.cssText = container.style.cssText ? '' : '';
+                footer.style.padding = '0 16px 20px';
+                if (gridEl && gridEl.parentNode) gridEl.parentNode.insertBefore(footer, gridEl.nextSibling);
+
+                let target = container;
+                let sawEverything = false;
+
                 for (const item of layout) {
+                    if (item.id === 'everything') {
+                        sawEverything = true;
+                        target = footer;
+                        if (!item.hidden && gridEl) {
+                            // labeled divider at the top of the uploads grid
+                            const oldLabel = document.getElementById('everythingLabel');
+                            if (oldLabel) oldLabel.remove();
+                            const lab = document.createElement('div');
+                            lab.id = 'everythingLabel';
+                            lab.style.cssText = 'grid-column:1 / -1; font-family:Courier New,monospace; font-size:11px; color:#0600ff; font-weight:bold; padding:10px 2px 6px;';
+                            lab.textContent = '━ everything ━';
+                            gridEl.prepend(lab);
+                        }
+                        if (item.hidden && gridEl) gridEl.style.display = 'none';
+                        continue;
+                    }
                     if (item.hidden) continue;
                     if (item.id === 'brandlog') {
                         if (isOwner) {
-                            await renderUserBrandLogSection(container, ownerId, true, logVis);
+                            await renderUserBrandLogSection(target, ownerId, true, logVis);
                         } else if (logVis === 'public' || (logVis === 'subs' && (viewerIsSub || isAdmin()))) {
-                            await renderUserBrandLogSection(container, ownerId, false, logVis);
+                            await renderUserBrandLogSection(target, ownerId, false, logVis);
                         } else if (logVis === 'subs') {
                             const teaser = document.createElement('div');
                             teaser.style.cssText = 'width:100%; margin-top:12px; padding-top:10px; border-top:1px solid #d4c5b0; font-family:Courier New,monospace; font-size:10px; color:#999; text-align:center;';
                             teaser.textContent = '♡ their brand log is for subscribers';
-                            container.appendChild(teaser);
+                            target.appendChild(teaser);
                         }
                     } else if (item.id.startsWith('showcase:')) {
                         const sc = showcases.find(s => 'showcase:' + s.id === item.id);
@@ -6331,7 +6361,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                             const canSee = isOwner || isAdmin() || vis === 'public' || (vis === 'subs' && viewerIsSub);
                             if (canSee) {
                                 const el = renderShowcaseSection(sc, isOwner);
-                                if (el) container.appendChild(el);
+                                if (el) target.appendChild(el);
                             }
                         }
                     }
@@ -6392,15 +6422,29 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
 
             const storeSec = document.createElement('div');
             storeSec.style.cssText = 'background:#fff; border:2px solid #0600ff; padding:14px; margin-bottom:14px;';
-            storeSec.innerHTML = '<div style="font-size:12px; color:#0600ff; font-weight:bold; margin-bottom:2px;">your store, top to bottom</div><div style="font-size:9px; color:#999; margin-bottom:10px;">this is the order visitors read your page. tap ▾ to edit an album right here.</div>';
+            storeSec.innerHTML = '<div style="font-size:12px; color:#0600ff; font-weight:bold; margin-bottom:2px;">your store, top to bottom</div><div style="font-size:9px; color:#999; margin-bottom:10px;">this is the order visitors read your page — everything is movable, even the big grid.</div>';
             const listEl = document.createElement('div');
             storeSec.appendChild(listEl);
             wrap.appendChild(storeSec);
 
             const expanded = new Set();
 
+            const saveStatus = document.createElement('div');
+            saveStatus.style.cssText = 'font-size:9px; color:#999; min-height:12px; margin-bottom:4px;';
+            storeSec.insertBefore(saveStatus, listEl);
+
             async function saveLayout() {
-                await setDoc(doc(db, 'users', auth.currentUser.uid), { storeLayout: layout }, { merge: true });
+                saveStatus.textContent = 'saving...';
+                try {
+                    const clean = layout.map(x => ({ id: String(x.id), hidden: x.hidden === true }));
+                    await setDoc(doc(db, 'users', auth.currentUser.uid), { storeLayout: clean }, { merge: true });
+                    saveStatus.textContent = 'saved ✓';
+                    saveStatus.style.color = '#00a86b';
+                    setTimeout(() => { saveStatus.textContent = ''; }, 1500);
+                } catch (e) {
+                    saveStatus.textContent = 'save failed: ' + e.message;
+                    saveStatus.style.color = '#c00';
+                }
             }
 
             function chipStyle(active) {
@@ -6421,9 +6465,15 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     const topLine = document.createElement('div');
                     topLine.style.cssText = 'display:flex; align-items:center; justify-content:space-between;';
                     const name = document.createElement('span');
-                    name.style.cssText = 'font-size:13px; font-weight:bold; cursor:' + (isAlbum ? 'pointer' : 'default') + ';';
-                    name.textContent = (isAlbum ? '✦ ' + sc.data.name + ' ' + (expanded.has(sc.id) ? '▴' : '▾') : 'my brand log');
-                    if (isAlbum) name.onclick = () => { expanded.has(sc.id) ? expanded.delete(sc.id) : expanded.add(sc.id); renderStoreList(); };
+                    name.style.cssText = 'font-size:13px; font-weight:bold; cursor:' + (isAlbum ? 'pointer' : 'default') + '; display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
+                    name.textContent = (item.id === 'everything') ? 'everything (all your finds)' : (isAlbum ? '✦ ' + sc.data.name : 'my brand log');
+                    if (isAlbum) {
+                        const editChip = document.createElement('span');
+                        editChip.textContent = expanded.has(sc.id) ? 'close ▴' : 'edit ▾';
+                        editChip.style.cssText = 'font-size:9px; font-weight:normal; padding:2px 8px; border:1.5px solid #0600ff; color:#0600ff; background:#fff;';
+                        name.appendChild(editChip);
+                        name.onclick = () => { expanded.has(sc.id) ? expanded.delete(sc.id) : expanded.add(sc.id); renderStoreList(); };
+                    }
                     topLine.appendChild(name);
 
                     const ctl = document.createElement('span');
@@ -6435,6 +6485,20 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     const hide = document.createElement('a'); hide.href = '#'; hide.textContent = item.hidden ? 'show' : 'hide'; hide.style.cssText = 'color:#999; font-size:10px; text-decoration:underline;';
                     hide.onclick = async (e) => { e.preventDefault(); item.hidden = !item.hidden; await saveLayout(); renderStoreList(); };
                     ctl.appendChild(up); ctl.appendChild(down); ctl.appendChild(hide);
+                    if (isAlbum) {
+                        const rowDel = document.createElement('a');
+                        rowDel.href = '#'; rowDel.textContent = '×';
+                        rowDel.style.cssText = 'color:#999; font-size:16px; text-decoration:none;';
+                        rowDel.onclick = async (e) => {
+                            e.preventDefault();
+                            if (!confirm('delete album "' + sc.data.name + '"? (finds stay on girlchan)')) return;
+                            await deleteDoc(doc(db, 'showcases', sc.id));
+                            const li = layout.findIndex(x => x.id === 'showcase:' + sc.id);
+                            if (li !== -1) { layout.splice(li, 1); await saveLayout(); }
+                            loadDecoratePage(false);
+                        };
+                        ctl.appendChild(rowDel);
+                    }
                     topLine.appendChild(ctl);
                     row.appendChild(topLine);
 
@@ -6514,10 +6578,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     listEl.appendChild(row);
                 });
 
-                const anchor = document.createElement('div');
-                anchor.style.cssText = 'padding:10px 4px; font-size:11px; color:#999;';
-                anchor.textContent = 'everything (all your finds) — anchored at the bottom';
-                listEl.appendChild(anchor);
+
             }
             renderStoreList();
 
@@ -6653,7 +6714,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                         document.getElementById('albStatus').textContent = 'no finds of yours match "' + fillTag + '" — made it empty to hand-pick';
                     }
                 }
-                await addDoc(collection(db, 'showcases'), {
+                const newRef = await addDoc(collection(db, 'showcases'), {
                     ownerId: auth.currentUser.uid,
                     name: name, cols: cols, rows: rows,
                     fillTag: fillTag,
@@ -6662,7 +6723,12 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     createdAt: new Date()
                 });
                 modal.remove();
-                loadDecoratePage(false);
+                if (!slots.some(Boolean)) {
+                    // hand-pick path: jump straight into filling it
+                    window.openSlotPicker(newRef.id, 0);
+                } else {
+                    loadDecoratePage(false);
+                }
             };
         };
 
@@ -6730,6 +6796,10 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             const all = [];
             snap.forEach(d => all.push({ id: d.id, data: d.data() }));
 
+            // dupe guard: know what's already in this album
+            const scNow = await getDoc(doc(db, 'showcases', showcaseId));
+            const inAlbum = new Set(((scNow.data() || {}).slots || []).filter(Boolean).map(s => s.imageId));
+
             const selected = []; // in tap order
             let pool = [];
             let shown = 0;
@@ -6761,6 +6831,16 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     img.loading = 'lazy';
                     img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; background:#eee;';
                     cell.appendChild(img);
+                    if (inAlbum.has(id)) {
+                        img.style.opacity = '0.35';
+                        const inMark = document.createElement('div');
+                        inMark.style.cssText = 'position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:Courier New,monospace; font-size:9px; color:#0600ff; font-weight:bold;';
+                        inMark.textContent = 'in ✓';
+                        cell.appendChild(inMark);
+                        cell.style.cursor = 'default';
+                        pickGrid.appendChild(cell);
+                        return;
+                    }
                     const check = document.createElement('div');
                     check.style.cssText = 'position:absolute; top:3px; right:3px; width:18px; height:18px; border-radius:50%; background:#0600ff; color:#F9FF00; font-size:11px; display:none; align-items:center; justify-content:center; font-weight:bold;';
                     check.textContent = '✓';
