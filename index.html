@@ -1240,7 +1240,6 @@
                 <h3>PROFILE</h3>
                 <a href="#" onclick="loadMyProfile()">/ my profile</a>
                 <a href="#" onclick="loadMyOutfits()">/ my outfits</a>
-                <a href="#" onclick="loadDecoratePage()">/ decorate</a>
             </div>
             <div class="sidebar-section">
                 <h3>MAIN</h3>
@@ -2301,7 +2300,7 @@ function goBack() {
         } else if (previousPage.type === 'myOutfits') {
             loadOutfitsBoard(false, true);
         } else if (previousPage.type === 'decorate') {
-            loadDecoratePage(false);
+            loadMyProfile(false);
         } else if (previousPage.type === 'brandlog') {
             loadBrandLog(false);
         } else if (previousPage.type === 'featured') {
@@ -3509,12 +3508,18 @@ async function deleteCollection(collectionId, collectionName) {
                 if (auth.currentUser && auth.currentUser.uid !== userId) {
                     getDoc(doc(db, 'curatorSubs', auth.currentUser.uid + '_' + userId)).then(s => {
                         const isSub = s.exists() && s.data().active === true;
-                        renderStoreSections(header, userId, false, isSub, profData);
-                    }).catch(() => renderStoreSections(header, userId, false, false, profData));
+                        const tab1 = window.buildProfileTabs(header, userId, false, profData, isSub);
+                        renderStoreSections(tab1, userId, false, isSub, profData);
+                    }).catch(() => {
+                        const tab1 = window.buildProfileTabs(header, userId, false, profData, false);
+                        renderStoreSections(tab1, userId, false, false, profData);
+                    });
                 } else if (auth.currentUser && auth.currentUser.uid === userId) {
-                    renderStoreSections(header, userId, true, false, profData);
+                    const tab1 = window.buildProfileTabs(header, userId, true, profData, false);
+                    renderStoreSections(tab1, userId, true, false, profData);
                 } else {
-                    renderStoreSections(header, userId, false, false, profData);
+                    const tab1 = window.buildProfileTabs(header, userId, false, profData, false);
+                    renderStoreSections(tab1, userId, false, false, profData);
                 }
             } catch (e) { console.error('profile header failed:', e); }
             
@@ -4039,35 +4044,7 @@ window.loadMyProfile = async function(addToHistory = true) {
                     statsEl.innerHTML = `<span><strong style="color:#0600ff;">${uploadCount}</strong> uploads</span>`;
                     profileHeader.appendChild(statsEl);
                     
-                    // Likes row
-                    const userLikes = userData.likes || [];
-                    if (userLikes.length > 0) {
-                        const likesLabel = document.createElement('div');
-                        likesLabel.style.cssText = 'width:100%; font-size:13px; font-weight:bold; font-family:Courier New,monospace; margin-top:12px; margin-bottom:6px;';
-                        likesLabel.innerHTML = '♡ likes <span style="font-size:9px; color:#8b7355; font-weight:normal; cursor:pointer; margin-left:8px;">see all →</span>';
-likesLabel.querySelector('span').onclick = () => loadLikesFeed();
-                        profileHeader.appendChild(likesLabel);
-                        
-                        const likesRow = document.createElement('div');
-                        likesRow.style.cssText = 'display:flex; gap:5px; width:100%; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; padding-bottom:8px;';
-                        
-                        for (const likeId of userLikes.slice(0, 10)) {
-                            try {
-                                const likeDoc = await getDoc(doc(db, 'images', likeId));
-                                if (likeDoc.exists()) {
-                                    const likeData = likeDoc.data();
-                                    const thumb = document.createElement('img');
-                                    thumb.src = likeData.imageUrl;
-                                    thumb.style.cssText = 'width:58px; height:72px; flex-shrink:0; object-fit:cover; border:1px solid #8b7355; cursor:pointer;';
-                                    thumb.onclick = () => openImageDetail(likeId, likeData.imageUrl, likeData.link, likeData.tags);
-                                    likesRow.appendChild(thumb);
-                                }
-                            } catch (e) {}
-                        }
-                        
-                        profileHeader.appendChild(likesRow);
-                    }
-                    
+
                 } else {
                     // Free user stats
                     const statsEl = document.createElement('div');
@@ -4088,7 +4065,22 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 
                 grid.parentNode.insertBefore(profileHeader, grid);
                 if (window.isPremium === true || isAdmin()) {
-                    renderStoreSections(profileHeader, auth.currentUser.uid, true, false, userData);
+                    // edit toggle lives above the tabs
+                    const editBtn = document.createElement('button');
+                    window._profileEditing = window._profileEditing === true;
+                    editBtn.textContent = window._profileEditing ? '✓ done editing' : 'edit my storefront ✎';
+                    editBtn.style.cssText = 'display:inline-block; width:auto; margin:6px 0 0; background:' + (window._profileEditing ? '#0600ff' : '#fff') + '; border:1px solid #0600ff; color:' + (window._profileEditing ? '#F9FF00' : '#0600ff') + '; font-family:Courier New,monospace; font-size:11px; padding:4px 12px; cursor:pointer;';
+                    editBtn.onclick = () => { window._profileEditing = !window._profileEditing; loadMyProfile(false); };
+                    profileHeader.appendChild(editBtn);
+                    if (window._profileEditing) {
+                        const wallsBtn = document.createElement('button');
+                        wallsBtn.textContent = '🏪 walls & headline';
+                        wallsBtn.style.cssText = 'display:inline-block; width:auto; margin:6px 0 0 8px; background:#fff; border:1px solid #ff007a; color:#ff007a; font-family:Courier New,monospace; font-size:11px; padding:4px 12px; cursor:pointer;';
+                        wallsBtn.onclick = () => window.openStorefrontEditor();
+                        profileHeader.appendChild(wallsBtn);
+                    }
+                    const tab1 = window.buildProfileTabs(profileHeader, auth.currentUser.uid, true, userData, false);
+                    renderStoreSections(tab1, auth.currentUser.uid, true, false, userData, window._profileEditing === true);
                 }
                 
             
@@ -5366,6 +5358,9 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             if (l) l.remove();
             const t = document.getElementById('profileTint');
             if (t) t.remove();
+            // profile tabs hide the shared grid — always restore it when leaving
+            const g = document.getElementById('imageGrid');
+            if (g) g.style.display = '';
         }
 
         function raiseContentAboveLayers() {
@@ -6442,7 +6437,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             head.textContent = '━ ' + d.name + ' ━';
             wrap.appendChild(head);
             const gridEl = document.createElement('div');
-            gridEl.style.cssText = 'display:grid; grid-template-columns:repeat(' + (d.cols || 3) + ',1fr); gap:0;';
+            gridEl.style.cssText = 'display:grid; grid-template-columns:repeat(' + (d.cols || 3) + ',1fr); gap:0; margin:0 -16px; width:calc(100% + 32px);';
             (d.slots || []).forEach(slot => {
                 if (!slot) {
                     if (isOwner) {
@@ -6473,6 +6468,16 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             document.getElementById('pageTitle').innerHTML = '/ ' + name;
             const grid = document.getElementById('imageGrid');
             grid.innerHTML = '';
+            grid.style.display = '';
+            const backWrap = document.createElement('div');
+            backWrap.style.cssText = 'grid-column:1 / -1; padding:4px 2px 8px;';
+            const backLink = document.createElement('a');
+            backLink.href = '#';
+            backLink.textContent = '← back';
+            backLink.style.cssText = 'font-family:Courier New,monospace; font-size:12px; color:#0600ff; font-weight:bold; text-decoration:none;';
+            backLink.onclick = (e) => { e.preventDefault(); goBack(); };
+            backWrap.appendChild(backLink);
+            grid.appendChild(backWrap);
             const oldHeader = document.getElementById('profileHeader'); if (oldHeader) oldHeader.remove();
             const oldSortBar = document.getElementById('profileSortBar'); if (oldSortBar) oldSortBar.remove();
             const tagRow = document.getElementById('recentTagsRow'); if (tagRow) tagRow.style.display = 'none';
@@ -6501,7 +6506,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 if (item.id.startsWith('showcase:')) {
                     const scId = item.id.slice(9);
                     if (!showcases.some(s => s.id === scId)) return; // deleted showcase
-                } else if (item.id !== 'brandlog' && item.id !== 'everything') {
+                } else if (item.id !== 'brandlog') {
                     return;
                 }
                 layout.push({ id: item.id, hidden: item.hidden === true });
@@ -6511,7 +6516,6 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             showcases.forEach(s => {
                 if (!seen.has('showcase:' + s.id)) layout.push({ id: 'showcase:' + s.id, hidden: false });
             });
-            if (!seen.has('everything')) layout.push({ id: 'everything', hidden: false });
             return layout;
         }
 
@@ -6523,43 +6527,194 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             return out;
         }
 
+        // ── PROFILE TABS: storefront / collections / everything ──
+        window.buildProfileTabs = function(headerEl, ownerId, isOwner, ownerData, viewerIsSub) {
+            // containers
+            const oldTabs = document.getElementById('profileTabRow'); if (oldTabs) oldTabs.remove();
+            const oldT1 = document.getElementById('tabStorefront'); if (oldT1) oldT1.remove();
+            const oldT2 = document.getElementById('tabCollections'); if (oldT2) oldT2.remove();
+
+            const gridEl = document.getElementById('imageGrid');
+            const sortBar = document.getElementById('profileSortBar');
+            const tagFilters = document.getElementById('profileTagFilters');
+
+            const tabRow = document.createElement('div');
+            tabRow.id = 'profileTabRow';
+            tabRow.style.cssText = 'display:flex; width:100%; border-bottom:2px solid #0600ff; margin-top:14px;';
+            headerEl.appendChild(tabRow);
+
+            const t1 = document.createElement('div');
+            t1.id = 'tabStorefront';
+            t1.style.cssText = 'width:100%;';
+            headerEl.appendChild(t1);
+
+            const t2 = document.createElement('div');
+            t2.id = 'tabCollections';
+            t2.style.cssText = 'width:100%; display:none;';
+            headerEl.appendChild(t2);
+
+            let collectionsRendered = false;
+
+            function setTab(which) {
+                window._profileTab = which;
+                tabRow.querySelectorAll('button').forEach(b => {
+                    const active = b.dataset.tab === which;
+                    b.style.background = active ? '#0600ff' : '#fff';
+                    b.style.color = active ? '#F9FF00' : '#0600ff';
+                });
+                t1.style.display = which === 'storefront' ? 'block' : 'none';
+                t2.style.display = which === 'collections' ? 'block' : 'none';
+                const showAll = which === 'everything';
+                if (gridEl) gridEl.style.display = showAll ? '' : 'none';
+                if (sortBar) sortBar.style.display = showAll ? '' : 'none';
+                if (tagFilters) tagFilters.style.display = showAll ? '' : 'none';
+                if (which === 'collections' && !collectionsRendered) {
+                    collectionsRendered = true;
+                    renderCollectionsTab(t2, ownerId, isOwner, ownerData, viewerIsSub);
+                }
+            }
+
+            [['storefront','storefront'],['collections','collections'],['everything','everything']].forEach(([id, label]) => {
+                const b = document.createElement('button');
+                b.dataset.tab = id;
+                b.textContent = label;
+                b.style.cssText = 'flex:1; padding:10px 4px; background:#fff; color:#0600ff; border:none; border-right:1px solid #0600ff; font-family:Courier New,monospace; font-size:11px; font-weight:bold; cursor:pointer;';
+                b.onclick = () => setTab(id);
+                tabRow.appendChild(b);
+            });
+            tabRow.lastChild.style.borderRight = 'none';
+
+            setTab('storefront');
+            return t1;
+        };
+
+        async function renderCollectionsTab(container, ownerId, isOwner, ownerData, viewerIsSub) {
+            container.innerHTML = '';
+            try {
+                // albums as big covers, 2 per row
+                const showcases = await fetchUserShowcases(ownerId);
+                const visible = showcases.filter(sc => {
+                    const vis = sc.data.visibility || 'public';
+                    return isOwner || isAdmin() || vis === 'public' || (vis === 'subs' && viewerIsSub);
+                });
+                if (visible.length > 0) {
+                    const head = document.createElement('div');
+                    head.style.cssText = 'font-family:Courier New,monospace; font-size:11px; color:#0600ff; font-weight:bold; margin:14px 0 8px; text-align:left; width:100%;';
+                    head.textContent = '━ albums ━';
+                    container.appendChild(head);
+                    const grid2 = document.createElement('div');
+                    grid2.style.cssText = 'display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%;';
+                    visible.forEach(sc => {
+                        const filled = (sc.data.slots || []).filter(Boolean);
+                        const card = document.createElement('div');
+                        card.style.cssText = 'cursor:pointer; font-family:Courier New,monospace; text-align:left;';
+                        card.onclick = () => loadShowcasePage(sc.id, sc.data.name);
+                        const cov = document.createElement('div');
+                        cov.style.cssText = 'width:100%; aspect-ratio:1; background:#ddd center/cover no-repeat; border:2px solid #0600ff;' + (filled[0] ? ' background-image:url(' + filled[0].imageUrl + ');' : '');
+                        card.appendChild(cov);
+                        const nm = document.createElement('div');
+                        nm.style.cssText = 'font-size:11px; font-weight:bold; margin-top:4px;';
+                        nm.textContent = '✦ ' + sc.data.name;
+                        card.appendChild(nm);
+                        const ct = document.createElement('div');
+                        ct.style.cssText = 'font-size:9px; color:#999;';
+                        ct.textContent = filled.length + ' finds';
+                        card.appendChild(ct);
+                        grid2.appendChild(card);
+                    });
+                    container.appendChild(grid2);
+                }
+
+                // likes as a proper grid
+                const likeIds = (ownerData.likes || []).slice(0, 30);
+                if (likeIds.length > 0) {
+                    const lhead = document.createElement('div');
+                    lhead.style.cssText = 'font-family:Courier New,monospace; font-size:11px; color:#0600ff; font-weight:bold; margin:18px 0 8px; text-align:left; width:100%;';
+                    lhead.textContent = '━ ♡ likes ━';
+                    container.appendChild(lhead);
+                    const lgrid = document.createElement('div');
+                    lgrid.style.cssText = 'display:grid; grid-template-columns:repeat(3,1fr); gap:2px; width:100%; margin:0 -16px; width:calc(100% + 32px);';
+                    container.appendChild(lgrid);
+                    for (const likeId of likeIds) {
+                        try {
+                            const likeDoc = await getDoc(doc(db, 'images', likeId));
+                            if (likeDoc.exists()) {
+                                const d = likeDoc.data();
+                                const img = document.createElement('img');
+                                img.src = d.imageUrl;
+                                img.loading = 'lazy';
+                                img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
+                                img.onclick = () => openImageDetail(likeId, d.imageUrl, d.link, d.tags);
+                                lgrid.appendChild(img);
+                            }
+                        } catch (e) {}
+                    }
+                }
+                if (visible.length === 0 && likeIds.length === 0) {
+                    container.innerHTML = '<div style="font-family:Courier New,monospace; font-size:11px; color:#999; padding:20px 0;">nothing collected yet</div>';
+                }
+            } catch (e) { console.error('collections tab failed:', e); }
+        }
+
         // renders storefront sections in the owner's chosen order.
-        // sections placed after 'everything' land in a footer below the uploads grid.
-        async function renderStoreSections(container, ownerId, isOwner, viewerIsSub, ownerData) {
+        // editing=true adds inline arrange controls (own profile edit mode).
+        async function renderStoreSections(container, ownerId, isOwner, viewerIsSub, ownerData, editing = false) {
             try {
                 const showcases = await fetchUserShowcases(ownerId);
                 const layout = buildEffectiveLayout(ownerData.storeLayout, showcases);
                 const logVis = ownerData.brandLogVisibility || (ownerData.brandLogPublic === true ? 'public' : 'private');
 
-                const gridEl = document.getElementById('imageGrid');
-                let footer = document.getElementById('storeFooter');
-                if (footer) footer.remove();
-                footer = document.createElement('div');
-                footer.id = 'storeFooter';
-                footer.style.cssText = container.style.cssText ? '' : '';
-                footer.style.padding = '0 16px 20px';
-                if (gridEl && gridEl.parentNode) gridEl.parentNode.insertBefore(footer, gridEl.nextSibling);
+                async function saveLayoutInline() {
+                    const clean = layout.map(x => ({ id: String(x.id), hidden: x.hidden === true }));
+                    await setDoc(doc(db, 'users', ownerId), { storeLayout: clean }, { merge: true });
+                }
+                const rerender = () => { container.innerHTML = ''; renderStoreSections(container, ownerId, isOwner, viewerIsSub, Object.assign({}, ownerData, { storeLayout: layout }), editing); };
 
-                let target = container;
-                let sawEverything = false;
-
-                for (const item of layout) {
-                    if (item.id === 'everything') {
-                        sawEverything = true;
-                        target = footer;
-                        if (!item.hidden && gridEl) {
-                            // labeled divider at the top of the uploads grid
-                            const oldLabel = document.getElementById('everythingLabel');
-                            if (oldLabel) oldLabel.remove();
-                            const lab = document.createElement('div');
-                            lab.id = 'everythingLabel';
-                            lab.style.cssText = 'grid-column:1 / -1; font-family:Courier New,monospace; font-size:11px; color:#0600ff; font-weight:bold; padding:10px 2px 6px;';
-                            lab.textContent = '━ everything ━';
-                            gridEl.prepend(lab);
-                        }
-                        if (item.hidden && gridEl) gridEl.style.display = 'none';
-                        continue;
+                function editBar(item, i, label, isAlbum, sc) {
+                    const bar = document.createElement('div');
+                    bar.style.cssText = 'display:flex; align-items:center; justify-content:space-between; margin-top:12px; padding:6px 8px; background:#fff; border:1.5px dashed #0600ff; font-family:Courier New,monospace;';
+                    const nm = document.createElement('span');
+                    nm.style.cssText = 'font-size:11px; font-weight:bold;' + (item.hidden ? ' opacity:0.5;' : '');
+                    nm.textContent = label + (item.hidden ? ' (hidden)' : '');
+                    bar.appendChild(nm);
+                    const ctl = document.createElement('span');
+                    ctl.style.cssText = 'display:flex; gap:12px; align-items:center; font-size:14px;';
+                    const up = document.createElement('a'); up.href = '#'; up.textContent = '↑'; up.style.cssText = 'color:' + (i === 0 ? '#ddd' : '#0600ff') + '; text-decoration:none;';
+                    up.onclick = async (e) => { e.preventDefault(); if (i === 0) return; [layout[i-1], layout[i]] = [layout[i], layout[i-1]]; await saveLayoutInline(); rerender(); };
+                    const down = document.createElement('a'); down.href = '#'; down.textContent = '↓'; down.style.cssText = 'color:' + (i === layout.length - 1 ? '#ddd' : '#0600ff') + '; text-decoration:none;';
+                    down.onclick = async (e) => { e.preventDefault(); if (i === layout.length - 1) return; [layout[i+1], layout[i]] = [layout[i], layout[i+1]]; await saveLayoutInline(); rerender(); };
+                    const hide = document.createElement('a'); hide.href = '#'; hide.textContent = item.hidden ? 'show' : 'hide'; hide.style.cssText = 'color:#999; font-size:10px; text-decoration:underline;';
+                    hide.onclick = async (e) => { e.preventDefault(); item.hidden = !item.hidden; await saveLayoutInline(); rerender(); };
+                    ctl.appendChild(up); ctl.appendChild(down); ctl.appendChild(hide);
+                    if (isAlbum) {
+                        const del = document.createElement('a'); del.href = '#'; del.textContent = '×'; del.style.cssText = 'color:#999; font-size:16px; text-decoration:none;';
+                        del.onclick = async (e) => {
+                            e.preventDefault();
+                            if (!confirm('delete album "' + sc.data.name + '"?')) return;
+                            await deleteDoc(doc(db, 'showcases', sc.id));
+                            const li = layout.findIndex(x => x.id === 'showcase:' + sc.id);
+                            if (li !== -1) { layout.splice(li, 1); await saveLayoutInline(); }
+                            loadMyProfile(false);
+                        };
+                        ctl.appendChild(del);
+                        const slots = document.createElement('a'); slots.href = '#'; slots.textContent = 'fill'; slots.style.cssText = 'color:#0600ff; font-size:10px; text-decoration:underline;';
+                        slots.onclick = (e) => { e.preventDefault(); window.openSlotPicker(sc.id, 0); };
+                        ctl.appendChild(slots);
                     }
+                    bar.appendChild(ctl);
+                    container.appendChild(bar);
+                }
+
+                const target = container;
+                for (let i = 0; i < layout.length; i++) {
+                    const item = layout[i];
+                    if (editing && isOwner) {
+                        const isAlbum = item.id.startsWith('showcase:');
+                        const sc = isAlbum ? showcases.find(s => 'showcase:' + s.id === item.id) : null;
+                        if (isAlbum && !sc) continue;
+                        editBar(item, i, isAlbum ? '✦ ' + sc.data.name : 'my brand log', isAlbum, sc);
+                    }
+                    if (item.hidden && !(editing && isOwner)) continue;
                     if (item.hidden) continue;
                     if (item.id === 'brandlog') {
                         if (isOwner) {
@@ -7740,7 +7895,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 } else if (page.type === 'myOutfits') {
                     await loadOutfitsBoard(true, true);
                 } else if (page.type === 'decorate') {
-                    await loadDecoratePage();
+                    await loadMyProfile();
                 } else if (page.type === 'brandlog') {
                     await loadBrandLog();
                 } else if (page.type === 'featured') {
@@ -9056,7 +9211,7 @@ function loadPage(page) {
             <button id="likeBtnRow" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer;"><span id="likeHeartIcon" style="display:block; margin:0 auto 4px; width:20px; height:20px;"><svg width="20" height="20" viewBox="0 0 28 26" fill="none"><path id="likeHeartPath" d="M14 23 C7 17.5 2 13 2 8.2 C2 4.7 4.8 2 8.2 2 C10.6 2 12.8 3.3 14 5.4 C15.2 3.3 17.4 2 19.8 2 C23.2 2 26 4.7 26 8.2 C26 13 21 17.5 14 23 Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"></path></svg></span><span id="likeTxt">like</span></button>
 
         </div>
-        <button onclick="closeImageDetail()" style="width: 100%; padding: 12px; background: #ccc; color: #000; border: 2px solid #999;">close</button>
+        <button onclick="closeImageDetail()" style="width: 100%; padding: 12px; background: #f0e0d6; color: #000; border: 2px solid #0600ff; font-family: 'Courier New', Courier, monospace; font-size: 13px; cursor: pointer;">close</button>
     </div>
 </div>
 <!-- eBay Item Modal (today mix-ins) — white bg = from the wider web -->
