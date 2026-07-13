@@ -5475,7 +5475,7 @@ window.loadMyProfile = async function(addToHistory = true) {
             box.style.cssText = 'background:#fff; border:3px solid #0600ff; box-shadow:8px 8px 0 #0600ff; padding:24px 20px; width:100%; max-width:360px; font-family:Courier New,monospace; position:relative; max-height:80vh; overflow-y:auto;';
             box.innerHTML = `
                 <button onclick="document.getElementById('storefrontModal').style.display='none'" style="position:absolute; top:6px; right:10px; width:auto; margin:0; padding:4px 8px; background:none; border:none; font-size:20px; cursor:pointer; color:#0600ff;">×</button>
-                <button id="peekBtn" style="position:absolute; top:8px; right:44px; width:auto; margin:0; padding:3px 10px; background:#F9FF00; border:1.5px solid #000; font-family:'Courier New',monospace; font-size:10px; font-weight:bold; cursor:pointer; color:#000;">👁 hold to peek</button>
+                <button id="peekBtn" title="peek behind" style="position:absolute; top:8px; right:42px; width:auto; margin:0; padding:2px 7px; background:none; border:none; font-size:17px; cursor:pointer; line-height:1;">👁</button>
                 <p style="font-size:10px; color:#666; margin-bottom:14px; line-height:1.5; margin-top:24px;">decorate your page — visitors see your walls.</p>
 
                 <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">wallpaper — upload, or find a pattern</label>
@@ -5513,10 +5513,16 @@ window.loadMyProfile = async function(addToHistory = true) {
             modal.appendChild(box);
             document.body.appendChild(modal);
             const peek = document.getElementById('peekBtn');
-            const peekOn = (e) => { e.preventDefault(); modal.style.opacity = '0.06'; };
-            const peekOff = () => { modal.style.opacity = '1'; };
-            peek.addEventListener('touchstart', peekOn); peek.addEventListener('touchend', peekOff);
-            peek.addEventListener('mousedown', peekOn); peek.addEventListener('mouseup', peekOff); peek.addEventListener('mouseleave', peekOff);
+            let peeking = false;
+            peek.onclick = (e) => {
+                e.stopPropagation();
+                peeking = !peeking;
+                modal.style.opacity = peeking ? '0.06' : '1';
+            };
+            // while peeking, tapping anywhere brings the editor back
+            modal.addEventListener('click', () => {
+                if (peeking) { peeking = false; modal.style.opacity = '1'; }
+            }, true);
             try {
                 const u = (await getDoc(doc(db, 'users', auth.currentUser.uid))).data() || {};
                 if (typeof u.storeOpacity === 'number') {
@@ -5553,12 +5559,12 @@ window.loadMyProfile = async function(addToHistory = true) {
             const none = document.createElement('span');
             none.textContent = 'original';
             none.style.cssText = 'padding:5px 10px; font-family:Courier New,monospace; font-size:10px; cursor:pointer; border:2px solid ' + (window._shapeColor === '' ? '#0600ff' : '#ccc') + '; background:#fff;';
-            none.onclick = () => { window._shapeColor = ''; renderShapeColorChips(); };
+            none.onclick = () => { window._shapeColor = ''; renderShapeColorChips(); previewRecoloredPattern(); };
             row.appendChild(none);
             GC_PALETTE.forEach(([hex]) => {
                 const chip = document.createElement('span');
                 chip.style.cssText = 'width:30px; height:30px; display:inline-block; cursor:pointer; background:' + hex + '; border:2.5px solid ' + (window._shapeColor === hex ? '#0600ff' : '#ccc') + '; box-sizing:border-box;';
-                chip.onclick = () => { window._shapeColor = hex; renderShapeColorChips(); };
+                chip.onclick = () => { window._shapeColor = hex; renderShapeColorChips(); previewRecoloredPattern(); };
                 row.appendChild(chip);
             });
         };
@@ -5614,6 +5620,19 @@ window.loadMyProfile = async function(addToHistory = true) {
                 chip.onclick = () => { window._storeHeadlineColor = hex; renderHeadlineColorChips(); };
                 row.appendChild(chip);
             });
+        };
+
+        window.previewRecoloredPattern = async function() {
+            if (!window._patternPickUrl) return;
+            if (!window._shapeColor) { previewWallpaperNow(window._patternPickUrl); return; }
+            try {
+                const pres = await fetch('/.netlify/functions/image-proxy?url=' + encodeURIComponent(window._patternPickUrl));
+                if (!pres.ok) return;
+                const blob = await pres.blob();
+                const colored = await recolorShape(blob, window._shapeColor);
+                const dataUrl = URL.createObjectURL(colored);
+                previewWallpaperNow(dataUrl);
+            } catch (e) {}
         };
 
         window.previewWallpaperNow = function(url) {
@@ -5682,7 +5701,7 @@ window.loadMyProfile = async function(addToHistory = true) {
                         img.style.borderColor = '#0600ff';
                         window._patternPickUrl = hit.full;
                         document.getElementById('storeWallFile').value = '';
-                        previewWallpaperNow(hit.full);
+                        if (window._shapeColor) { previewRecoloredPattern(); } else { previewWallpaperNow(hit.full); }
                     };
                     results.appendChild(img);
                 });
