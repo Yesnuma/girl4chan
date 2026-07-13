@@ -11,7 +11,9 @@ const ALLOWED_HOSTS = [
   'cloudfront.net',          // poshmark image CDN
   'media-assets.grailed.com',
   'vinted.net',
-  'etsystatic.com'
+  'etsystatic.com',
+  'pixabay.com',
+  'cdn.pixabay.com'
 ];
 
 exports.handler = async (event) => {
