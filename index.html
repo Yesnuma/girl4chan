@@ -3352,7 +3352,7 @@ async function deleteCollection(collectionId, collectionName) {
                 header.appendChild(nameEl);
                 if (profData.storeHeadline) {
                     const hl = document.createElement('div');
-                    hl.style.cssText = 'font-size:11px; color:#ff007a; font-style:italic; font-family:Courier New,monospace; margin-bottom:4px;';
+                    hl.style.cssText = 'font-size:11px; color:' + (profData.storeHeadlineColor || '#ff007a') + '; font-style:italic; font-family:Courier New,monospace; margin-bottom:4px;';
                     hl.textContent = '✿ ' + profData.storeHeadline + ' ✿';
                     header.appendChild(hl);
                 }
@@ -3976,9 +3976,18 @@ window.loadMyProfile = async function(addToHistory = true) {
                 profileHeader.appendChild(nameEl);
                 if (userData.storeHeadline) {
                     const hl = document.createElement('div');
-                    hl.style.cssText = 'font-size:11px; color:#ff007a; font-style:italic; font-family:Courier New,monospace; margin-bottom:4px;';
+                    hl.style.cssText = 'font-size:11px; color:' + (userData.storeHeadlineColor || '#ff007a') + '; font-style:italic; font-family:Courier New,monospace; margin-bottom:4px;';
                     hl.textContent = '✿ ' + userData.storeHeadline + ' ✿';
                     profileHeader.appendChild(hl);
+                }
+
+                // + new album (premium)
+                if (window.isPremium === true || isAdmin()) {
+                    const newAlb = document.createElement('button');
+                    newAlb.textContent = '＋ new album';
+                    newAlb.style.cssText = 'display:inline-block; width:auto; margin:0 0 6px; background:#fff; border:1px solid #0600ff; color:#0600ff; font-family:Courier New,monospace; font-size:11px; padding:4px 12px; cursor:pointer;';
+                    newAlb.onclick = () => window.openAlbumCreator();
+                    profileHeader.appendChild(newAlb);
                 }
 
                 // shuffle my closet
@@ -5355,10 +5364,20 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
         function clearProfileWallpaper() {
             const l = document.getElementById('profileWallpaper');
             if (l) l.remove();
+            const t = document.getElementById('profileTint');
+            if (t) t.remove();
         }
 
         function applyProfileWallpaper(u) {
             clearProfileWallpaper();
+            const oldTint = document.getElementById('profileTint');
+            if (oldTint) oldTint.remove();
+            if (u && u.storeTint && typeof u.storeTintStrength === 'number' && u.storeTintStrength > 0) {
+                const t = document.createElement('div');
+                t.id = 'profileTint';
+                t.style.cssText = 'position:fixed; inset:0; pointer-events:none; z-index:0; background:' + u.storeTint + '; opacity:' + u.storeTintStrength + ';';
+                document.body.prepend(t);
+            }
             if (!u || !u.storeWallpaperUrl) return;
             const layer = document.createElement('div');
             layer.id = 'profileWallpaper';
@@ -5406,8 +5425,19 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 <p style="font-size:10px; color:#666; margin-bottom:14px; line-height:1.5;">decorate your own page — visitors see your walls when they visit you.</p>
                 <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">headline (shows under your name)</label>
                 <input type="text" id="storeHeadline" maxlength="80" placeholder="say something..." style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; box-sizing:border-box; margin-bottom:12px;">
-                <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">wallpaper</label>
-                <input type="file" id="storeWallFile" accept="image/*" style="width:100%; font-size:11px; margin-bottom:12px;">
+                <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">wallpaper — upload, or find a pattern</label>
+                <input type="file" id="storeWallFile" accept="image/*" style="width:100%; font-size:11px; margin-bottom:8px;">
+                <div style="display:flex; gap:6px; margin-bottom:6px;">
+                    <input type="text" id="patternSearch" placeholder="search free patterns... (plaid, hearts)" style="flex:1; min-width:0; padding:9px; border:1.5px solid #0600ff; font-family:'Courier New',monospace; font-size:11px; box-sizing:border-box;">
+                    <button onclick="searchPatterns()" style="width:auto; margin:0; padding:0 12px; background:#0600ff; border:1.5px solid #0600ff; color:#F9FF00; font-family:'Courier New',monospace; font-size:11px; cursor:pointer;">go</button>
+                </div>
+                <div id="patternResults" style="display:grid; grid-template-columns:repeat(4,1fr); gap:3px; margin-bottom:12px;"></div>
+                <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">color wash over the wallpaper</label>
+                <div id="tintRow" style="display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap;"></div>
+                <label style="font-size:10px; color:#666; display:block; margin-bottom:4px;">wash strength: <span id="tintStrVal">0</span>%</label>
+                <input type="range" id="tintStrength" min="0" max="70" value="0" style="width:100%; margin-bottom:12px;" oninput="document.getElementById('tintStrVal').textContent=this.value; previewTint();">
+                <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">headline color</label>
+                <div id="headlineColorRow" style="display:flex; gap:6px; margin-bottom:12px;"></div>
                 <select id="storeWallStyle" onchange="document.getElementById('storeTileWrap').style.display = this.value==='tile' ? 'block':'none'; previewStoreStyle();" style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; background:#fff; margin-bottom:12px;">
                     <option value="fill">fill the screen (one big image)</option>
                     <option value="tile">tile it (pattern / icon repeats)</option>
@@ -5439,7 +5469,99 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     document.getElementById('storeTileSize').value = ts;
                     document.getElementById('storeTileVal').textContent = ts;
                 }
+                if (typeof u.storeTintStrength === 'number') {
+                    document.getElementById('tintStrength').value = Math.round(u.storeTintStrength * 100);
+                    document.getElementById('tintStrVal').textContent = Math.round(u.storeTintStrength * 100);
+                }
+                window._storeTint = u.storeTint || '';
+                window._storeHeadlineColor = u.storeHeadlineColor || '#ff007a';
+                window._patternPickUrl = null;
+                renderTintChips();
+                renderHeadlineColorChips();
             } catch (e) {}
+        };
+
+        const GC_PALETTE = [['#ff007a','pink'],['#0600ff','blue'],['#F9FF00','yellow'],['#9ED2F5','baby blue'],['#f0e0d6','tan'],['#000000','black'],['#ffffff','white']];
+
+        window.renderTintChips = function() {
+            const row = document.getElementById('tintRow');
+            if (!row) return;
+            row.innerHTML = '';
+            const none = document.createElement('span');
+            none.textContent = 'none';
+            none.style.cssText = 'padding:5px 10px; font-family:Courier New,monospace; font-size:10px; cursor:pointer; border:2px solid ' + (window._storeTint === '' ? '#0600ff' : '#ccc') + '; background:#fff;';
+            none.onclick = () => { window._storeTint = ''; renderTintChips(); previewTint(); };
+            row.appendChild(none);
+            GC_PALETTE.forEach(([hex]) => {
+                const chip = document.createElement('span');
+                chip.style.cssText = 'width:30px; height:30px; display:inline-block; cursor:pointer; background:' + hex + '; border:2.5px solid ' + (window._storeTint === hex ? '#0600ff' : '#ccc') + '; box-sizing:border-box;';
+                chip.onclick = () => { window._storeTint = hex; renderTintChips(); previewTint(); };
+                row.appendChild(chip);
+            });
+        };
+
+        window.renderHeadlineColorChips = function() {
+            const row = document.getElementById('headlineColorRow');
+            if (!row) return;
+            row.innerHTML = '';
+            GC_PALETTE.forEach(([hex]) => {
+                const chip = document.createElement('span');
+                chip.style.cssText = 'width:30px; height:30px; display:inline-block; cursor:pointer; background:' + hex + '; border:2.5px solid ' + (window._storeHeadlineColor === hex ? '#0600ff' : '#ccc') + '; box-sizing:border-box;';
+                chip.onclick = () => { window._storeHeadlineColor = hex; renderHeadlineColorChips(); };
+                row.appendChild(chip);
+            });
+        };
+
+        window.previewTint = function() {
+            let t = document.getElementById('profileTint');
+            const strength = parseInt(document.getElementById('tintStrength')?.value || 0, 10) / 100;
+            if (!window._storeTint || strength === 0) { if (t) t.remove(); return; }
+            if (!t) {
+                t = document.createElement('div');
+                t.id = 'profileTint';
+                t.style.cssText = 'position:fixed; inset:0; pointer-events:none; z-index:0;';
+                document.body.prepend(t);
+            }
+            t.style.background = window._storeTint;
+            t.style.opacity = String(strength);
+        };
+
+        window.searchPatterns = async function() {
+            const q = document.getElementById('patternSearch').value.trim();
+            const results = document.getElementById('patternResults');
+            if (!q) return;
+            results.innerHTML = '<span style="grid-column:1/-1; font-size:10px; color:#999;">searching...</span>';
+            try {
+                const res = await fetch('/.netlify/functions/pixabay-search', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: q })
+                });
+                const data = await res.json();
+                if (data.error === 'no_key') {
+                    results.innerHTML = '<span style="grid-column:1/-1; font-size:10px; color:#c00;">pattern search needs the PIXABAY_API_KEY set in netlify</span>';
+                    return;
+                }
+                results.innerHTML = '';
+                if (!data.hits || data.hits.length === 0) {
+                    results.innerHTML = '<span style="grid-column:1/-1; font-size:10px; color:#999;">nothing found — try another word</span>';
+                    return;
+                }
+                data.hits.forEach(hit => {
+                    const img = document.createElement('img');
+                    img.src = hit.preview;
+                    img.loading = 'lazy';
+                    img.style.cssText = 'width:100%; aspect-ratio:1; object-fit:cover; display:block; cursor:pointer; background:#eee; border:2.5px solid transparent; box-sizing:border-box;';
+                    img.onclick = () => {
+                        results.querySelectorAll('img').forEach(i => i.style.borderColor = 'transparent');
+                        img.style.borderColor = '#0600ff';
+                        window._patternPickUrl = hit.full;
+                        document.getElementById('storeWallFile').value = '';
+                    };
+                    results.appendChild(img);
+                });
+            } catch (e) {
+                results.innerHTML = '<span style="grid-column:1/-1; font-size:10px; color:#c00;">search failed — try again</span>';
+            }
         };
 
         window.previewStoreStyle = function() {
@@ -5469,6 +5591,17 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     const wref = ref(storage, 'storefronts/' + auth.currentUser.uid + '_' + Date.now() + '.jpg');
                     await uploadBytes(wref, compressed);
                     url = await getDownloadURL(wref);
+                } else if (window._patternPickUrl) {
+                    // picked pattern: pull it through the proxy, keep our own copy forever
+                    status.textContent = 'grabbing the pattern...';
+                    const pres = await fetch('/.netlify/functions/image-proxy?url=' + encodeURIComponent(window._patternPickUrl));
+                    if (!pres.ok) throw new Error('could not grab that pattern');
+                    const blob = await pres.blob();
+                    const compressed = await compressImage(blob, 1920, 0.9);
+                    const wref = ref(storage, 'storefronts/' + auth.currentUser.uid + '_' + Date.now() + '.jpg');
+                    await uploadBytes(wref, compressed);
+                    url = await getDownloadURL(wref);
+                    window._patternPickUrl = null;
                 } else {
                     const u = (await getDoc(doc(db, 'users', auth.currentUser.uid))).data() || {};
                     url = u.storeWallpaperUrl || null;
@@ -5478,7 +5611,10 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     storeWallpaperUrl: url,
                     storeOpacity: parseInt(document.getElementById('storeOpacity').value, 10) / 100,
                     storeStyle: document.getElementById('storeWallStyle').value,
-                    storeTileSize: parseInt(document.getElementById('storeTileSize').value, 10)
+                    storeTileSize: parseInt(document.getElementById('storeTileSize').value, 10),
+                    storeTint: window._storeTint || '',
+                    storeTintStrength: parseInt(document.getElementById('tintStrength').value, 10) / 100,
+                    storeHeadlineColor: window._storeHeadlineColor || '#ff007a'
                 }, { merge: true });
                 status.textContent = 'saved ✿';
                 status.style.color = '#00a86b';
