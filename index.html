@@ -5431,6 +5431,10 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     <input type="text" id="patternSearch" placeholder="search free patterns... (plaid, hearts)" style="flex:1; min-width:0; padding:9px; border:1.5px solid #0600ff; font-family:'Courier New',monospace; font-size:11px; box-sizing:border-box;">
                     <button onclick="searchPatterns()" style="width:auto; margin:0; padding:0 12px; background:#0600ff; border:1.5px solid #0600ff; color:#F9FF00; font-family:'Courier New',monospace; font-size:11px; cursor:pointer;">go</button>
                 </div>
+                <div style="display:flex; gap:6px; margin-bottom:6px; font-family:'Courier New',monospace; font-size:10px;">
+                    <label style="display:flex; align-items:center; gap:4px;"><input type="radio" name="patternStyle" value="photo" checked> photos</label>
+                    <label style="display:flex; align-items:center; gap:4px;"><input type="radio" name="patternStyle" value="shape"> shapes &amp; silhouettes ✦</label>
+                </div>
                 <div id="patternResults" style="display:grid; grid-template-columns:repeat(4,1fr); gap:3px; margin-bottom:12px;"></div>
                 <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">color wash over the wallpaper</label>
                 <div id="tintRow" style="display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap;"></div>
@@ -5532,9 +5536,10 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             if (!q) return;
             results.innerHTML = '<span style="grid-column:1/-1; font-size:10px; color:#999;">searching...</span>';
             try {
+                const style = document.querySelector('input[name="patternStyle"]:checked')?.value || 'photo';
                 const res = await fetch('/.netlify/functions/pixabay-search', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: q })
+                    body: JSON.stringify({ query: q, style: style })
                 });
                 const data = await res.json();
                 if (data.error === 'no_key') {
