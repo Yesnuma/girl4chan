@@ -156,6 +156,18 @@
             padding: 15px 10px;
         }
 
+        /* widescreen: keep the zine column — cap + center, same look at any size */
+        @media (min-width: 760px) {
+            .container, .header {
+                max-width: 720px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+            body {
+                background-color: #f0e0d6;
+            }
+        }
+
         .page-title {
             font-size: 16px;
             font-weight: bold;
@@ -201,6 +213,7 @@
         /* Upload Tab */
         .upload-tab {
             position: fixed;
+            z-index: 40;
             right: 0;
             bottom: 10px;
             width: 30px;
@@ -227,6 +240,7 @@
         /* Rules Tab */
         .rules-tab {
             position: fixed;
+            z-index: 40;
             right: 0;
             bottom: 150px;
             width: 30px;
@@ -242,6 +256,7 @@
         /* Chat Tab — tucked on the LEFT edge, barely peeking (it's a secret) */
         .chat-tab {
             position: fixed;
+            z-index: 40;
             left: -22px;
             bottom: 80px;
             width: 30px;
@@ -266,6 +281,7 @@
         /* Cabinet Tab — right side, with upload and rules */
         .cabinet-tab {
             position: fixed;
+            z-index: 40;
             right: 0;
             bottom: 80px;
             width: 30px;
@@ -8302,6 +8318,20 @@ window.loadMyProfile = async function(addToHistory = true) {
 
             item.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
+            });
+
+            // desktop: plain mouse click opens the find (ignored right after touch)
+            let lastTouchAt = 0;
+            item.addEventListener('touchend', () => { lastTouchAt = Date.now(); });
+            item.addEventListener('click', (e) => {
+                if (Date.now() - lastTouchAt < 800) return; // synthetic click after touch
+                const tags = item.dataset.tags ? JSON.parse(item.dataset.tags) : [];
+                openImageDetail(
+                    item.dataset.imageId,
+                    item.dataset.imageUrl,
+                    item.dataset.link,
+                    tags
+                );
             });
         }
 
