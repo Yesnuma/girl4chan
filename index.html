@@ -5368,8 +5368,18 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             if (t) t.remove();
         }
 
+        function raiseContentAboveLayers() {
+            const container = document.querySelector('.container');
+            if (container) { container.style.position = 'relative'; container.style.zIndex = '1'; }
+            const headerEl = document.querySelector('.header');
+            if (headerEl) { headerEl.style.position = 'relative'; headerEl.style.zIndex = '2'; }
+            const footer = document.getElementById('storeFooter');
+            if (footer) { footer.style.position = 'relative'; footer.style.zIndex = '1'; }
+        }
+
         function applyProfileWallpaper(u) {
             clearProfileWallpaper();
+            raiseContentAboveLayers();
             const oldTint = document.getElementById('profileTint');
             if (oldTint) oldTint.remove();
             if (u && u.storeTint && typeof u.storeTintStrength === 'number' && u.storeTintStrength > 0) {
@@ -5436,6 +5446,8 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     <label style="display:flex; align-items:center; gap:4px;"><input type="radio" name="patternStyle" value="shape"> shapes &amp; silhouettes ✦</label>
                 </div>
                 <div id="patternResults" style="display:grid; grid-template-columns:repeat(4,1fr); gap:3px; margin-bottom:12px;"></div>
+                <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">shape color — paints a picked pattern one flat color</label>
+                <div id="shapeColorRow" style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;"></div>
                 <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">color wash over the wallpaper</label>
                 <div id="tintRow" style="display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap;"></div>
                 <label style="font-size:10px; color:#666; display:block; margin-bottom:4px;">wash strength: <span id="tintStrVal">0</span>%</label>
@@ -5480,12 +5492,55 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 window._storeTint = u.storeTint || '';
                 window._storeHeadlineColor = u.storeHeadlineColor || '#ff007a';
                 window._patternPickUrl = null;
+                window._shapeColor = '';
                 renderTintChips();
                 renderHeadlineColorChips();
+                renderShapeColorChips();
             } catch (e) {}
         };
 
         const GC_PALETTE = [['#ff007a','pink'],['#0600ff','blue'],['#F9FF00','yellow'],['#9ED2F5','baby blue'],['#f0e0d6','tan'],['#000000','black'],['#ffffff','white']];
+
+        window.renderShapeColorChips = function() {
+            const row = document.getElementById('shapeColorRow');
+            if (!row) return;
+            row.innerHTML = '';
+            const none = document.createElement('span');
+            none.textContent = 'original';
+            none.style.cssText = 'padding:5px 10px; font-family:Courier New,monospace; font-size:10px; cursor:pointer; border:2px solid ' + (window._shapeColor === '' ? '#0600ff' : '#ccc') + '; background:#fff;';
+            none.onclick = () => { window._shapeColor = ''; renderShapeColorChips(); };
+            row.appendChild(none);
+            GC_PALETTE.forEach(([hex]) => {
+                const chip = document.createElement('span');
+                chip.style.cssText = 'width:30px; height:30px; display:inline-block; cursor:pointer; background:' + hex + '; border:2.5px solid ' + (window._shapeColor === hex ? '#0600ff' : '#ccc') + '; box-sizing:border-box;';
+                chip.onclick = () => { window._shapeColor = hex; renderShapeColorChips(); };
+                row.appendChild(chip);
+            });
+        };
+
+        // paint a transparent-background shape one flat color
+        function recolorShape(blob, hex) {
+            return new Promise((resolve) => {
+                try {
+                    const url = URL.createObjectURL(blob);
+                    const img = new Image();
+                    img.onload = () => {
+                        URL.revokeObjectURL(url);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        ctx.globalCompositeOperation = 'source-in';
+                        ctx.fillStyle = hex;
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        canvas.toBlob((out) => resolve(out || blob), 'image/png');
+                    };
+                    img.onerror = () => { URL.revokeObjectURL(url); resolve(blob); };
+                    img.src = url;
+                } catch (e) { resolve(blob); }
+            });
+        }
 
         window.renderTintChips = function() {
             const row = document.getElementById('tintRow');
@@ -5516,6 +5571,20 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
             });
         };
 
+        window.previewWallpaperNow = function(url) {
+            let layer = document.getElementById('profileWallpaper');
+            if (!layer) {
+                layer = document.createElement('div');
+                layer.id = 'profileWallpaper';
+                layer.style.cssText = 'position:fixed; inset:0; pointer-events:none; z-index:0;';
+                document.body.prepend(layer);
+                raiseContentAboveLayers();
+            }
+            layer.style.backgroundImage = 'url(' + url + ')';
+            layer.style.opacity = String((parseInt(document.getElementById('storeOpacity')?.value || 20, 10)) / 100);
+            previewStoreStyle();
+        };
+
         window.previewTint = function() {
             let t = document.getElementById('profileTint');
             const strength = parseInt(document.getElementById('tintStrength')?.value || 0, 10) / 100;
@@ -5525,6 +5594,7 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                 t.id = 'profileTint';
                 t.style.cssText = 'position:fixed; inset:0; pointer-events:none; z-index:0;';
                 document.body.prepend(t);
+                raiseContentAboveLayers();
             }
             t.style.background = window._storeTint;
             t.style.opacity = String(strength);
@@ -5561,9 +5631,11 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                         img.style.borderColor = '#0600ff';
                         window._patternPickUrl = hit.full;
                         document.getElementById('storeWallFile').value = '';
+                        previewWallpaperNow(hit.full);
                     };
                     results.appendChild(img);
                 });
+                results.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             } catch (e) {
                 results.innerHTML = '<span style="grid-column:1/-1; font-size:10px; color:#c00;">search failed — try again</span>';
             }
@@ -5601,10 +5673,16 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     status.textContent = 'grabbing the pattern...';
                     const pres = await fetch('/.netlify/functions/image-proxy?url=' + encodeURIComponent(window._patternPickUrl));
                     if (!pres.ok) throw new Error('could not grab that pattern');
-                    const blob = await pres.blob();
-                    const compressed = await compressImage(blob, 1920, 0.9);
-                    const wref = ref(storage, 'storefronts/' + auth.currentUser.uid + '_' + Date.now() + '.jpg');
-                    await uploadBytes(wref, compressed);
+                    let blob = await pres.blob();
+                    let wref;
+                    if (window._shapeColor) {
+                        blob = await recolorShape(blob, window._shapeColor);
+                        wref = ref(storage, 'storefronts/' + auth.currentUser.uid + '_' + Date.now() + '.png');
+                    } else {
+                        blob = await compressImage(blob, 1920, 0.9);
+                        wref = ref(storage, 'storefronts/' + auth.currentUser.uid + '_' + Date.now() + '.jpg');
+                    }
+                    await uploadBytes(wref, blob);
                     url = await getDownloadURL(wref);
                     window._patternPickUrl = null;
                 } else {
@@ -5621,9 +5699,8 @@ likesLabel.querySelector('span').onclick = () => loadLikesFeed();
                     storeTintStrength: parseInt(document.getElementById('tintStrength').value, 10) / 100,
                     storeHeadlineColor: window._storeHeadlineColor || '#ff007a'
                 }, { merge: true });
-                status.textContent = 'saved ✿';
+                status.innerHTML = 'saved ✿ <a href="#" style="color:#0600ff;" onclick="event.preventDefault(); document.getElementById(\'storefrontModal\').style.display=\'none\'; loadMyProfile();">→ see it live</a>';
                 status.style.color = '#00a86b';
-                loadMyProfile(false);
             } catch (e) {
                 status.textContent = 'failed: ' + e.message;
                 status.style.color = '#c00';
