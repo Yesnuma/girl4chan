@@ -30,7 +30,7 @@ exports.handler = async (event) => {
             : '&image_type=all';
         const url = 'https://pixabay.com/api/?key=' + process.env.PIXABAY_API_KEY +
             '&q=' + encodeURIComponent(query.trim()) + typeParams +
-            '&safesearch=true&per_page=24&page=' + page;
+            '&safesearch=true&order=popular&per_page=24&page=' + page;
         const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
         const data = await res.json();
         const hits = (data.hits || []).map(h => ({
