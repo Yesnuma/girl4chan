@@ -10,11 +10,12 @@ exports.handler = async (event) => {
         return { statusCode: 200, body: JSON.stringify({ error: 'no_key', hits: [] }) };
     }
 
-    let query, page = 1;
+    let query, page = 1, style = 'photo';
     try {
         const body = JSON.parse(event.body);
         query = body.query;
         if (body.page) page = body.page;
+        if (body.style) style = body.style;
     } catch (e) {
         return { statusCode: 400, body: JSON.stringify({ error: 'bad request' }) };
     }
@@ -23,9 +24,13 @@ exports.handler = async (event) => {
     }
 
     try {
+        // 'shape' = clipart/silhouettes with transparent backgrounds — tiles beautifully
+        const typeParams = style === 'shape'
+            ? '&image_type=vector&colors=transparent'
+            : '&image_type=all';
         const url = 'https://pixabay.com/api/?key=' + process.env.PIXABAY_API_KEY +
-            '&q=' + encodeURIComponent(query.trim()) +
-            '&image_type=all&safesearch=true&per_page=24&page=' + page;
+            '&q=' + encodeURIComponent(query.trim()) + typeParams +
+            '&safesearch=true&per_page=24&page=' + page;
         const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
         const data = await res.json();
         const hits = (data.hits || []).map(h => ({
