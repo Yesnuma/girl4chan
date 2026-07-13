@@ -1365,7 +1365,7 @@
                 <span style="position:absolute; bottom:4px; left:4px; font-size:7px; color:#fff; font-weight:bold; width:10px; text-align:center; line-height:10px;">2</span>
             </div>
             <div style="font-size:12px; line-height:1.4; font-family:'Courier New',monospace;">
-                <strong>add to collection</strong><br>tap ↖ then ↙
+                <strong>add to board</strong><br>tap ↖ then ↙
             </div>
         </div>
 
@@ -1481,7 +1481,7 @@
     <div class="modal" id="collectionPickerModal">
         <div class="collection-picker-content">
             <div class="collection-picker-header">
-                <h2>add to collection</h2>
+                <h2>add to board</h2>
                 <button class="collection-picker-close" onclick="closeCollectionPicker()">×</button>
             </div>
             <input type="text" id="collectionSearch" placeholder="search..." oninput="filterCollections()">
@@ -2864,6 +2864,68 @@ async function deleteCollection(collectionId, collectionName) {
 }
 
         // Load specific collection
+        window.openBoardEditor = async function(collectionId, collectionName) {
+            if (!requireAuth()) return;
+            if (window.isPremium !== true && !isAdmin()) { alert('decorating boards is a premium thing ✦'); return; }
+            let modal = document.getElementById('boardEditorModal');
+            if (modal) modal.remove();
+            modal = document.createElement('div');
+            modal.id = 'boardEditorModal';
+            modal.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10001; align-items:center; justify-content:center; padding:20px;';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            const box = document.createElement('div');
+            box.style.cssText = 'background:#fff; border:3px solid #0600ff; box-shadow:8px 8px 0 #0600ff; padding:24px 20px; width:100%; max-width:340px; font-family:Courier New,monospace; position:relative;';
+            box.innerHTML = `
+                <button onclick="document.getElementById('boardEditorModal').remove()" style="position:absolute; top:6px; right:10px; width:auto; margin:0; padding:4px 8px; background:none; border:none; font-size:20px; cursor:pointer; color:#0600ff;">×</button>
+                <h3 style="color:#0600ff; font-size:14px; margin-bottom:4px;">🎨 decorate this board</h3>
+                <p style="font-size:9px; color:#999; margin-bottom:12px;">everyone sees it — last decorator wins.</p>
+                <input type="file" id="boardWallFile" accept="image/*" style="width:100%; font-size:11px; margin-bottom:12px;">
+                <select id="boardWallStyle" style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; background:#fff; margin-bottom:12px;">
+                    <option value="fill">fill the screen</option>
+                    <option value="tile">tile it (pattern repeats)</option>
+                </select>
+                <label style="font-size:10px; color:#666; display:block; margin-bottom:4px;">opacity: <span id="boardOpVal">20</span>%</label>
+                <input type="range" id="boardOpacity" min="5" max="60" value="20" style="width:100%; margin-bottom:14px;" oninput="document.getElementById('boardOpVal').textContent=this.value;">
+                <button onclick="saveBoardWalls('${collectionId}', '${collectionName.replace(/'/g, '')}')" style="width:100%; padding:12px; background:#0600ff; color:#fff; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; cursor:pointer; margin-bottom:8px;">put it up ✿</button>
+                <button onclick="clearBoardWalls('${collectionId}', '${collectionName.replace(/'/g, '')}')" style="width:100%; padding:10px; background:#f5f5f5; color:#000; border:2px solid #ccc; font-family:'Courier New',monospace; font-size:11px; cursor:pointer;">strip the board</button>
+                <div id="boardWallStatus" style="font-size:11px; text-align:center; margin-top:10px;"></div>
+            `;
+            modal.appendChild(box);
+            document.body.appendChild(modal);
+        };
+
+        window.saveBoardWalls = async function(collectionId, collectionName) {
+            const status = document.getElementById('boardWallStatus');
+            try {
+                const fileInput = document.getElementById('boardWallFile');
+                if (!fileInput.files || !fileInput.files[0]) { status.textContent = 'pick an image first'; return; }
+                status.textContent = 'uploading...';
+                const compressed = await compressImage(fileInput.files[0], 1920, 0.85);
+                const wref = ref(storage, 'boards/' + collectionId + '_' + Date.now() + '.jpg');
+                await uploadBytes(wref, compressed);
+                const url = await getDownloadURL(wref);
+                await setDoc(doc(db, 'collections', collectionId), {
+                    boardWallUrl: url,
+                    boardWallOpacity: parseInt(document.getElementById('boardOpacity').value, 10) / 100,
+                    boardWallStyle: document.getElementById('boardWallStyle').value,
+                    boardWallBy: auth.currentUser.uid
+                }, { merge: true });
+                document.getElementById('boardEditorModal').remove();
+                loadCollection(collectionId, collectionName, false);
+            } catch (e) {
+                status.textContent = 'failed: ' + e.message;
+                status.style.color = '#c00';
+            }
+        };
+
+        window.clearBoardWalls = async function(collectionId, collectionName) {
+            try {
+                await setDoc(doc(db, 'collections', collectionId), { boardWallUrl: null }, { merge: true });
+                document.getElementById('boardEditorModal').remove();
+                loadCollection(collectionId, collectionName, false);
+            } catch (e) {}
+        };
+
         async function loadCollection(collectionId, collectionName, addToHistory = true) {
             clearProfileWallpaper();
             closeSidebar();
@@ -2882,7 +2944,22 @@ async function deleteCollection(collectionId, collectionName) {
 
             // Update current context
             currentContext = { type: 'collection', id: collectionId, name: collectionName };
-            document.getElementById('pageTitle').innerHTML = `/ ${collectionName}`;
+            document.getElementById('pageTitle').innerHTML = `/ ${collectionName}` +
+                ((auth.currentUser && (window.isPremium === true || isAdmin())) ? ' <a href="#" style="font-size:12px; text-decoration:none;" onclick="event.preventDefault(); openBoardEditor(\'' + collectionId + '\', \'' + String(collectionName).replace(/'/g, '') + '\')">🎨</a>' : '');
+
+            // board walls (community-decorated, reuses the profile layer machinery)
+            try {
+                const colDoc = await getDoc(doc(db, 'collections', collectionId));
+                const cd = colDoc.exists() ? colDoc.data() : {};
+                if (cd.boardWallUrl) {
+                    applyProfileWallpaper({
+                        storeWallpaperUrl: cd.boardWallUrl,
+                        storeOpacity: typeof cd.boardWallOpacity === 'number' ? cd.boardWallOpacity : 0.2,
+                        storeStyle: cd.boardWallStyle || 'fill',
+                        storeTileSize: 160
+                    });
+                }
+            } catch (e) {}
 
             // Save current page to localStorage
             localStorage.setItem('currentPage', JSON.stringify({
@@ -3349,13 +3426,7 @@ async function deleteCollection(collectionId, collectionName) {
                     nameEl.appendChild(badge);
                 }
                 header.appendChild(nameEl);
-                if (profData.storeHeadline) {
-                    const hl = document.createElement('div');
-                    hl.style.cssText = 'font-size:11px; color:' + (profData.storeHeadlineColor || '#ff007a') + '; font-style:italic; font-family:Courier New,monospace; margin-bottom:4px;';
-                    hl.textContent = '✿ ' + profData.storeHeadline + ' ✿';
-                    header.appendChild(hl);
-                }
-
+                
                 if (profData.bio) {
                     const bioEl = document.createElement('div');
                     bioEl.style.cssText = 'font-size:11px; color:#666; text-align:center; max-width:240px; font-family:Courier New,monospace; margin-bottom:8px;';
@@ -3975,13 +4046,7 @@ window.loadMyProfile = async function(addToHistory = true) {
                     nameEl.appendChild(badge);
                 }
                 profileHeader.appendChild(nameEl);
-                if (userData.storeHeadline) {
-                    const hl = document.createElement('div');
-                    hl.style.cssText = 'font-size:11px; color:' + (userData.storeHeadlineColor || '#ff007a') + '; font-style:italic; font-family:Courier New,monospace; margin-bottom:4px;';
-                    hl.textContent = '✿ ' + userData.storeHeadline + ' ✿';
-                    profileHeader.appendChild(hl);
-                }
-
+                
                 // shuffle my closet
                 const myShuffle = document.createElement('a');
                 myShuffle.href = '/outfit.html';
@@ -5410,15 +5475,14 @@ window.loadMyProfile = async function(addToHistory = true) {
             box.style.cssText = 'background:#fff; border:3px solid #0600ff; box-shadow:8px 8px 0 #0600ff; padding:24px 20px; width:100%; max-width:360px; font-family:Courier New,monospace; position:relative; max-height:80vh; overflow-y:auto;';
             box.innerHTML = `
                 <button onclick="document.getElementById('storefrontModal').style.display='none'" style="position:absolute; top:6px; right:10px; width:auto; margin:0; padding:4px 8px; background:none; border:none; font-size:20px; cursor:pointer; color:#0600ff;">×</button>
-                <h3 style="color:#0600ff; font-size:16px; margin-bottom:6px;">🏪 my storefront</h3>
-                <p style="font-size:10px; color:#666; margin-bottom:14px; line-height:1.5;">decorate your own page — visitors see your walls when they visit you.</p>
-                <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">headline (shows under your name)</label>
-                <input type="text" id="storeHeadline" maxlength="80" placeholder="say something..." style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; box-sizing:border-box; margin-bottom:12px;">
+                <button id="peekBtn" style="position:absolute; top:8px; right:44px; width:auto; margin:0; padding:3px 10px; background:#F9FF00; border:1.5px solid #000; font-family:'Courier New',monospace; font-size:10px; font-weight:bold; cursor:pointer; color:#000;">👁 hold to peek</button>
+                <p style="font-size:10px; color:#666; margin-bottom:14px; line-height:1.5; margin-top:24px;">decorate your page — visitors see your walls.</p>
+
                 <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">wallpaper — upload, or find a pattern</label>
                 <input type="file" id="storeWallFile" accept="image/*" style="width:100%; font-size:11px; margin-bottom:8px;">
                 <div style="display:flex; gap:6px; margin-bottom:6px;">
                     <input type="text" id="patternSearch" placeholder="search free patterns... (plaid, hearts)" style="flex:1; min-width:0; padding:9px; border:1.5px solid #0600ff; font-family:'Courier New',monospace; font-size:11px; box-sizing:border-box;">
-                    <button onclick="searchPatterns()" style="width:auto; margin:0; padding:0 12px; background:#0600ff; border:1.5px solid #0600ff; color:#F9FF00; font-family:'Courier New',monospace; font-size:11px; cursor:pointer;">go</button>
+                    <button id="patternGoBtn" onclick="searchPatterns()" style="width:auto; margin:0; padding:0 12px; background:#fff; border:1.5px solid #0600ff; color:#0600ff; font-family:'Courier New',monospace; font-size:11px; cursor:pointer;">search ⌕</button>
                 </div>
                 <div style="display:flex; gap:6px; margin-bottom:6px; font-family:'Courier New',monospace; font-size:10px;">
                     <label style="display:flex; align-items:center; gap:4px;"><input type="radio" name="patternStyle" value="photo" checked> photos</label>
@@ -5448,9 +5512,13 @@ window.loadMyProfile = async function(addToHistory = true) {
             `;
             modal.appendChild(box);
             document.body.appendChild(modal);
+            const peek = document.getElementById('peekBtn');
+            const peekOn = (e) => { e.preventDefault(); modal.style.opacity = '0.06'; };
+            const peekOff = () => { modal.style.opacity = '1'; };
+            peek.addEventListener('touchstart', peekOn); peek.addEventListener('touchend', peekOff);
+            peek.addEventListener('mousedown', peekOn); peek.addEventListener('mouseup', peekOff); peek.addEventListener('mouseleave', peekOff);
             try {
                 const u = (await getDoc(doc(db, 'users', auth.currentUser.uid))).data() || {};
-                if (u.storeHeadline) document.getElementById('storeHeadline').value = u.storeHeadline;
                 if (typeof u.storeOpacity === 'number') {
                     const v = Math.round(u.storeOpacity * 100);
                     document.getElementById('storeOpacity').value = v;
@@ -5577,16 +5645,22 @@ window.loadMyProfile = async function(addToHistory = true) {
             t.style.opacity = String(strength);
         };
 
-        window.searchPatterns = async function() {
+        window._patternPage = 1;
+        window._patternLastQ = '';
+        window.searchPatterns = async function(nextPage = false) {
             const q = document.getElementById('patternSearch').value.trim();
             const results = document.getElementById('patternResults');
             if (!q) return;
+            if (nextPage && q === window._patternLastQ) { window._patternPage++; } else { window._patternPage = 1; }
+            window._patternLastQ = q;
+            const goBtn = document.getElementById('patternGoBtn');
+            if (goBtn) { goBtn.textContent = '...'; goBtn.disabled = true; }
             results.innerHTML = '<span style="grid-column:1/-1; font-size:10px; color:#999;">searching...</span>';
             try {
                 const style = document.querySelector('input[name="patternStyle"]:checked')?.value || 'photo';
                 const res = await fetch('/.netlify/functions/pixabay-search', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: q, style: style })
+                    body: JSON.stringify({ query: q, style: style, page: window._patternPage })
                 });
                 const data = await res.json();
                 if (data.error === 'no_key') {
@@ -5612,10 +5686,16 @@ window.loadMyProfile = async function(addToHistory = true) {
                     };
                     results.appendChild(img);
                 });
+                const moreBtn = document.createElement('button');
+                moreBtn.textContent = '↻ show me different ones';
+                moreBtn.style.cssText = 'grid-column:1/-1; width:100%; margin:4px 0 0; padding:8px; background:#fff; border:1.5px dashed #0600ff; color:#0600ff; font-family:Courier New,monospace; font-size:10px; cursor:pointer;';
+                moreBtn.onclick = () => searchPatterns(true);
+                results.appendChild(moreBtn);
                 results.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             } catch (e) {
                 results.innerHTML = '<span style="grid-column:1/-1; font-size:10px; color:#c00;">search failed — try again</span>';
             }
+            if (goBtn) { goBtn.textContent = 'search ⌕'; goBtn.disabled = false; }
         };
 
         window.previewStoreStyle = function() {
@@ -5667,7 +5747,6 @@ window.loadMyProfile = async function(addToHistory = true) {
                     url = u.storeWallpaperUrl || null;
                 }
                 await setDoc(doc(db, 'users', auth.currentUser.uid), {
-                    storeHeadline: document.getElementById('storeHeadline').value.trim(),
                     storeWallpaperUrl: url,
                     storeOpacity: parseInt(document.getElementById('storeOpacity').value, 10) / 100,
                     storeStyle: document.getElementById('storeWallStyle').value,
@@ -6569,7 +6648,7 @@ window.loadMyProfile = async function(addToHistory = true) {
 
             const tabRow = document.createElement('div');
             tabRow.id = 'profileTabRow';
-            tabRow.style.cssText = 'display:flex; width:100%; border-bottom:2px solid #0600ff; margin-top:14px;';
+            tabRow.style.cssText = 'display:flex; width:100%; border-bottom:2px solid #0600ff; margin-top:14px; position:relative; z-index:30;';
             headerEl.appendChild(tabRow);
 
             const t1 = document.createElement('div');
@@ -6928,7 +7007,7 @@ window.loadMyProfile = async function(addToHistory = true) {
                             await deleteDoc(doc(db, 'showcases', sc.id));
                             const li = layout.findIndex(x => x.id === 'showcase:' + sc.id);
                             if (li !== -1) { layout.splice(li, 1); await saveLayout(); }
-                            loadDecoratePage(false);
+                            if (currentContext.type === 'decorate') { loadMyProfile(false); } else if (currentContext.type === 'profile') { loadMyProfile(false); } else { loadMyProfile(false); }
                         };
                         ctl.appendChild(rowDel);
                     }
@@ -7001,7 +7080,7 @@ window.loadMyProfile = async function(addToHistory = true) {
                             await deleteDoc(doc(db, 'showcases', sc.id));
                             const li = layout.findIndex(x => x.id === 'showcase:' + sc.id);
                             if (li !== -1) { layout.splice(li, 1); await saveLayout(); }
-                            loadDecoratePage(false);
+                            if (currentContext.type === 'decorate') { loadMyProfile(false); } else if (currentContext.type === 'profile') { loadMyProfile(false); } else { loadMyProfile(false); }
                         };
                         panel.appendChild(del);
 
@@ -7169,18 +7248,18 @@ window.loadMyProfile = async function(addToHistory = true) {
 
         window.toggleShowcaseMode = async function(scId, cur) {
             await updateDoc(doc(db, 'showcases', scId), { displayMode: cur === 'grid' ? 'cover' : 'grid' });
-            loadDecoratePage(false);
+            if (currentContext.type === 'decorate') { loadMyProfile(false); } else if (currentContext.type === 'profile') { loadMyProfile(false); } else { loadMyProfile(false); }
         };
         window.cycleShowcaseVis = async function(scId, cur) {
             const next = { 'public': 'subs', 'subs': 'private', 'private': 'public' };
             await updateDoc(doc(db, 'showcases', scId), { visibility: next[cur] || 'public' });
-            loadDecoratePage(false);
+            if (currentContext.type === 'decorate') { loadMyProfile(false); } else if (currentContext.type === 'profile') { loadMyProfile(false); } else { loadMyProfile(false); }
         };
 
         window.refillShowcase = async function(showcaseId, tag, count) {
             const slots = await fillSlotsFromTag(tag, count);
             await updateDoc(doc(db, 'showcases', showcaseId), { slots: slots });
-            loadDecoratePage(false);
+            if (currentContext.type === 'decorate') { loadMyProfile(false); } else if (currentContext.type === 'profile') { loadMyProfile(false); } else { loadMyProfile(false); }
         };
 
         // slot picker: multi-pick, your finds by default, toggle for all girlchan
@@ -7210,7 +7289,7 @@ window.loadMyProfile = async function(addToHistory = true) {
                 slots[slotIndex] = null;
                 await updateDoc(doc(db, 'showcases', showcaseId), { slots: slots });
                 modal.remove();
-                loadDecoratePage(false);
+                if (currentContext.type === 'decorate') { loadMyProfile(false); } else if (currentContext.type === 'profile') { loadMyProfile(false); } else { loadMyProfile(false); }
             };
             rowCtl.appendChild(clearBtn);
             box.appendChild(rowCtl);
@@ -7335,7 +7414,7 @@ window.loadMyProfile = async function(addToHistory = true) {
                 }
                 await updateDoc(doc(db, 'showcases', showcaseId), { slots: slots });
                 modal.remove();
-                loadDecoratePage(false);
+                if (currentContext.type === 'decorate') { loadMyProfile(false); } else if (currentContext.type === 'profile') { loadMyProfile(false); } else { loadMyProfile(false); }
             };
             box.appendChild(addBtn);
 
