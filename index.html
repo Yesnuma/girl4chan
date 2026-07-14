@@ -2880,66 +2880,9 @@ async function deleteCollection(collectionId, collectionName) {
 }
 
         // Load specific collection
-        window.openBoardEditor = async function(collectionId, collectionName) {
-            if (!requireAuth()) return;
-            if (window.isPremium !== true && !isAdmin()) { alert('decorating boards is a premium thing ✦'); return; }
-            let modal = document.getElementById('boardEditorModal');
-            if (modal) modal.remove();
-            modal = document.createElement('div');
-            modal.id = 'boardEditorModal';
-            modal.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10001; align-items:center; justify-content:center; padding:20px;';
-            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-            const box = document.createElement('div');
-            box.style.cssText = 'background:#fff; border:3px solid #0600ff; box-shadow:8px 8px 0 #0600ff; padding:24px 20px; width:100%; max-width:340px; font-family:Courier New,monospace; position:relative;';
-            box.innerHTML = `
-                <button onclick="document.getElementById('boardEditorModal').remove()" style="position:absolute; top:6px; right:10px; width:auto; margin:0; padding:4px 8px; background:none; border:none; font-size:20px; cursor:pointer; color:#0600ff;">×</button>
-                <h3 style="color:#0600ff; font-size:14px; margin-bottom:4px;">🎨 decorate this board</h3>
-                <p style="font-size:9px; color:#999; margin-bottom:12px;">everyone sees it — last decorator wins.</p>
-                <input type="file" id="boardWallFile" accept="image/*" style="width:100%; font-size:11px; margin-bottom:12px;">
-                <select id="boardWallStyle" style="width:100%; padding:10px; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; background:#fff; margin-bottom:12px;">
-                    <option value="fill">fill the screen</option>
-                    <option value="tile">tile it (pattern repeats)</option>
-                </select>
-                <label style="font-size:10px; color:#666; display:block; margin-bottom:4px;">opacity: <span id="boardOpVal">20</span>%</label>
-                <input type="range" id="boardOpacity" min="5" max="60" value="20" style="width:100%; margin-bottom:14px;" oninput="document.getElementById('boardOpVal').textContent=this.value;">
-                <button onclick="saveBoardWalls('${collectionId}', '${collectionName.replace(/'/g, '')}')" style="width:100%; padding:12px; background:#0600ff; color:#fff; border:2px solid #0600ff; font-family:'Courier New',monospace; font-size:12px; cursor:pointer; margin-bottom:8px;">put it up ✿</button>
-                <button onclick="clearBoardWalls('${collectionId}', '${collectionName.replace(/'/g, '')}')" style="width:100%; padding:10px; background:#f5f5f5; color:#000; border:2px solid #ccc; font-family:'Courier New',monospace; font-size:11px; cursor:pointer;">strip the board</button>
-                <div id="boardWallStatus" style="font-size:11px; text-align:center; margin-top:10px;"></div>
-            `;
-            modal.appendChild(box);
-            document.body.appendChild(modal);
-        };
-
-        window.saveBoardWalls = async function(collectionId, collectionName) {
-            const status = document.getElementById('boardWallStatus');
-            try {
-                const fileInput = document.getElementById('boardWallFile');
-                if (!fileInput.files || !fileInput.files[0]) { status.textContent = 'pick an image first'; return; }
-                status.textContent = 'uploading...';
-                const compressed = await compressImage(fileInput.files[0], 1920, 0.85);
-                const wref = ref(storage, 'boards/' + collectionId + '_' + Date.now() + '.jpg');
-                await uploadBytes(wref, compressed);
-                const url = await getDownloadURL(wref);
-                await setDoc(doc(db, 'collections', collectionId), {
-                    boardWallUrl: url,
-                    boardWallOpacity: parseInt(document.getElementById('boardOpacity').value, 10) / 100,
-                    boardWallStyle: document.getElementById('boardWallStyle').value,
-                    boardWallBy: auth.currentUser.uid
-                }, { merge: true });
-                document.getElementById('boardEditorModal').remove();
-                loadCollection(collectionId, collectionName, false);
-            } catch (e) {
-                status.textContent = 'failed: ' + e.message;
-                status.style.color = '#c00';
-            }
-        };
-
-        window.clearBoardWalls = async function(collectionId, collectionName) {
-            try {
-                await setDoc(doc(db, 'collections', collectionId), { boardWallUrl: null }, { merge: true });
-                document.getElementById('boardEditorModal').remove();
-                loadCollection(collectionId, collectionName, false);
-            } catch (e) {}
+        window.openBoardEditor = function(collectionId, collectionName) {
+            // boards use the full wall editor now
+            window.openStorefrontEditor({ type: 'board', id: collectionId, name: collectionName });
         };
 
         async function loadCollection(collectionId, collectionName, addToHistory = true) {
@@ -2967,12 +2910,14 @@ async function deleteCollection(collectionId, collectionName) {
             try {
                 const colDoc = await getDoc(doc(db, 'collections', collectionId));
                 const cd = colDoc.exists() ? colDoc.data() : {};
-                if (cd.boardWallUrl) {
+                if (cd.boardWallUrl || cd.boardWallTint) {
                     applyProfileWallpaper({
                         storeWallpaperUrl: cd.boardWallUrl,
                         storeOpacity: typeof cd.boardWallOpacity === 'number' ? cd.boardWallOpacity : 0.2,
                         storeStyle: cd.boardWallStyle || 'fill',
-                        storeTileSize: 160
+                        storeTileSize: cd.boardWallTileSize || 160,
+                        storeTint: cd.boardWallTint || '',
+                        storeTintStrength: typeof cd.boardWallTintStrength === 'number' ? cd.boardWallTintStrength : 0
                     });
                 }
             } catch (e) {}
@@ -3789,6 +3734,12 @@ async function deleteCollection(collectionId, collectionName) {
             `;
             grid.appendChild(tipBox);
 
+            // manage/cancel any paid subscriptions (Stripe portal)
+            const manageBox = document.createElement('div');
+            manageBox.style.cssText = 'background: #fff; padding: 14px 20px; border: 1.5px solid #ccc; margin-bottom: 20px;';
+            manageBox.innerHTML = '<button onclick="openBillingPortal(this)" style="width:auto; margin:0; background:#fff; border:1.5px solid #0600ff; color:#0600ff; font-family:Courier New,monospace; font-size:11px; padding:7px 14px; cursor:pointer;">⚙ manage my subscriptions</button><div style="font-size:9px; color:#999; margin-top:6px;">cancel or update girlchan premium + curator subs anytime</div>';
+            grid.appendChild(manageBox);
+
             // Subscription shop (premium curators only)
             if (window.isPremium === true || isAdmin()) {
                 const shopBox = document.createElement('div');
@@ -3850,6 +3801,21 @@ async function deleteCollection(collectionId, collectionName) {
             } catch (error) {
                 console.error('Error loading campaign ID:', error);
             }
+        };
+
+        window.openBillingPortal = async function(btn) {
+            if (!requireAuth()) return;
+            if (btn) btn.textContent = 'one sec...';
+            try {
+                const res = await fetch('/.netlify/functions/create-portal', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: auth.currentUser.uid })
+                });
+                const data = await res.json();
+                if (data.url) { window.location.href = data.url; return; }
+                alert(data.error === 'no_subscriptions' ? 'no paid subscriptions on this account yet' : 'could not open — try again');
+            } catch (e) { alert('could not open — try again'); }
+            if (btn) btn.textContent = '⚙ manage my subscriptions';
         };
 
         window.saveSubShop = async function() {
@@ -5479,10 +5445,11 @@ window.loadMyProfile = async function(addToHistory = true) {
             } catch (e) { return 0; }
         }
 
-        window.openStorefrontEditor = async function() {
+        window.openStorefrontEditor = async function(target) {
             if (!requireAuth()) return;
+            window._wallTarget = target || { type: 'user' };
             let modal = document.getElementById('storefrontModal');
-            if (modal) { modal.style.display = 'flex'; return; }
+            if (modal) modal.remove(); // rebuild fresh so user/board targets never mix
             modal = document.createElement('div');
             modal.id = 'storefrontModal';
             modal.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10001; align-items:center; justify-content:center; padding:20px;';
@@ -5491,7 +5458,7 @@ window.loadMyProfile = async function(addToHistory = true) {
             box.style.cssText = 'background:#fff; border:3px solid #0600ff; box-shadow:8px 8px 0 #0600ff; padding:24px 20px; width:100%; max-width:360px; font-family:Courier New,monospace; position:relative; max-height:80vh; overflow-y:auto;';
             box.innerHTML = `
                 <button onclick="document.getElementById('storefrontModal').style.display='none'" style="position:absolute; top:6px; right:10px; width:auto; margin:0; padding:4px 8px; background:none; border:none; font-size:20px; cursor:pointer; color:#0600ff;">×</button>
-                <button id="peekBtn" title="peek behind" style="position:absolute; top:8px; right:42px; width:auto; margin:0; padding:2px 7px; background:none; border:none; font-size:17px; cursor:pointer; line-height:1;">👁</button>
+                <button id="peekBtn" title="peek behind the editor" style="position:absolute; top:9px; right:42px; width:auto; margin:0; padding:3px 9px; background:#fff; border:1.5px solid #0600ff; color:#0600ff; font-family:'Courier New',monospace; font-size:10px; cursor:pointer;">peek</button>
                 <p style="font-size:10px; color:#666; margin-bottom:14px; line-height:1.5; margin-top:24px;">decorate your page — visitors see your walls.</p>
 
                 <label style="font-size:11px; color:#333; display:block; margin-bottom:4px;">wallpaper — upload, or find a pattern</label>
@@ -5540,7 +5507,14 @@ window.loadMyProfile = async function(addToHistory = true) {
                 if (peeking) { peeking = false; modal.style.opacity = '1'; }
             }, true);
             try {
-                const u = (await getDoc(doc(db, 'users', auth.currentUser.uid))).data() || {};
+                const t = window._wallTarget;
+                let u;
+                if (t.type === 'board') {
+                    const cd = (await getDoc(doc(db, 'collections', t.id))).data() || {};
+                    u = { storeWallpaperUrl: cd.boardWallUrl, storeOpacity: cd.boardWallOpacity, storeStyle: cd.boardWallStyle, storeTileSize: cd.boardWallTileSize, storeTint: cd.boardWallTint, storeTintStrength: cd.boardWallTintStrength };
+                } else {
+                    u = (await getDoc(doc(db, 'users', auth.currentUser.uid))).data() || {};
+                }
                 if (typeof u.storeOpacity === 'number') {
                     const v = Math.round(u.storeOpacity * 100);
                     document.getElementById('storeOpacity').value = v;
@@ -5781,16 +5755,30 @@ window.loadMyProfile = async function(addToHistory = true) {
                     const u = (await getDoc(doc(db, 'users', auth.currentUser.uid))).data() || {};
                     url = u.storeWallpaperUrl || null;
                 }
-                await setDoc(doc(db, 'users', auth.currentUser.uid), {
-                    storeWallpaperUrl: url,
-                    storeOpacity: parseInt(document.getElementById('storeOpacity').value, 10) / 100,
-                    storeStyle: document.getElementById('storeWallStyle').value,
-                    storeTileSize: parseInt(document.getElementById('storeTileSize').value, 10),
-                    storeTint: window._storeTint || '',
-                    storeTintStrength: parseInt(document.getElementById('tintStrength').value, 10) / 100,
-                    storeHeadlineColor: window._storeHeadlineColor || '#ff007a'
-                }, { merge: true });
-                status.innerHTML = 'saved ✿ <a href="#" style="color:#0600ff;" onclick="event.preventDefault(); document.getElementById(\'storefrontModal\').style.display=\'none\'; loadMyProfile();">→ see it live</a>';
+                const tgt = window._wallTarget;
+                if (tgt.type === 'board') {
+                    await setDoc(doc(db, 'collections', tgt.id), {
+                        boardWallUrl: url,
+                        boardWallOpacity: parseInt(document.getElementById('storeOpacity').value, 10) / 100,
+                        boardWallStyle: document.getElementById('storeWallStyle').value,
+                        boardWallTileSize: parseInt(document.getElementById('storeTileSize').value, 10),
+                        boardWallTint: window._storeTint || '',
+                        boardWallTintStrength: parseInt(document.getElementById('tintStrength').value, 10) / 100,
+                        boardWallBy: auth.currentUser.uid
+                    }, { merge: true });
+                    status.innerHTML = 'saved ✿ — close this to see the board';
+                } else {
+                    await setDoc(doc(db, 'users', auth.currentUser.uid), {
+                        storeWallpaperUrl: url,
+                        storeOpacity: parseInt(document.getElementById('storeOpacity').value, 10) / 100,
+                        storeStyle: document.getElementById('storeWallStyle').value,
+                        storeTileSize: parseInt(document.getElementById('storeTileSize').value, 10),
+                        storeTint: window._storeTint || '',
+                        storeTintStrength: parseInt(document.getElementById('tintStrength').value, 10) / 100,
+                        storeHeadlineColor: window._storeHeadlineColor || '#ff007a'
+                    }, { merge: true });
+                    status.innerHTML = 'saved ✿ <a href="#" style="color:#0600ff;" onclick="event.preventDefault(); document.getElementById(\'storefrontModal\').style.display=\'none\'; loadMyProfile();">→ see it live</a>';
+                }
                 status.style.color = '#00a86b';
             } catch (e) {
                 status.textContent = 'failed: ' + e.message;
@@ -5800,7 +5788,12 @@ window.loadMyProfile = async function(addToHistory = true) {
 
         window.clearStorefront = async function() {
             try {
-                await setDoc(doc(db, 'users', auth.currentUser.uid), { storeWallpaperUrl: null }, { merge: true });
+                const tgt = window._wallTarget || { type: 'user' };
+                if (tgt.type === 'board') {
+                    await setDoc(doc(db, 'collections', tgt.id), { boardWallUrl: null, boardWallTint: '' }, { merge: true });
+                } else {
+                    await setDoc(doc(db, 'users', auth.currentUser.uid), { storeWallpaperUrl: null }, { merge: true });
+                }
                 clearProfileWallpaper();
                 const status = document.getElementById('storeStatus');
                 if (status) { status.textContent = 'walls stripped'; status.style.color = '#666'; }
@@ -6286,21 +6279,21 @@ window.loadMyProfile = async function(addToHistory = true) {
                 if (isOwner) {
                     const ctrl = document.createElement('span');
                     ctrl.style.cssText = 'display:flex; gap:10px; align-items:center; font-size:9px;';
-                    const vis = document.createElement('a');
-                    vis.href = '#';
-                    const visLabels = { 'private': 'private ✓', 'public': 'public ✓', 'subs': 'subscribers ✓' };
-                    vis.textContent = visLabels[isPublicSetting] || 'private ✓';
-                    vis.title = 'tap to change who can see your log';
-                    vis.style.cssText = 'color:#999;';
-                    vis.onclick = async (e) => {
-                        e.preventDefault();
-                        const nextVis = { 'private': 'public', 'public': 'subs', 'subs': 'private' };
-                        try {
-                            await setDoc(doc(db, 'users', ownerId), { brandLogVisibility: nextVis[isPublicSetting] || 'public' }, { merge: true });
-                            loadMyProfile(false);
-                        } catch (err) {}
-                    };
-                    ctrl.appendChild(vis);
+                    [['public', 'everyone'], ['subs', 'subs'], ['private', 'just me']].forEach(([v, label]) => {
+                        const chip = document.createElement('a');
+                        chip.href = '#';
+                        chip.textContent = label;
+                        const on = isPublicSetting === v;
+                        chip.style.cssText = 'padding:2px 7px; border:1.5px solid ' + (on ? '#0600ff' : '#ccc') + '; background:' + (on ? '#0600ff' : '#fff') + '; color:' + (on ? '#F9FF00' : '#999') + '; text-decoration:none; font-size:8px;';
+                        chip.onclick = async (e) => {
+                            e.preventDefault();
+                            try {
+                                await setDoc(doc(db, 'users', ownerId), { brandLogVisibility: v }, { merge: true });
+                                loadMyProfile(false);
+                            } catch (err) {}
+                        };
+                        ctrl.appendChild(chip);
+                    });
                     const add = document.createElement('a');
                     add.href = '#';
                     add.textContent = '＋ add';
@@ -6392,7 +6385,20 @@ window.loadMyProfile = async function(addToHistory = true) {
                 const hero = feats[0];
                 const hd = hero.data;
                 const heroEl = document.createElement('div');
-                heroEl.style.cssText = 'grid-column:1 / -1; background:#fff; border:2px solid #0600ff; box-shadow:4px 4px 0 #0600ff; padding:20px 16px; margin-bottom:16px; text-align:center; font-family:Courier New,monospace;';
+                heroEl.style.cssText = 'grid-column:1 / -1; background:#fff; border:2px solid #0600ff; box-shadow:4px 4px 0 #0600ff; padding:20px 16px; margin-bottom:16px; text-align:center; font-family:Courier New,monospace; position:relative; overflow:hidden;';
+                // the card wears their storefront walls
+                if (hd.storeWallpaperUrl) {
+                    const walls = document.createElement('div');
+                    const wOp = typeof hd.storeOpacity === 'number' ? hd.storeOpacity : 0.2;
+                    let wBg = 'background-image:url(' + hd.storeWallpaperUrl + ');';
+                    if (hd.storeStyle === 'tile') {
+                        wBg += ' background-size:' + (hd.storeTileSize || 160) + 'px auto; background-repeat:repeat;';
+                    } else {
+                        wBg += ' background-size:cover; background-position:center;';
+                    }
+                    walls.style.cssText = 'position:absolute; inset:0; pointer-events:none; opacity:' + wOp + '; ' + wBg;
+                    heroEl.appendChild(walls);
+                }
 
                 if (hd.profilePhoto) {
                     const ph = document.createElement('img');
@@ -6582,14 +6588,62 @@ window.loadMyProfile = async function(addToHistory = true) {
             try {
                 const scDoc = await getDoc(doc(db, 'showcases', scId));
                 if (!scDoc.exists()) return;
-                (scDoc.data().slots || []).filter(Boolean).forEach(slot => {
+                const scData = scDoc.data();
+                const isOwner = auth.currentUser && scData.ownerId === auth.currentUser.uid;
+                let removeMode = false;
+
+                if (isOwner) {
+                    const bar = document.createElement('div');
+                    bar.style.cssText = 'grid-column:1 / -1; display:flex; gap:8px; padding:0 2px 10px;';
+                    const addBtn = document.createElement('button');
+                    addBtn.textContent = '＋ add finds';
+                    addBtn.style.cssText = 'width:auto; margin:0; background:#0600ff; border:1.5px solid #0600ff; color:#F9FF00; font-family:Courier New,monospace; font-size:11px; padding:6px 14px; cursor:pointer;';
+                    addBtn.onclick = () => window.openSlotPicker(scId, 999999);
+                    bar.appendChild(addBtn);
+                    const rmBtn = document.createElement('button');
+                    rmBtn.textContent = 'remove finds';
+                    rmBtn.style.cssText = 'width:auto; margin:0; background:#fff; border:1.5px solid #999; color:#666; font-family:Courier New,monospace; font-size:11px; padding:6px 14px; cursor:pointer;';
+                    rmBtn.onclick = () => {
+                        removeMode = !removeMode;
+                        rmBtn.textContent = removeMode ? '✓ done removing' : 'remove finds';
+                        rmBtn.style.borderColor = removeMode ? '#0600ff' : '#999';
+                        rmBtn.style.color = removeMode ? '#0600ff' : '#666';
+                        grid.querySelectorAll('.albRm').forEach(x => x.style.display = removeMode ? 'flex' : 'none');
+                    };
+                    bar.appendChild(rmBtn);
+                    grid.appendChild(bar);
+                }
+
+                (scData.slots || []).filter(Boolean).forEach(slot => {
+                    const cell = document.createElement('div');
+                    cell.style.cssText = 'position:relative;';
                     const img = document.createElement('img');
                     img.src = slot.imageUrl;
                     img.alt = '';
                     img.draggable = false;
                     img.style.cssText = 'width:100%; aspect-ratio:3/4; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
-                    img.onclick = () => openImageDetail(slot.imageId, slot.imageUrl, slot.link || '', slot.tags || []);
-                    grid.appendChild(img);
+                    img.onclick = () => {
+                        if (removeMode) return;
+                        openImageDetail(slot.imageId, slot.imageUrl, slot.link || '', slot.tags || []);
+                    };
+                    cell.appendChild(img);
+                    if (isOwner) {
+                        const rm = document.createElement('div');
+                        rm.className = 'albRm';
+                        rm.textContent = '×';
+                        rm.style.cssText = 'position:absolute; top:4px; right:4px; width:24px; height:24px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-size:15px; font-weight:bold; display:none; align-items:center; justify-content:center; cursor:pointer; font-family:Courier New,monospace;';
+                        rm.onclick = async (e) => {
+                            e.stopPropagation();
+                            try {
+                                const cur = await getDoc(doc(db, 'showcases', scId));
+                                const slots = (cur.data().slots || []).filter(sl => !(sl && sl.imageId === slot.imageId));
+                                await updateDoc(doc(db, 'showcases', scId), { slots: slots });
+                                cell.remove();
+                            } catch (err) { alert('failed: ' + err.message); }
+                        };
+                        cell.appendChild(rm);
+                    }
+                    grid.appendChild(cell);
                 });
             } catch (e) { console.error('album page failed:', e); }
         }
@@ -6708,13 +6762,24 @@ window.loadMyProfile = async function(addToHistory = true) {
                 t1.style.display = which === 'storefront' ? 'block' : 'none';
                 t2.style.display = which === 'collections' ? 'block' : 'none';
                 const showAll = which === 'everything';
+                const showGrid = showAll || which === 'storefront'; // everything anchors the storefront base
                 const g = document.getElementById('imageGrid');
                 const sb = document.getElementById('profileSortBar');
                 const tf = document.getElementById('profileTagFilters');
                 const tc = document.getElementById('profileTagChips');
-                if (g) g.style.display = showAll ? '' : 'none';
+                if (g) g.style.display = showGrid ? '' : 'none';
                 if (sb) sb.style.display = showAll ? '' : 'none';
                 if (tf) tf.style.display = showAll ? '' : 'none';
+                // labeled divider when the grid sits under the storefront
+                const oldLab = document.getElementById('everythingLabel');
+                if (oldLab) oldLab.remove();
+                if (which === 'storefront' && g) {
+                    const lab = document.createElement('div');
+                    lab.id = 'everythingLabel';
+                    lab.style.cssText = 'grid-column:1 / -1; font-family:Courier New,monospace; font-size:11px; color:#0600ff; font-weight:bold; padding:10px 2px 6px;';
+                    lab.textContent = '━ everything ━';
+                    g.prepend(lab);
+                }
                 if (which === 'everything' && g && !document.getElementById('profileTagChips')) {
                     window.buildProfileTagChips(g);
                 } else if (tc) {
@@ -6905,14 +6970,6 @@ window.loadMyProfile = async function(addToHistory = true) {
                         }
                     }
                 }
-                if (!container.hasChildNodes() && !editing) {
-                    const lab = document.createElement('div');
-                    lab.style.cssText = 'font-family:Courier New,monospace; font-size:11px; color:#0600ff; font-weight:bold; margin:14px 0 4px; text-align:left; width:100%;';
-                    lab.textContent = '━ everything ━';
-                    container.appendChild(lab);
-                    const g = document.getElementById('imageGrid');
-                    if (g) g.style.display = '';
-                }
             } catch (e) { console.error('store sections failed:', e); }
         }
 
@@ -7042,7 +7099,9 @@ window.loadMyProfile = async function(addToHistory = true) {
                             await deleteDoc(doc(db, 'showcases', sc.id));
                             const li = layout.findIndex(x => x.id === 'showcase:' + sc.id);
                             if (li !== -1) { layout.splice(li, 1); await saveLayout(); }
-                            if (currentContext.type === 'decorate') { loadMyProfile(false); } else if (currentContext.type === 'profile') { loadMyProfile(false); } else { loadMyProfile(false); }
+                            if (currentContext.type === 'album' && currentContext.id === showcaseId) {
+                    getDoc(doc(db, 'showcases', showcaseId)).then(d => loadShowcasePage(showcaseId, d.data()?.name || '', false));
+                } else { loadMyProfile(false); }
                         };
                         ctl.appendChild(rowDel);
                     }
@@ -7115,7 +7174,9 @@ window.loadMyProfile = async function(addToHistory = true) {
                             await deleteDoc(doc(db, 'showcases', sc.id));
                             const li = layout.findIndex(x => x.id === 'showcase:' + sc.id);
                             if (li !== -1) { layout.splice(li, 1); await saveLayout(); }
-                            if (currentContext.type === 'decorate') { loadMyProfile(false); } else if (currentContext.type === 'profile') { loadMyProfile(false); } else { loadMyProfile(false); }
+                            if (currentContext.type === 'album' && currentContext.id === showcaseId) {
+                    getDoc(doc(db, 'showcases', showcaseId)).then(d => loadShowcasePage(showcaseId, d.data()?.name || '', false));
+                } else { loadMyProfile(false); }
                         };
                         panel.appendChild(del);
 
@@ -7283,18 +7344,24 @@ window.loadMyProfile = async function(addToHistory = true) {
 
         window.toggleShowcaseMode = async function(scId, cur) {
             await updateDoc(doc(db, 'showcases', scId), { displayMode: cur === 'grid' ? 'cover' : 'grid' });
-            if (currentContext.type === 'decorate') { loadMyProfile(false); } else if (currentContext.type === 'profile') { loadMyProfile(false); } else { loadMyProfile(false); }
+            if (currentContext.type === 'album' && currentContext.id === showcaseId) {
+                    getDoc(doc(db, 'showcases', showcaseId)).then(d => loadShowcasePage(showcaseId, d.data()?.name || '', false));
+                } else { loadMyProfile(false); }
         };
         window.cycleShowcaseVis = async function(scId, cur) {
             const next = { 'public': 'subs', 'subs': 'private', 'private': 'public' };
             await updateDoc(doc(db, 'showcases', scId), { visibility: next[cur] || 'public' });
-            if (currentContext.type === 'decorate') { loadMyProfile(false); } else if (currentContext.type === 'profile') { loadMyProfile(false); } else { loadMyProfile(false); }
+            if (currentContext.type === 'album' && currentContext.id === showcaseId) {
+                    getDoc(doc(db, 'showcases', showcaseId)).then(d => loadShowcasePage(showcaseId, d.data()?.name || '', false));
+                } else { loadMyProfile(false); }
         };
 
         window.refillShowcase = async function(showcaseId, tag, count) {
             const slots = await fillSlotsFromTag(tag, count);
             await updateDoc(doc(db, 'showcases', showcaseId), { slots: slots });
-            if (currentContext.type === 'decorate') { loadMyProfile(false); } else if (currentContext.type === 'profile') { loadMyProfile(false); } else { loadMyProfile(false); }
+            if (currentContext.type === 'album' && currentContext.id === showcaseId) {
+                    getDoc(doc(db, 'showcases', showcaseId)).then(d => loadShowcasePage(showcaseId, d.data()?.name || '', false));
+                } else { loadMyProfile(false); }
         };
 
         // slot picker: multi-pick, your finds by default, toggle for all girlchan
@@ -7324,7 +7391,9 @@ window.loadMyProfile = async function(addToHistory = true) {
                 slots[slotIndex] = null;
                 await updateDoc(doc(db, 'showcases', showcaseId), { slots: slots });
                 modal.remove();
-                if (currentContext.type === 'decorate') { loadMyProfile(false); } else if (currentContext.type === 'profile') { loadMyProfile(false); } else { loadMyProfile(false); }
+                if (currentContext.type === 'album' && currentContext.id === showcaseId) {
+                    getDoc(doc(db, 'showcases', showcaseId)).then(d => loadShowcasePage(showcaseId, d.data()?.name || '', false));
+                } else { loadMyProfile(false); }
             };
             rowCtl.appendChild(clearBtn);
             box.appendChild(rowCtl);
@@ -7449,7 +7518,9 @@ window.loadMyProfile = async function(addToHistory = true) {
                 }
                 await updateDoc(doc(db, 'showcases', showcaseId), { slots: slots });
                 modal.remove();
-                if (currentContext.type === 'decorate') { loadMyProfile(false); } else if (currentContext.type === 'profile') { loadMyProfile(false); } else { loadMyProfile(false); }
+                if (currentContext.type === 'album' && currentContext.id === showcaseId) {
+                    getDoc(doc(db, 'showcases', showcaseId)).then(d => loadShowcasePage(showcaseId, d.data()?.name || '', false));
+                } else { loadMyProfile(false); }
             };
             box.appendChild(addBtn);
 
