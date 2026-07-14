@@ -6118,7 +6118,7 @@ window.loadMyProfile = async function(addToHistory = true) {
                 img.src = item.img;
                 img.alt = '';
                 img.draggable = false;
-                img.style.cssText = 'flex:0 0 100px; width:100px; height:132px; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
+                img.style.cssText = 'flex:0 0 118px; width:118px; height:155px; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
                 img.onclick = () => openEbayDetail(item);
                 rowEl.appendChild(img);
             });
@@ -6237,13 +6237,13 @@ window.loadMyProfile = async function(addToHistory = true) {
             sec.appendChild(titleRow);
 
             const rowEl = document.createElement('div');
-            rowEl.style.cssText = 'display:flex; gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding:6px 0 2px;';
+            rowEl.style.cssText = 'display:flex; gap:5px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding:6px 0 2px;';
             (d.items || []).forEach(item => {
                 const img = document.createElement('img');
                 img.src = item.img;
                 img.alt = '';
                 img.draggable = false;
-                img.style.cssText = 'flex:0 0 84px; width:84px; height:110px; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
+                img.style.cssText = 'flex:0 0 118px; width:118px; height:155px; object-fit:cover; display:block; cursor:pointer; background:#ddd;';
                 img.onclick = () => openEbayDetail(item);
                 rowEl.appendChild(img);
             });
