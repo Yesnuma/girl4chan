@@ -286,18 +286,19 @@
   </div>
 </div>
 
-<div class="btn-row">
-  <button class="shuffle-btn" id="shuffleBtn" onclick="shuffleOutfit()" disabled>shuffle ✦</button>
-  <button class="edit-btn" id="editBtn" onclick="toggleEditMode()">✎</button>
-</div>
-<button class="save-outfit-btn" id="saveBtn" onclick="saveOutfit()" disabled>save this ♡</button>
-<div class="edit-hint" id="editHint">tap a piece to select it, drag to move</div>
 <div class="edit-controls" id="editControls">
   <button onclick="resizeSelected(-1)">－ smaller</button>
   <button onclick="resizeSelected(1)">＋ bigger</button>
   <button onclick="layerSelected(-1)">↓ back</button>
   <button onclick="layerSelected(1)">↑ front</button>
 </div>
+
+<div class="btn-row">
+  <button class="shuffle-btn" id="shuffleBtn" onclick="shuffleOutfit()" disabled>shuffle ✦</button>
+  <button class="edit-btn" id="editBtn" onclick="toggleEditMode()">edit ✎</button>
+</div>
+<button class="save-outfit-btn" id="saveBtn" onclick="saveOutfit()" disabled>save this ♡</button>
+<div class="edit-hint" id="editHint">tap a piece to select it, drag to move</div>
 <div class="og-hint" id="ogHint">tap any piece to shop it</div>
 
 <div class="closet-note" id="closetNote"></div>
@@ -501,7 +502,7 @@
     canvas.classList.toggle('editing', editMode);
     const btn = document.getElementById('editBtn');
     btn.classList.toggle('active', editMode);
-    btn.textContent = editMode ? 'done' : '✎';
+    btn.textContent = editMode ? '✓ done' : 'edit ✎';
     document.getElementById('editHint').classList.toggle('show', editMode);
     document.getElementById('ogHint').style.display = editMode ? 'none' : 'block';
     if (!editMode) {
