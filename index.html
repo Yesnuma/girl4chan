@@ -6339,6 +6339,20 @@ window.loadMyProfile = async function(addToHistory = true) {
                     createdAt: new Date(), updatedAt: new Date(),
                     items: items
                 });
+                // it also joins the communal brand log (credited), unless it's already there
+                try {
+                    const commSnap = await getDocs(collection(db, 'brandLog'));
+                    let commDupe = false;
+                    commSnap.forEach(d => { if ((d.data().nameLower || '') === lower) commDupe = true; });
+                    if (!commDupe) {
+                        await addDoc(collection(db, 'brandLog'), {
+                            name: clean, nameLower: lower,
+                            addedBy: auth.currentUser.uid, addedByName: userDoc.data()?.username || '',
+                            createdAt: new Date(), updatedAt: new Date(),
+                            items: items
+                        });
+                    }
+                } catch (e) { console.error('communal log add failed:', e); }
                 loadMyProfile(false);
             } catch (e) { alert('failed: ' + e.message); }
         };
@@ -6396,7 +6410,7 @@ window.loadMyProfile = async function(addToHistory = true) {
                     } else {
                         wBg += ' background-size:cover; background-position:center;';
                     }
-                    walls.style.cssText = 'position:absolute; inset:0; pointer-events:none; opacity:' + wOp + '; ' + wBg;
+                    walls.style.cssText = 'position:absolute; inset:0; pointer-events:none; z-index:-1; opacity:' + wOp + '; ' + wBg;
                     heroEl.appendChild(walls);
                 }
 
