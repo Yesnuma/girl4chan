@@ -1896,6 +1896,20 @@ window.openImageDetail = async function(imageId, imageUrl, link, tags) {
         closeImageDetail();
         window.gcFileToCabinet({ gcId: imageId, img: imageUrl, shopUrl: link || '', tags: tags || [] });
     };
+    // explore the world wide web: reverse image search this find
+    const wwwBtn = document.getElementById('wwwBtn');
+    if (wwwBtn) wwwBtn.href = 'https://lens.google.com/uploadbyurl?url=' + encodeURIComponent(imageUrl);
+    // admin: pin this find to /today as a lookalikes slider
+    let pinBtn = document.getElementById('pinTodayBtn');
+    if (pinBtn) pinBtn.remove();
+    if (isAdmin()) {
+        pinBtn = document.createElement('button');
+        pinBtn.id = 'pinTodayBtn';
+        pinBtn.textContent = '📌 pin to today';
+        pinBtn.style.cssText = 'width:100%; margin:8px 0 0; padding:8px; background:none; border:1px dashed #999; color:#999; font-family:Courier New,monospace; font-size:10px; cursor:pointer;';
+        pinBtn.onclick = () => window.pinToToday(pinBtn, imageId, imageUrl, link, tags);
+        document.getElementById('wwwBtn').parentNode.parentNode.appendChild(pinBtn);
+    }
 
     // Display tags
     const tagsContainer = document.getElementById('detailTags');
@@ -7727,6 +7741,65 @@ window.loadMyProfile = async function(addToHistory = true) {
             return sec;
         }
 
+        window.pinToToday = async function(btn, imageId, imageUrl, link, tags) {
+            if (!isAdmin()) return;
+            btn.textContent = 'finding lookalikes...';
+            try {
+                const res = await fetch('/.netlify/functions/searchByImage', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imageUrl: imageUrl, limit: 15 })
+                });
+                const data = await res.json();
+                const ebay = [];
+                for (const it of (data.itemSummaries || [])) {
+                    if (ebay.length >= 12) break;
+                    let img = '';
+                    if (it.image && it.image.imageUrl) img = it.image.imageUrl;
+                    else if (it.thumbnailImages && it.thumbnailImages[0]) img = it.thumbnailImages[0].imageUrl;
+                    if (!img) continue;
+                    img = img.replace(/s-l\d+\.jpg/, 's-l1600.jpg').replace(/s-l\d+\.webp/, 's-l1600.webp');
+                    ebay.push({
+                        img: img,
+                        link: it.itemAffiliateWebUrl || it.itemWebUrl || '',
+                        title: it.title || '',
+                        price: (it.price && it.price.value) ? '$' + it.price.value : '',
+                        itemId: it.itemId || ''
+                    });
+                }
+                await addDoc(collection(db, 'todayPinned'), {
+                    seedGc: { id: imageId, imageUrl: imageUrl, link: link || '', tags: tags || [] },
+                    ebay: ebay,
+                    tags: (tags || []).slice(0, 2),
+                    createdAt: new Date()
+                });
+                btn.textContent = 'pinned to today 📌 ✓';
+            } catch (e) {
+                btn.textContent = 'pin failed — try again';
+            }
+        };
+
+        async function fetchPinnedSections() {
+            try {
+                const snap = await getDocs(collection(db, 'todayPinned'));
+                const out = [];
+                snap.forEach(d => {
+                    const p = d.data();
+                    out.push({
+                        type: 'slider',
+                        tags: p.tags || [],
+                        gc: [p.seedGc],
+                        ebay: p.ebay || [],
+                        pinned: true,
+                        pinId: d.id,
+                        _t: p.createdAt?.seconds || 0
+                    });
+                });
+                out.sort((a, b) => b._t - a._t);
+                return out;
+            } catch (e) { return []; }
+        }
+
         function renderAutoSection(section, sectionIndex) {
             const sec = document.createElement('div');
             sec.dataset.autoIndex = sectionIndex;
@@ -7739,9 +7812,23 @@ window.loadMyProfile = async function(addToHistory = true) {
             } else if (section.type === 'outfit') {
                 titleEl.textContent = '━ an outfit by ' + section.username + '.finds ━';
             } else {
-                titleEl.textContent = section.tags && section.tags.length > 0
+                titleEl.textContent = (section.pinned ? '📌 ' : '') + (section.tags && section.tags.length > 0
                     ? '━ ' + section.tags.map(t => '#' + t).join(' + ') + ' ━'
-                    : '━ random rabbit hole ━';
+                    : '━ hand-picked rabbit hole ━');
+            }
+            if (section.pinned && isAdmin()) {
+                const unpin = document.createElement('a');
+                unpin.href = '#';
+                unpin.textContent = ' × unpin';
+                unpin.style.cssText = 'color:#999; font-size:10px; font-weight:normal; text-decoration:underline; margin-left:8px;';
+                unpin.onclick = async (e) => {
+                    e.preventDefault();
+                    try {
+                        await deleteDoc(doc(db, 'todayPinned', section.pinId));
+                        sec.remove();
+                    } catch (err) { alert('failed: ' + err.message); }
+                };
+                titleEl.appendChild(unpin);
             }
             sec.appendChild(titleEl);
 
@@ -7964,6 +8051,7 @@ window.loadMyProfile = async function(addToHistory = true) {
                 }
 
                 // 2) auto-generated sections (cached)
+                const pinnedSections = await fetchPinnedSections();
                 const autoSections = await getTodayAutoSections();
 
                 loadingEl.remove();
@@ -8007,6 +8095,10 @@ window.loadMyProfile = async function(addToHistory = true) {
                 todayState.usedCols = new Set();
                 todayState.usedOutfits = new Set();
                 todayState.sectionCount = 0;
+                pinnedSections.forEach((s) => {
+                    grid.appendChild(renderAutoSection(s, todayState.sectionCount));
+                    todayState.sectionCount++;
+                });
                 autoSections.forEach((s) => {
                     if (s.tags) todayState.excludeKeys.add(s.tags.slice().sort().join('+'));
                     if (s.type === 'collection' && s.colId) todayState.usedCols.add(s.colId);
@@ -8459,9 +8551,10 @@ async function handleDelete(item) {
         return;
     }
     
-    // Cancel any existing pending delete
+    // A new delete commits any still-pending one immediately (no more lost deletes)
     if (pendingDelete) {
         clearTimeout(pendingDelete.timer);
+        if (pendingDelete.commit) pendingDelete.commit();
         removeUndoToast();
     }
     
@@ -8479,17 +8572,18 @@ async function handleDelete(item) {
         pendingDelete = null;
     });
     
-    // Set timer to actually delete after 5 seconds
-    const timer = setTimeout(async () => {
+    // The actual write — runnable by the timer OR immediately if another delete starts
+    let committed = false;
+    const commit = async () => {
+        if (committed) return;
+        committed = true;
         try {
             if (inCollection) {
-                // Remove from collection, don't delete the image
                 await updateDoc(doc(db, 'collections', currentContext.id), {
                     images: arrayRemove(imageId)
                 });
                 item.remove();
             } else {
-                // Actually delete from Firebase
                 await deleteDoc(doc(db, 'images', imageId));
                 item.remove();
             }
@@ -8497,15 +8591,17 @@ async function handleDelete(item) {
                 console.log(inCollection ? 'Removed from collection:' : 'Admin deleted:', imageId);
             }
         } catch (error) {
-            // If delete fails, show the image again
             item.style.display = '';
             alert('Delete failed: ' + error.message);
         }
+    };
+    const timer = setTimeout(async () => {
+        await commit();
         pendingDelete = null;
         removeUndoToast();
     }, 5000);
     
-    pendingDelete = { timer, item, imageId };
+    pendingDelete = { timer, item, imageId, commit };
 }
 
 function showUndoToast(action, undoCallback) {
@@ -9486,6 +9582,7 @@ function loadPage(page) {
             <button id="exploreBtn" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block; margin:0 auto 4px;"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>explore</button>
             <button id="fileBtn" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block; margin:0 auto 4px;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>file</button>
             <button id="likeBtnRow" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer;"><span id="likeHeartIcon" style="display:block; margin:0 auto 4px; width:20px; height:20px;"><svg width="20" height="20" viewBox="0 0 28 26" fill="none"><path id="likeHeartPath" d="M14 23 C7 17.5 2 13 2 8.2 C2 4.7 4.8 2 8.2 2 C10.6 2 12.8 3.3 14 5.4 C15.2 3.3 17.4 2 19.8 2 C23.2 2 26 4.7 26 8.2 C26 13 21 17.5 14 23 Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"></path></svg></span><span id="likeTxt">like</span></button>
+            <a id="wwwBtn" href="#" target="_blank" rel="noopener" style="flex:1; padding:14px 4px; background:#fff; border:2px solid #0600ff; color:#0600ff; font-family:'Courier New',Courier,monospace; font-size:11px; cursor:pointer; text-decoration:none; text-align:center;"><span style="font-size:18px; display:block; margin-bottom:4px; line-height:22px;">🌐</span>the web</a>
 
         </div>
         <button onclick="closeImageDetail()" style="width: 100%; padding: 12px; background: #f0e0d6; color: #000; border: 2px solid #0600ff; font-family: 'Courier New', Courier, monospace; font-size: 13px; cursor: pointer;">close</button>
