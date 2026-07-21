@@ -7733,6 +7733,15 @@ window.loadMyProfile = async function(addToHistory = true) {
                         el.onclick = () => openEbayDetail(item);
                         rowEl.appendChild(el);
                     });
+                    // see more → the seller's full eBay closet (affiliate-tracked)
+                    const moreTile = document.createElement('a');
+                    moreTile.href = 'https://www.ebay.com/sch/i.html?_ssn=' + encodeURIComponent(fs.data.seller) +
+                        '&mkcid=1&mkrid=711-53200-19255-0&siteid=0&campid=5339134951&toolid=10001&mkevt=1';
+                    moreTile.target = '_blank';
+                    moreTile.rel = 'noopener';
+                    moreTile.style.cssText = 'flex:0 0 100px; width:100px; height:132px; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#0600ff; color:#F9FF00; font-family:Courier New,monospace; font-size:11px; font-weight:bold; text-decoration:none; text-align:center; gap:4px;';
+                    moreTile.innerHTML = 'see<br>more<br>→';
+                    rowEl.appendChild(moreTile);
                 } catch (e) {
                     loading.textContent = 'couldn\'t load this seller right now';
                 }
@@ -8232,14 +8241,14 @@ window.loadMyProfile = async function(addToHistory = true) {
             try {
                 const savedPage = localStorage.getItem('currentPage');
                 if (!savedPage) {
-                    await loadTodayPage();
+                    await loadEverythingFeed();
                     return;
                 }
                 const page = JSON.parse(savedPage);
 
                 // Logged-out users can't restore personal pages — fall back to today
                 if (!auth.currentUser && (page.type === 'profile' || page.type === 'likes' || page.type === 'accountSettings' || page.type === 'myOutfits' || page.type === 'decorate')) {
-                    await loadTodayPage();
+                    await loadEverythingFeed();
                     return;
                 }
 
@@ -8272,11 +8281,11 @@ window.loadMyProfile = async function(addToHistory = true) {
                 } else if (page.type === 'everything') {
                     await loadEverythingFeed();
                 } else {
-                    await loadTodayPage();
+                    await loadEverythingFeed();
                 }
             } catch (error) {
                 console.error('Error restoring page:', error);
-                await loadTodayPage();
+                await loadEverythingFeed();
             }
         }
         // Gesture detection for images - UPDATED WITH SMOOTH DRAG
